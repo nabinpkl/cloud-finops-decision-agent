@@ -1,0 +1,109 @@
+
+# Agent instructions
+
+This project has two modes the agent operates in:
+
+1. **Coding agent mode**: building the project itself (gates, scripts, exploration code). Rules: universal-AGENTS.md and python.md. Nothing project-specific beyond those.
+2. **Price / cloud agent mode**: answering pricing queries the user puts to the agent inside this project. Rules: the citation contract below.
+
+The two modes coexist in this file in v0. Post-v0, the price / cloud rules move into their own space (likely `price-agent/AGENTS.md` loaded via slash command or workspace switch) so a coding session in this repo is not weighted down by runtime rules it never uses.
+
+## Coding Agent mode
+In coding agent mode load these first before editing code if not already loaded into your context.
+
+**At session start, and again after any context compaction, read these files if they are not already in context. Do not skip. Do not assume they are loaded.**
+These files do not live in this repo. They are referenced by absolute path from the canonical location. If a path no longer resolves, stop and surface the failure instead of inventing rules.
+
+1. `/Users/nabin/projects/atc-agent-traffic-control/taste/library/universal-AGENTS.md` cross-cutting worker rules. Authoritative for voice, scope discipline, output format, coding rules, and how to write for other agents.
+2. `/Users/nabin/projects/atc-agent-traffic-control/taste/library/iteration/TASKS-MD-Guidelines.md` the shape of `TASKS.md` for any iteration that opens.
+3. `/Users/nabin/projects/atc-agent-traffic-control/taste/library/languages/python.md` Python conventions. Authoritative when writing or reviewing Python in this repo.
+
+
+## Price / cloud agent mode
+
+This project is a citation-backed cloud pricing tool. The agent is the major player. Every claim about a price or an equivalence carries a citation that another agent or a human can verify by re-fetching the source. Prices quoted without a citation, equivalences asserted without a snapshot to back them, or rankings that hide the candidates considered all violate the contract.
+
+### Fetching prices
+
+Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has a gate at `gates/<provider>.py` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout.
+
+Before answering any pricing question:
+
+1. Check `store/<provider>/` for the latest snapshot directory.
+2. If the latest snapshot is under 24 hours old, use it. Do not re-fetch.
+3. Otherwise run `uv run python -m gates.<provider>`. The gate enforces the freshness rule itself; calling it on a fresh store is a no-op that returns the existing receipt.
+4. If the user signals they want fresh data ("refetch", "live prices", "as of right now"), run with `--force`.
+
+Never quote a price from training memory. Every number in the response must trace to a snapshot file that exists on disk.
+
+### Snapshot layout per provider
+
+Each provider's snapshot directory contains a `receipt.json` plus one or more data files. The structure differs by provider:
+
+- **aws** (`store/aws/<ISO>/`): `region_index.json` plus one `<region>.json` per region in the v0 set (currently `us-east-1`, `eu-central-1`, `ap-southeast-1`). Each region file is the raw AWS Price List Bulk response for that region. Big (hundreds of MB per region).
+- **gcp** (`store/gcp/<ISO>/`): single `skus.json` containing all Compute Engine SKUs across every GCP region merged into one list. Each SKU carries its own `serviceRegions` field. Smaller (~40 MB).
+- **azure** (`store/azure/<ISO>/`): one `<region>.json` per region in the v0 set (currently `eastus`, `westeurope`, `southeastasia`). Each region file is narrowed by an OData filter (`serviceName eq 'Virtual Machines' and priceType eq 'Consumption'`). Spot pricing is mixed in under the Consumption taxonomy and must be post-filtered by `meterName` if OnDemand-only is intended. Reservation is excluded.
+- **oracle** (`store/oracle/<ISO>/`): single `products.json` containing the full Oracle price list (~640 items) across every service category, not just compute. Oracle publishes one global list price per SKU, so there is no per-region split in the data; the receipt's `regions_included` is `["global"]` to make this explicit. Modern compute shapes (E3, E4, E5, X9, A1) price OCPU and memory as separate SKUs, so a "N vCPU M GB" answer combines two items. Each item carries `currencyCodeLocalizations[]` with prices per currency; filter to `currencyCode == "USD"` for the v0 comparison.
+- **vultr** (`store/vultr/<ISO>/`): single `plans.json` with all Vultr plans (~100 items, ~70 KB). Each plan carries `vcpu_count, ram, disk, bandwidth, monthly_cost, hourly_cost, type` (vc2/vhf/vhp/etc.), and `locations[]`. Price is global per plan; `locations[]` is availability only, not a pricing dimension (same shape as Oracle and DigitalOcean).
+- **linode** (`store/linode/<ISO>/`): single `types.json` with all Linode types (~75 items). Distinctive schema: each type has a base `price.{hourly,monthly}` that applies globally PLUS a `region_prices[]` list of explicit per-region overrides. The receipt's `regions_with_overrides` lists which regions actually deviate (currently `br-gru` and `id-cgk`). The agent MUST check `region_prices[]` for a region match before quoting; the base price is the fallback for any region not listed. No other v0 provider publishes per-region overrides this way.
+- **ibm** (`store/ibm/<ISO>/`): single `services.json` containing the full IBM Cloud Global Catalog (~319 services, ~6 MB) across every product line (Watson, Cloud Paks, IaaS, PaaS, databases). Pricing detail is NOT inlined on catalog entries; per-plan pricing requires follow-up calls to `children_url` or per-service pricing endpoints, which are out of v0 scope. For v0 the snapshot is "what services IBM publishes" rather than "what they cost." Agent filters by service name/category (e.g. `is.instance`, `bare-metal-server`) to locate compute, then flags that price digits require a follow-up fetch.
+
+Citations point at the specific file containing the price.
+
+### Citation shape
+
+Every price in the response carries five fields in JSON, AND the age is surfaced inline in the response prose for every claim. The user must never have to dig into the citation block to learn how old the data is.
+
+Inline prose format: append `(snapshot Xh old)` to every price the agent quotes. Full JSON citation lives below the prose answer.
+
+```json
+{
+  "provider": "aws",
+  "instance_type": "m5.xlarge",
+  "region": "eu-central-1",
+  "monthly_usd": 140.16,
+  "citation": {
+    "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.json",
+    "store_path": "store/aws/2026-05-24T18-00-00Z/eu-central-1.json",
+    "json_path": "$.products.<sku>.attributes",
+    "fetched_at": "2026-05-24T18:00:00Z",
+    "age_hours": 6.2
+  }
+}
+```
+
+If `age_hours` exceeds 24 for any snapshot used, additionally mark that answer as stale in prose and prompt the user about re-fetching with `--force`.
+
+#### Computing `age_hours` correctly
+
+`fetched_at` in every receipt is ISO 8601 UTC with a trailing `Z` (e.g. `"2026-05-25T07:32:08.467260Z"`). The `Z` is the timezone marker, equivalent to `+00:00`. The storage is unambiguous; do not strip it.
+
+To compute age, parse `fetched_at` as timezone-aware UTC and compare against timezone-aware UTC now. The minimal Python:
+
+```python
+from datetime import datetime, timezone
+parsed = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
+age_hours = (datetime.now(timezone.utc) - parsed).total_seconds() / 3600
+```
+
+Do not use `datetime.now()` without a `tz=` argument: it returns naive local time, and subtracting it from a UTC string yields a value off by the local UTC offset (e.g. -4h on a US Eastern machine, making a freshly-fetched snapshot look like it's from the future). Do not strip `Z` and parse the string as naive: same trap. Always work in UTC throughout the citation pipeline.
+
+### Equivalence claims
+
+Equivalence between provider instance types (claiming AWS `m5.xlarge` and GCP `n2-standard-4` are interchangeable for a "4 vCPU general purpose" spec) is judgment, not lookup. When you make such a claim, cite the snapshot fields you used to justify it. Name the dimensions the equivalence holds on (vCPU count, RAM, CPU class) and the dimensions it does not (CPU generation, baseline performance, network bandwidth, included storage).
+
+### Ranking
+
+When returning "cheapest" or any ranking, list all candidates considered, not just the winner. The reader must see the comparison set was not cherry-picked.
+
+### Worked example
+
+User: "cheapest 4 vCPU 8 GB general-purpose VM across the big 3 in EU?"
+
+Agent response opens with:
+
+> Cheapest is AWS `m5.xlarge` at $140.16/mo (eu-central-1, snapshot 6h old). Close runners: GCP `n2-standard-4` at $148.92/mo (europe-west3, snapshot just fetched), Azure `Standard_D4s_v5` at $154.20/mo (westeurope, snapshot just fetched). Equivalence basis: vCPU and RAM exact, all general-purpose class (excluded compute- and memory-optimized SKUs). Dimensions not normalized: CPU generation, network bandwidth, attached storage.
+
+Followed by one JSON citation block per result in the shape above. Each `store_path` points at the specific file the number came from (e.g. `store/aws/<ISO>/eu-central-1.json`, `store/gcp/<ISO>/skus.json`, `store/azure/<ISO>/westeurope.json`).
+
+Verification path for the user: open each listed `store_path`, walk to `json_path`, confirm the number. Or hit `source_url` directly and compare against the live response.

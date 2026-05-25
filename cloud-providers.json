@@ -1,0 +1,39 @@
+{
+  "providers": [
+    {
+      "name": "aws",
+      "service_scope": "ec2",
+      "notes": "Public Price List Bulk API; no auth. Gate file owns the endpoint and regional fan-out logic."
+    },
+    {
+      "name": "gcp",
+      "service_scope": "compute",
+      "notes": "Cloud Billing Catalog API; public data but API key required for quota tracking. Set GCP_API_KEY in .env; see .env.example. Gate file owns the Compute Engine service id (6F81-5844-456A) and pagination (max pageSize 5000)."
+    },
+    {
+      "name": "azure",
+      "service_scope": "virtual-machines",
+      "notes": "Retail Prices API; no auth. Gate file owns the OData filter for VMs and pagination."
+    },
+    {
+      "name": "oracle",
+      "service_scope": "all-products",
+      "notes": "Public price list API at apexapps.oracle.com/pls/apex/cetools; no auth, no pagination, single-shot ~3 MB. List price is global per SKU (no per-region split in the data). Compute SKUs live alongside everything else under serviceCategory; modern shapes (E3-E5, X9, A1) price OCPU and memory separately."
+    },
+    {
+      "name": "vultr",
+      "service_scope": "plans",
+      "notes": "Public /v2/plans endpoint; no auth, no pagination, single-shot ~70 KB / 100 plans. Each plan carries monthly_cost, hourly_cost, vcpu_count, ram, disk, bandwidth, type, and locations[] for availability. Price is global per plan (locations[] is availability, not a pricing dimension)."
+    },
+    {
+      "name": "linode",
+      "service_scope": "types",
+      "notes": "Public /v4/linode/types endpoint; no auth, single page, ~42 KB / 75 types. Distinctive schema: each type has a base price.{hourly,monthly} that applies globally PLUS an explicit region_prices[] list of per-region overrides. Currently only br-gru and id-cgk publish overrides; everything else falls back to base. Agent must read region_prices[] before quoting a region-specific number."
+    },
+    {
+      "name": "ibm",
+      "service_scope": "global-catalog",
+      "notes": "Public Global Catalog API at globalcatalog.cloud.ibm.com/api/v1?q=kind:service; no auth, paginated 50/page via top-level `next` URL, ~7 pages / 319 services / ~6 MB total. Catalog spans every IBM Cloud product (Watson, Cloud Paks, IaaS, PaaS, databases). Pricing detail is NOT inlined on catalog entries; per-plan price endpoints exist as follow-ups but are out of v0 scope."
+    }
+  ]
+}

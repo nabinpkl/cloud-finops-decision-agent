@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Pricing snapshots are local artifacts; re-fetched via `just fetch-all` on a fresh clone.
+store/
+
+.env
+.env.local
