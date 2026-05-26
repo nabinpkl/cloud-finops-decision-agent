@@ -9,8 +9,8 @@ Cloud VM pricing is the chosen bench because it has **authoritative ground truth
 
 ## 2. What it is
 
-- An open, **agent-consumable** comparator that answers "cheapest VM across providers for spec X, right now, with citations" through an **MCP surface a coding agent can call mid-deploy**.
-- A **test bench** for one falsifiable claim (§6), instrumented so that "where did the agent earn its cost" is *observable*, not asserted.
+- An open, **agent-consumable** comparator that answers "cheapest VM across providers for spec X, right now, with citations." Three layers in one repo: deterministic **gates** that snapshot per-provider catalogs, a deterministic **normalization layer** (Python module + FastAPI + CLI) that maps a spec to ranked candidates with citations, and an **agent UI** (Next.js + assistant-ui) where the agent draws the comparison surface from the normalization layer's output. SPEC.md owns the contracts.
+- A **test bench** for one falsifiable claim (§6), instrumented so that "where did the agent earn its cost" is *observable*, not asserted. The normalization layer is the deterministic baseline; the agent UI is the system under test; eval scores the divergence.
 - Scoped to the **greenfield moment** — choosing where to deploy a fresh project — for the audience that can actually act on the answer.
 
 ## 3. What it is NOT
@@ -59,12 +59,11 @@ Test this claim, stated so it can be broken:
 ## 8. Draft Scope
 
 **v0 — in:**
-for example
-- MCP tool `compare_vm_prices(vcpu, ram_gb, region?)` → ranked cheapest-first; each result carries provider, instance, monthly price, source, `as_of`, freshness, caveats.
-- Hand-seeded equivalence map for the handful of specs/providers I'd actually consider — including at least one honest hard case (shared-core vs dedicated-core: spec-nominal, *not* performance-equivalent).
-- Seeded price snapshot with real provenance fields; live fetchers stubbed behind a pluggable interface.
-- `propose_equivalence` + `list_pending`: agent surfaces a novel mapping → human review queue.
-- Every served price logged with a timestamp.
+- Per-provider deterministic gates writing timestamped snapshots to `store/<provider>/<ISO>/` for AWS, GCP, Azure, Oracle, Vultr, Linode, IBM. Done.
+- Normalization layer (`normalize/`): Python module + FastAPI wrapper + `python -m normalize` CLI. `compare(vcpu, ram_gb, region?, family?)` → cheapest-per-provider ranked, each result carrying provider, instance, monthly/hourly USD, citation block, and `considered_count`. `lookup(provider, instance_type, region)` for single-instance answers. Match policy is closest-larger (≥vCPU and ≥RAM).
+- Family taxonomy (`normalize/taxonomy/families.json`) and region taxonomy (`normalize/taxonomy/regions.json`) — JSON files that encode the cross-provider equivalence, hand-seeded, editable in PRs, citable by the agent when it makes equivalence claims. SPEC.md defines the file shape.
+- Agent UI (`web/`): Next.js + assistant-ui. Two custom tool components in v0: `ComparisonTable` (multi-provider ranking) and `PriceCard` (single instance). Staleness handled inline in prose per AGENTS.md.
+- Eval (`eval/v0.jsonl`): 20–30 hand-written scenarios scored by an LLM judge on two lanes — citation correctness, staleness/refusal behavior. `python -m eval` runner.
 
 **v0 — Azure narrowing (empirical):** Azure Retail Prices normalizes per `(SKU × region × priceType × OS)` rows. An unfiltered VM fetch is 500+ pages of 1000 items each and trips an unpublished rate limit (~470 sequential requests then HTTP 429 with `Retry-After=60`). v0 narrows to `priceType eq 'Consumption'` and three regions (`eastus`, `westeurope`, `southeastasia`) matching AWS's geographic coverage. The narrowed fetch is 26 pages, ~24k items, ~25s wall time. Spot SKUs are filed under the Consumption taxonomy in Azure's data model so they end up in the snapshot; the agent post-filters by `meterName` when OnDemand-only is intended. Reservation and Savings rates are out of v0; revisit when the agent answers commitment-shape questions. Also `$top` is silently ignored (page size is hard-capped at 1000), so the only lever to shrink the dataset is the OData filter.
 
@@ -72,16 +71,16 @@ for example
 
 **v0 — Indie + IBM addition (empirical):** Three more providers join v0 via no-auth public endpoints: Vultr (`/v2/plans`, ~100 items, ~70 KB), Linode (`/v4/linode/types`, ~75 items, ~42 KB), and IBM Cloud (`globalcatalog.cloud.ibm.com/api/v1?q=kind:service`, 319 services, ~6 MB across 7 paginated pages). Vultr matches the Oracle/DigitalOcean shape (global price per plan, `locations[]` is availability only). Linode contributes a fifth schema shape that no other v0 provider uses: a base `price.{hourly,monthly}` plus an explicit `region_prices[]` list of per-region overrides — currently only `br-gru` and `id-cgk` deviate from base. The agent must check `region_prices[]` before quoting a region-specific number. IBM's Global Catalog is the broadest catalog and is hierarchical: the catalog enumerates ~319 services, the compute slice (`is.instance`, `is.bare-metal-server`, `is.dedicated-host`) is reached by following each entry's `children_url` to its plans (~237 plans total), and real per-region prices live at `/{plan_id}/pricing/deployment` one hop further in. The plain `/pricing` endpoint returns $0 for base instance-hours because base price is fully regional. v0 walks all three hops and ships compute pricing alongside the catalog snapshot (`compute.json`, ~340 MB because each plan's response carries every region × every metric × every country/currency combo inline). DigitalOcean is deliberately not in v0: its `/v2/sizes` API returns an account-filtered slice of the published catalog rather than the full catalog, so the citation would point at a snapshot that is true for one account but not for the world. Hetzner and Fly remain on the v1 list (Hetzner needs an auth token; Fly publishes no pricing API at all).
 
-**v0 — out:** live multi-provider fetchers wired to production APIs, monitoring, multi-user, web UI, auth.
+**v0 — out:** monitoring, multi-user, auth, MCP surface, equivalence proposal/review queue, `propose_equivalence` / `list_pending` workflow (taxonomy edits happen in PRs in v0). DigitalOcean (account-filtered API), Hetzner (auth token required), Fly (no pricing API).
 
-**v1 — later:** "what changed" monitoring reading the v0 logs; live fetchers; broader catalog; tamper-resistant snapshot integrity (store the snapshot hash in an agent-inaccessible location, so local-integrity becomes externally verifiable rather than relying on "agent did not accidentally touch the store"). v0 keeps an in-store hash for accident-detection only; it is not a notarization claim about what the upstream API actually returned at fetch time. Split the price / cloud agent rules out of the project `AGENTS.md` into their own space (likely `price-agent/AGENTS.md`, loaded via slash command or workspace switch) so coding sessions in this repo are not weighted down by runtime rules they never use. Indie providers (Hetzner, DigitalOcean, Vultr, Fly) as the deploy-target expansion, downhill of the big-3 work once the equivalence model is proven on the harder schemas.
+**v1 — later:** MCP surface over the normalization layer for IDE/Cursor/Claude Code consumption; "what changed" monitoring reading the v0 snapshots and eval runs; live fetchers ratcheted to higher cadence than 24h; broader catalog; tamper-resistant snapshot integrity (store the snapshot hash in an agent-inaccessible location, so local-integrity becomes externally verifiable rather than relying on "agent did not accidentally touch the store"). v0 keeps an in-store hash for accident-detection only; it is not a notarization claim about what the upstream API actually returned at fetch time. Equivalence proposal workflow (`propose_equivalence`, `list_pending`) returns when taxonomy edits outgrow PR review. Split the price / cloud agent rules out of the project `AGENTS.md` into their own space (likely `price-agent/AGENTS.md`, loaded via slash command or workspace switch) so coding sessions in this repo are not weighted down by runtime rules they never use. Indie providers (Hetzner, DigitalOcean, Fly) as the deploy-target expansion, downhill of the big-3 work once the equivalence model is proven on the harder schemas.
 
 ## 9. Success criteria (for a bench, not a product)
 
-1. A coding agent can call the MCP surface and act on a cited cheapest-VM answer end to end.
+1. The agent UI answers a cheapest-VM-by-spec question end to end, rendering a ComparisonTable whose every row carries a citation that resolves to a real snapshot file on disk.
 2. The bench produces a **finding** on the claim — *including* the case where the claim is falsified, which is a valid and publishable outcome.
-3. The one layer where the agent earns its cost is observable and named, with the plumbing layers demonstrably cheaper done deterministically.
-4. The artifact is **legible**: repo + a real agent-interaction transcript, so it reads as a build, not a take.
+3. The one layer where the agent earns its cost is observable and named, with the plumbing layers (gates, normalization, taxonomy) demonstrably cheaper done deterministically.
+4. The artifact is **legible**: repo + a real agent-interaction transcript + eval results, so it reads as a build, not a take.
 
 ## 10. Risks
 

@@ -1,6 +1,6 @@
 # cloud-finops-decision-agent
 
-A citation-backed cloud pricing tool where an agent does the work and every claim is verifiable. Ask it "cheapest 4 vCPU 8 GB box across the big 3 in EU" and the answer comes with the source URL, the snapshot file the number came from, and the path inside that snapshot. You verify by clicking the URL or opening the file. No trust required.
+Citation-backed cloud pricing where the agent draws the UI from a deterministic normalization layer. Ask it "cheapest 4 vCPU 8 GB box across the big 3 in EU" and the agent renders a comparison table whose every row links to the snapshot file the number came from, the JSON path inside that snapshot, and the upstream URL. You verify by clicking through. No trust required.
 
 ## Why this exists
 
@@ -12,13 +12,15 @@ A second, larger experiment rides on top, and we do not have answers yet. The de
 
 ## How it works
 
-Two layers.
+Three layers in one repo. SPEC.md owns the contracts between them.
 
-Gates are deterministic Python scripts that fetch a provider's full compute pricing catalog (across all regions) and save a timestamped snapshot under `store/<provider>/<ISO>.json`. One gate per provider. They print a JSON receipt to stdout so the calling agent has the citation fields it needs.
+**Gates** (`gates/`) are deterministic Python scripts that fetch a provider's compute pricing catalog and save a timestamped snapshot under `store/<provider>/<ISO>/`. One gate per provider, with a polite 429-aware HTTP layer in `gates/_shared.py`. They print a JSON receipt to stdout.
 
-The agent (a Claude Code session in this repo) does the interpretive work: walking the snapshots, mapping a user spec to provider instance types, judging equivalence across heterogeneous schemas, ranking across providers, and returning answers with citations.
+**Normalization layer** (`normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
 
-The citation contract is the project's only enforcement layer in v0. Every price the agent quotes carries a `source_url`, `store_path`, `json_path`, `fetched_at` timestamp, and `age_hours`. The age is surfaced inline in prose so the reader never has to dig into a JSON block to learn the data is 6 hours old. If the cited snapshot is over 24 hours old, the agent marks the answer stale and prompts to re-fetch.
+**Agent UI** (`web/`) is a Next.js app using `assistant-ui` as the chat shell. The agent calls the normalization layer over HTTP as a tool and decides which custom component to render: `ComparisonTable` for ranking queries, `PriceCard` for single-instance lookups. The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure.
+
+The citation contract is the only enforcement layer. Every price the agent quotes carries `source_url`, `store_path`, `json_path`, `fetched_at`, and `age_hours`. If the cited snapshot is over 24 hours old, the agent marks the answer stale and offers a refetch. AGENTS.md is the agent behavior contract; SPEC.md is the data shape contract.
 
 Seven providers in v0: AWS, GCP, Azure, Oracle, Vultr, Linode, IBM. The big three have the gnarliest pricing schemas in the industry, which makes them the right stress test for the equivalence judgment layer. Oracle widens the schema further with globally-published list pricing and OCPU+memory split for modern shapes. Vultr and Linode bring the indie scale into the bench (~100 plans each) and Linode contributes a fifth distinct schema shape via explicit `region_prices[]` overrides. IBM contributes a sixth shape, hierarchical and three-hop: the catalog enumerates ~319 services, the compute slice (VPC virtual servers, bare metal, dedicated hosts) is reached by following each entry's `children_url` to its plans, and real per-region prices live one more hop deeper at `/{plan_id}/pricing/deployment`. The plain `/pricing` endpoint returns $0 for base instance-hours because base price is fully regional. Hetzner, DigitalOcean, and Fly remain on the v1 list: Hetzner needs an auth token, DigitalOcean's API returns an account-filtered slice rather than the published catalog, and Fly publishes no pricing API at all.
 
@@ -52,12 +54,18 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 ## Layout
 
-- `gates/<provider>.py`: per-provider fetchers (one each for aws, gcp, azure, oracle, vultr, linode, ibm in v0)
-- `store/<provider>/<ISO>/`: timestamped snapshot directories holding the raw data files plus a `receipt.json`
+- `gates/<provider>.py`: per-provider fetchers (aws, gcp, azure, oracle, vultr, linode, ibm in v0)
+- `gates/_shared.py`: timestamps, freshness check, `.env` loader, 429-aware HTTP helper
+- `store/<provider>/<ISO>/`: timestamped snapshot directories holding raw data files plus `receipt.json`
+- `normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
+- `normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
+- `web/`: Next.js + assistant-ui app where the agent draws the comparison surface
+- `eval/v0.jsonl`: hand-written scenarios scored by an LLM judge on citation correctness + staleness/refusal
 - `cloud-providers.json`: provider registry
-- `AGENTS.md`: agent contract for both modes
-- `DRAFT-PRD.md`: product intent, scope, v1 roadmap
+- `AGENTS.md`: agent behavior contract (citation contract, mode switching)
+- `SPEC.md`: technical contract (normalization API, taxonomy formats, citation schema, UI surface, eval rubric)
+- `PRD.md`: product intent, scope, roadmap
 
 ## Status
 
-Early. The PRD is a draft. The gates do not exist yet. v0 is being scoped through hands-on discovery against the actual provider APIs.
+Gates ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. Normalization layer, agent UI, and eval are next per SPEC.md's build sequence.

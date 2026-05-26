@@ -23,6 +23,14 @@ These files do not live in this repo. They are referenced by absolute path from 
 
 This project is a citation-backed cloud pricing tool. The agent is the major player. Every claim about a price or an equivalence carries a citation that another agent or a human can verify by re-fetching the source. Prices quoted without a citation, equivalences asserted without a snapshot to back them, or rankings that hide the candidates considered all violate the contract.
 
+**SPEC.md owns data shapes** (normalization API, taxonomy file formats, citation block schema). This file owns agent behavior rules. When the two reference the same structure (e.g. the citation block), SPEC.md is canonical; the behavior rules here describe how to use it, not how to define it.
+
+### Calling the normalization layer
+
+Once `normalize/` is in place, the agent's primary tool for pricing answers is the normalization layer (`normalize.compare`, `normalize.lookup`) called via the FastAPI HTTP endpoints or imported directly in a Python context. The normalization layer encapsulates the snapshot walk, taxonomy lookup, match policy (closest-larger), and citation block construction. The agent quotes its output and surfaces the citation in prose; it does not re-do the deterministic work.
+
+Direct snapshot walking is still allowed when (a) the normalization layer does not cover the question (e.g. "are there any Power Systems prices in IBM's catalog?"), or (b) the user explicitly asks the agent to explore the raw data. In those cases the agent constructs the citation block by hand per SPEC.md.
+
 ### Fetching prices
 
 Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has a gate at `gates/<provider>.py` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout.
@@ -50,29 +58,13 @@ Each provider's snapshot directory contains a `receipt.json` plus one or more da
 
 Citations point at the specific file containing the price.
 
-### Citation shape
+### Citation behavior
 
-Every price in the response carries five fields in JSON, AND the age is surfaced inline in the response prose for every claim. The user must never have to dig into the citation block to learn how old the data is.
+The citation block schema (the five JSON fields `source_url`, `store_path`, `json_path`, `fetched_at`, `age_hours`) is defined in SPEC.md. This section governs how the agent surfaces it.
 
-Inline prose format: append `(snapshot Xh old)` to every price the agent quotes. Full JSON citation lives below the prose answer.
-
-```json
-{
-  "provider": "aws",
-  "instance_type": "m5.xlarge",
-  "region": "eu-central-1",
-  "monthly_usd": 140.16,
-  "citation": {
-    "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.json",
-    "store_path": "store/aws/2026-05-24T18-00-00Z/eu-central-1.json",
-    "json_path": "$.products.<sku>.attributes",
-    "fetched_at": "2026-05-24T18:00:00Z",
-    "age_hours": 6.2
-  }
-}
-```
-
-If `age_hours` exceeds 24 for any snapshot used, additionally mark that answer as stale in prose and prompt the user about re-fetching with `--force`.
+- Every price in a response carries a citation block AND has its age surfaced inline in prose. The user must never have to dig into a JSON block to learn how old the data is.
+- Inline prose format: append `(snapshot Xh old)` to every price the agent quotes. The full JSON citation lives below the prose answer (or inside the rendered tool component's Source primitive in the agent UI).
+- If `age_hours` exceeds 24 for any snapshot used, mark that answer as stale in prose and prompt the user about re-fetching with `--force`.
 
 #### Computing `age_hours` correctly
 
@@ -86,11 +78,13 @@ parsed = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
 age_hours = (datetime.now(timezone.utc) - parsed).total_seconds() / 3600
 ```
 
-Do not use `datetime.now()` without a `tz=` argument: it returns naive local time, and subtracting it from a UTC string yields a value off by the local UTC offset (e.g. -4h on a US Eastern machine, making a freshly-fetched snapshot look like it's from the future). Do not strip `Z` and parse the string as naive: same trap. Always work in UTC throughout the citation pipeline.
+Do not use `datetime.now()` without a `tz=` argument: it returns naive local time, and subtracting it from a UTC string yields a value off by the local UTC offset (e.g. -4h on a US Eastern machine, making a freshly-fetched snapshot look like it's from the future). Do not strip `Z` and parse the string as naive: same trap. Always work in UTC throughout the citation pipeline. The normalization layer is the canonical implementation of this computation; reach for it before re-implementing.
 
 ### Equivalence claims
 
-Equivalence between provider instance types (claiming AWS `m5.xlarge` and GCP `n2-standard-4` are interchangeable for a "4 vCPU general purpose" spec) is judgment, not lookup. When you make such a claim, cite the snapshot fields you used to justify it. Name the dimensions the equivalence holds on (vCPU count, RAM, CPU class) and the dimensions it does not (CPU generation, baseline performance, network bandwidth, included storage).
+Equivalence between provider instance types (claiming AWS `m5.xlarge` and GCP `n2-standard-4` are interchangeable for a "4 vCPU general purpose" spec) is captured in `normalize/taxonomy/families.json` for the cases v0 has hand-seeded. When quoting from the taxonomy, surface the `dimensions_matched` and `dimensions_not_normalized` fields in prose so the equivalence basis is visible.
+
+When the user's question reaches a spec not covered by the taxonomy, the equivalence is judgment, not lookup. Cite the snapshot fields used to justify it, name the dimensions the equivalence holds on (vCPU count, RAM, CPU class) and the dimensions it does not (CPU generation, baseline performance, network bandwidth, included storage), and flag that the equivalence is agent-derived rather than from the taxonomy. v1 will queue agent-derived equivalences for PR review (`propose_equivalence`); for v0, surfacing them transparently in prose is sufficient.
 
 ### Ranking
 
