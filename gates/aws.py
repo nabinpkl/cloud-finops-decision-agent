@@ -14,6 +14,7 @@ from gates._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
+    fetch_polite,
     is_fresh,
     iso_compact,
     iso_z,
@@ -47,15 +48,10 @@ class Receipt:
     total_size_bytes: int
 
 
-async def fetch_bytes(client: httpx.AsyncClient, url: str, timeout: float) -> bytes:
-    resp = await client.get(url, timeout=timeout)
-    resp.raise_for_status()
-    return resp.content
-
-
 async def fetch_all(regions: list[str]) -> tuple[bytes, dict[str, tuple[bytes, str]]]:
     async with httpx.AsyncClient(follow_redirects=True) as client:
-        index_bytes = await fetch_bytes(client, REGION_INDEX_URL, timeout=60.0)
+        index_resp = await fetch_polite(client, REGION_INDEX_URL, timeout=60.0)
+        index_bytes = index_resp.content
         index = json.loads(index_bytes)
         offers = index["regions"]
         missing = [r for r in regions if r not in offers]
@@ -64,8 +60,8 @@ async def fetch_all(regions: list[str]) -> tuple[bytes, dict[str, tuple[bytes, s
 
         async def one(region: str) -> tuple[str, bytes, str]:
             url = PRICING_HOST + offers[region]["currentVersionUrl"]
-            data = await fetch_bytes(client, url, timeout=600.0)
-            return region, data, url
+            resp = await fetch_polite(client, url, timeout=600.0)
+            return region, resp.content, url
 
         results = await asyncio.gather(*(one(r) for r in regions))
         return index_bytes, {r: (data, url) for r, data, url in results}

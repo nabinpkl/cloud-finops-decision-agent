@@ -15,6 +15,7 @@ from gates._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
+    fetch_polite,
     is_fresh,
     iso_compact,
     iso_z,
@@ -61,8 +62,7 @@ async def fetch_all_skus(api_key: str) -> tuple[list[dict], int]:
             params: dict[str, str | int] = {"pageSize": PAGE_SIZE}
             if token:
                 params["pageToken"] = token
-            resp = await client.get(CATALOG_BASE, params=params, timeout=120.0)
-            resp.raise_for_status()
+            resp = await fetch_polite(client, CATALOG_BASE, params=params, timeout=120.0)
             page = resp.json()
             page_count += 1
             skus.extend(page.get("skus", []))

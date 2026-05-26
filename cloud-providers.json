@@ -32,8 +32,8 @@
     },
     {
       "name": "ibm",
-      "service_scope": "global-catalog",
-      "notes": "Public Global Catalog API at globalcatalog.cloud.ibm.com/api/v1?q=kind:service; no auth, paginated 50/page via top-level `next` URL, ~7 pages / 319 services / ~6 MB total. Catalog spans every IBM Cloud product (Watson, Cloud Paks, IaaS, PaaS, databases). Pricing detail is NOT inlined on catalog entries; per-plan price endpoints exist as follow-ups but are out of v0 scope."
+      "service_scope": "global-catalog+compute-pricing",
+      "notes": "Public Global Catalog API at globalcatalog.cloud.ibm.com/api/v1; no auth. Gate walks three hops: (1) catalog query paginated 50/page (~7 pages, ~319 services, ~6 MB), (2) for compute service names (is.instance, is.bare-metal-server, is.dedicated-host) follow children_url to enumerate plans (~237 plans total in v0), (3) call /{plan_id}/pricing/deployment per plan to get per-region prices. The deployment endpoint returns every region the plan exists in inline. Real compute numbers live only at this third hop: plain /pricing returns $0 for base instance-hours because base price is fully regional. Snapshot writes services.json (catalog) + compute.json (plans + per-plan deployment pricing); the latter is ~340 MB because each plan's response carries every region, metric, and country/currency combination."
     }
   ]
 }

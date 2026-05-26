@@ -14,6 +14,7 @@ from gates._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
+    fetch_polite,
     is_fresh,
     iso_compact,
     iso_z,
@@ -53,8 +54,7 @@ class Receipt:
 
 async def fetch_plans() -> dict:
     async with httpx.AsyncClient(follow_redirects=True) as client:
-        resp = await client.get(PLANS_URL, timeout=120.0)
-        resp.raise_for_status()
+        resp = await fetch_polite(client, PLANS_URL, timeout=120.0)
         return resp.json()
 
 

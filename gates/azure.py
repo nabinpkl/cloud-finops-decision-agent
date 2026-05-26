@@ -15,6 +15,7 @@ from gates._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
+    fetch_polite,
     is_fresh,
     iso_compact,
     iso_z,
@@ -38,9 +39,6 @@ REGIONS: list[str] = ["eastus", "westeurope", "southeastasia"]
 # commitment-shape questions.
 #
 # Page size is hardcoded at 1000 server-side; $top is silently ignored.
-MAX_RETRIES_PER_PAGE = 5
-INITIAL_BACKOFF_SECONDS = 2.0
-MAX_BACKOFF_SECONDS = 60.0
 
 STORE_ROOT = store_root(PROVIDER)
 
@@ -76,33 +74,22 @@ class Receipt:
     total_size_bytes: int
 
 
-async def get_with_retry(client: httpx.AsyncClient, url: str, region: str, page_num: int) -> dict:
-    delay = INITIAL_BACKOFF_SECONDS
-    for attempt in range(MAX_RETRIES_PER_PAGE + 1):
-        t0 = now_utc()
-        resp = await client.get(url, timeout=120.0)
-        elapsed = (now_utc() - t0).total_seconds()
-        if resp.status_code == 429:
-            retry_after = resp.headers.get("Retry-After")
-            wait = float(retry_after) if retry_after else delay
-            log(f"{region} page {page_num} attempt {attempt + 1}: 429, waiting {wait:.1f}s (Retry-After={retry_after or 'absent'})")
-            await asyncio.sleep(wait)
-            delay = min(delay * 2, MAX_BACKOFF_SECONDS)
-            continue
-        resp.raise_for_status()
-        log(f"{region} page {page_num}: 200 in {elapsed:.2f}s")
-        return resp.json()
-    raise httpx.HTTPError(f"Exceeded {MAX_RETRIES_PER_PAGE} retries on {region} page {page_num} due to repeated 429s")
-
-
 async def fetch_region(client: httpx.AsyncClient, region: str) -> tuple[list[dict], int, str]:
     items: list[dict] = []
     pages = 0
     first_url = first_url_for(region)
     next_url: str | None = first_url
+
+    def on_retry(attempt: int, status: int, wait: float) -> None:
+        log(f"{region} page {pages} attempt {attempt}: {status}, waiting {wait:.1f}s")
+
     while next_url:
         pages += 1
-        page = await get_with_retry(client, next_url, region, pages)
+        t0 = now_utc()
+        resp = await fetch_polite(client, next_url, timeout=120.0, on_retry=on_retry)
+        elapsed = (now_utc() - t0).total_seconds()
+        log(f"{region} page {pages}: 200 in {elapsed:.2f}s")
+        page = resp.json()
         items.extend(page.get("Items", []))
         next_url = page.get("NextPageLink") or None
     return items, pages, first_url

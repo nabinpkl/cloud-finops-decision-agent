@@ -1,7 +1,8 @@
-"""Shared helpers for provider gates: hashing, timestamps, freshness, env, output."""
+"""Shared helpers for provider gates: hashing, timestamps, freshness, env, output, HTTP."""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -9,6 +10,8 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import httpx
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -74,3 +77,40 @@ def load_dotenv_if_present() -> None:
 def emit(payload: dict, code: int = 0) -> None:
     print(json.dumps(payload, indent=2))
     sys.exit(code)
+
+
+DEFAULT_MAX_RETRIES = 5
+DEFAULT_INITIAL_BACKOFF = 2.0
+DEFAULT_MAX_BACKOFF = 60.0
+
+
+async def fetch_polite(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    params: dict | None = None,
+    timeout: float = 120.0,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    initial_backoff: float = DEFAULT_INITIAL_BACKOFF,
+    max_backoff: float = DEFAULT_MAX_BACKOFF,
+    on_retry: "callable | None" = None,
+) -> httpx.Response:
+    # Honor Retry-After when present, exponential backoff otherwise. Retries on 429
+    # and 5xx; 4xx other than 429 raise immediately. on_retry(attempt, status, wait)
+    # is optional; gates that want stderr breadcrumbs supply it.
+    delay = initial_backoff
+    for attempt in range(max_retries + 1):
+        resp = await client.get(url, params=params, timeout=timeout)
+        if resp.status_code == 429 or 500 <= resp.status_code < 600:
+            if attempt == max_retries:
+                resp.raise_for_status()
+            retry_after = resp.headers.get("Retry-After")
+            wait = float(retry_after) if retry_after else delay
+            if on_retry is not None:
+                on_retry(attempt + 1, resp.status_code, wait)
+            await asyncio.sleep(wait)
+            delay = min(delay * 2, max_backoff)
+            continue
+        resp.raise_for_status()
+        return resp
+    raise httpx.HTTPError(f"exceeded {max_retries} retries fetching {url}")
