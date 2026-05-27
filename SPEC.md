@@ -99,38 +99,60 @@ When no candidate satisfies the request (e.g. user asked 256 vCPU but no provide
     "vcpu": 4,
     "ram_gb": 8,
     "region": "eu-central",
-    "family": "general-purpose"
+    "family": "general-purpose",
+    "providers": ["aws", "azure", "ibm", "linode", "vultr"]
   },
   "results": [
     {
-      "provider": "aws",
-      "instance_type": "m5.xlarge",
-      "region_native": "eu-central-1",
+      "provider": "vultr",
+      "instance_type": "vc2-4c-8gb",
+      "region_native": "fra",
       "vcpu_actual": 4,
-      "ram_gb_actual": 16,
-      "monthly_usd": 140.16,
-      "hourly_usd": 0.192,
-      "considered_count": 4,
+      "ram_gb_actual": 8.0,
+      "monthly_usd": 40.00,
+      "hourly_usd": 0.055,
+      "considered_count": 21,
       "citation": {
-        "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.json",
-        "store_path": "store/aws/2026-05-26T03-00-00Z/eu-central-1.json",
-        "json_path": "$.products.<sku>.attributes",
-        "fetched_at": "2026-05-26T03:00:00Z",
+        "source_url": "https://api.vultr.com/v2/plans",
+        "store_path": "store/vultr/2026-05-25T21-00-46Z/plans.json",
+        "json_path": "$.plans[?(@.id=='vc2-4c-8gb')].monthly_cost",
+        "fetched_at": "2026-05-25T21:00:46.211738Z",
         "age_hours": 6.2
       }
     },
     {
-      "provider": "gcp",
-      "instance_type": "n2-standard-4",
-      "...": "..."
+      "provider": "aws",
+      "instance_type": "a1.xlarge",
+      "region_native": "eu-central-1",
+      "vcpu_actual": 4,
+      "ram_gb_actual": 8.0,
+      "monthly_usd": 84.97,
+      "hourly_usd": 0.1164,
+      "considered_count": 208,
+      "citation": {
+        "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.json",
+        "store_path": "store/aws/2026-05-25T04-23-36Z/eu-central-1.json",
+        "json_path": "$.terms.OnDemand['4AQFBS47E7Y26RTA'].*.priceDimensions.*.pricePerUnit.USD",
+        "fetched_at": "2026-05-25T04:23:36.466029Z",
+        "age_hours": 8.4
+      }
     }
   ],
   "ranked_by": "monthly_usd",
-  "unmet_requirements": []
+  "unmet_requirements": [],
+  "data_quality": {
+    "overall_status": "ok",
+    "per_provider": {
+      "aws":   {"status": "ok", "snapshot_age_hours": 8.4,  "flags": [], "human_summary": "aws index built clean: 2880 rows.", "report_path": "store/aws/2026-05-25T04-23-36Z/index_report.json", "snapshot_iso": "2026-05-25T04-23-36Z"},
+      "vultr": {"status": "ok", "snapshot_age_hours": 6.2,  "flags": [], "human_summary": "vultr index built clean: 271 rows.", "report_path": "store/vultr/2026-05-25T21-00-46Z/index_report.json", "snapshot_iso": "2026-05-25T21-00-46Z"}
+    }
+  }
 }
 ```
 
 When `expand=full`, each result entry also carries `considered: [...]` — the full list of candidates that matched the family + vCPU + RAM filter, in the order they were ranked, so the agent can quote the full comparison set when answering.
+
+Under the closest-larger match policy, a 4 vCPU 8 GB ask picks AWS `a1.xlarge` (4 vCPU 8 GB at $0.1164/hr) rather than `m5.xlarge` (4 vCPU 16 GB at $0.230/hr) because `a1.xlarge` meets the spec at lower cost. The agent's prose surfaces the actual vCPU/RAM delivered so the user sees what was selected and why.
 
 ### Citation block
 
@@ -147,6 +169,66 @@ The citation block on every result entry is the project's only ground-truth cont
 ```
 
 `age_hours` is computed as `(now_utc() - parse(fetched_at)).total_seconds() / 3600`. AGENTS.md spells out the UTC-aware parsing pitfall; the normalization layer is the canonical implementation.
+
+### Composite citation (resource-priced providers)
+
+GCP and Oracle price compute per resource (per vCPU or OCPU + per GB RAM) rather than per named bundle. Per ADR 0007 the parquet stores atomic rate rows for these providers; compare() synthesizes composite results at query time. A composite result's citation block has the shape:
+
+```json
+{
+  "composite": [
+    {
+      "kind":              "rate",
+      "rate_unit":         "per_vcpu_hour",
+      "rate":              0.0306,
+      "quantity":          4,
+      "contribution_usd":  0.1224,
+      "source_url":        "https://cloudbilling.googleapis.com/...",
+      "store_path":        "store/gcp/<ISO>/skus.json",
+      "json_path":         "$.skus[?(@.skuId=='ABCD-1234-EFGH')].pricingInfo[0].pricingExpression.tieredRates[0].unitPrice",
+      "fetched_at":        "2026-05-27T03:00:00Z",
+      "age_hours":         3.1
+    },
+    {
+      "kind":              "rate",
+      "rate_unit":         "per_gb_ram_hour",
+      "rate":              0.0102,
+      "quantity":          8,
+      "contribution_usd":  0.0816,
+      "...":               "..."
+    }
+  ],
+  "synthesis": {
+    "rule":    "flex_rules.gcp.n2",
+    "formula": "vcpu * vcpu_rate + ram_gb * ram_rate"
+  }
+}
+```
+
+The corresponding result entry sets `synthesized: true` so the agent's prose can disclose the composition. Each `composite[]` entry is a fully-verifiable citation: open `store_path`, walk `json_path`, confirm the rate. Sum of `contribution_usd` equals the result's `hourly_usd` within rounding.
+
+### data_quality envelope
+
+Every response carries a `data_quality` block per ADR 0005. The shape:
+
+```json
+{
+  "overall_status": "ok | warn | stale | broken",
+  "per_provider": {
+    "aws": {
+      "status":             "ok | warn | stale | broken",
+      "snapshot_age_hours": 8.4,
+      "flags":              [],
+      "human_summary":      "aws index built clean: 2880 rows.",
+      "report_path":        "store/aws/<ISO>/index_report.json",
+      "snapshot_iso":       "<ISO>",
+      "evidence":           {"...": "..."}
+    }
+  }
+}
+```
+
+`overall_status` is the worst of the per-provider statuses on the ordering `ok < warn < stale < broken`. `flags` carries the drift identifiers from ADR 0004's enum. `human_summary` is pre-composed prose the agent paraphrases. `report_path` points at the on-disk artifact for drill-down. `snapshot_stale` is appended automatically whenever `snapshot_age_hours > 24`.
 
 ## Taxonomies
 

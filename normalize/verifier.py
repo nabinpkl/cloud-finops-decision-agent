@@ -83,6 +83,12 @@ def _extract_price(value: Any) -> float | None:
     (GCP unitPrice = {units, nanos}). Normalize to a float."""
     if isinstance(value, (int, float)):
         return float(value)
+    if isinstance(value, str):
+        # AWS stores per-unit prices as quoted decimal strings.
+        try:
+            return float(value)
+        except ValueError:
+            return None
     if isinstance(value, dict):
         if "units" in value and "nanos" in value:
             return float(value["units"]) + float(value["nanos"]) / 1e9

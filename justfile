@@ -20,6 +20,19 @@ index provider:
 index-force provider:
     uv run python -m normalize.index {{provider}} --force
 
+# Build indexes for every provider that has a supported builder.
+index-all: (index "linode") (index "vultr") (index "azure") (index "ibm") (index "aws") (index "gcp") (index "oracle")
+
+# Compare cheapest matching instance across providers.
+# Example: just compare 4 8 eu-central general-purpose
+compare vcpu ram region family="any":
+    uv run python -m normalize compare --vcpu {{vcpu}} --ram {{ram}} --region {{region}} --family {{family}}
+
+# Look up a single instance type's price.
+# Example: just lookup aws m5.xlarge eu-central-1
+lookup provider instance_type region:
+    uv run python -m normalize lookup --provider {{provider}} --instance-type {{instance_type}} --region {{region}}
+
 # Placeholder until ruff and pytest land.
 check:
     @echo "no checks defined yet"

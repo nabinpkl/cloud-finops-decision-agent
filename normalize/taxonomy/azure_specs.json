@@ -1,0 +1,49 @@
+{
+  "_meta": {
+    "version": "v0",
+    "description": "Per-family RAM-per-vCPU ratios and parsing rules for Azure VM SKUs. Azure's pricing API does not carry vCPU or RAM on priced rows; we derive both from armSkuName via the documented naming convention (https://learn.microsoft.com/azure/virtual-machines/vm-naming-conventions). vCPU is parsed from the SKU name. RAM is computed as `vcpu * ram_per_vcpu_gb` with optional adjustments via modifiers (h doubles RAM, l halves it).",
+    "schema": {
+      "<family>.ram_per_vcpu_gb": "Default GB of RAM per vCPU for this family generation.",
+      "<family>.family_slug": "Maps to a taxonomy family slug from families.json.",
+      "<family>.modifiers": "Per-letter adjustments applied to the base spec. 'h' = high memory (typically 2x), 'l' = low memory (typically 0.5x). Other letters in the SKU (a/s/d/i/p/t/c) are flavor markers and do not change vCPU or RAM.",
+      "<family>.notes": "Free-text architecture context for agent prose."
+    },
+    "v0_coverage": "v0 covers the modern D, E, F, L families with v3 to v6 generations under Linux OnDemand pricing. M-series (large RAM), N-series (GPU), H-series (HPC), A-series (legacy), B-series (burstable), G/GS (deprecated) are out of v0 for now. SKUs in those families appear as filtered_skipped in the index report, not unclassified, because the absence is deliberate."
+  },
+  "D": {
+    "ram_per_vcpu_gb": 4.0,
+    "family_slug": "general-purpose",
+    "modifiers": {
+      "h": 2.0,
+      "l": 0.5
+    },
+    "notes": "Balanced general-purpose. Dsv5 = Intel Ice Lake, Dasv5 = AMD Milan, Dadsv6 = AMD Genoa."
+  },
+  "E": {
+    "ram_per_vcpu_gb": 8.0,
+    "family_slug": "memory-optimized",
+    "modifiers": {
+      "h": 2.0,
+      "l": 0.5
+    },
+    "notes": "Memory-optimized 1:8 vCPU:GB ratio. Esv5 = Ice Lake, Easv5 = Milan, Eadsv7 = Genoa."
+  },
+  "F": {
+    "ram_per_vcpu_gb": 2.0,
+    "family_slug": "compute-optimized",
+    "modifiers": {
+      "h": 2.0,
+      "l": 0.5
+    },
+    "notes": "Compute-optimized 1:2 vCPU:GB ratio. Fsv2 = Cascade Lake, Falsv6 = AMD Genoa."
+  },
+  "L": {
+    "ram_per_vcpu_gb": 8.0,
+    "family_slug": "storage-optimized",
+    "modifiers": {
+      "h": 2.0,
+      "l": 0.5
+    },
+    "notes": "Storage-optimized with local NVMe. Lsv3 = Ice Lake, Lasv4 = AMD."
+  }
+}

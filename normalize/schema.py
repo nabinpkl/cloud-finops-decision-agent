@@ -16,6 +16,13 @@ import polars as pl
 
 # One row per priced SKU. The columns are the citation contract plus the
 # comparable fields. Schema changes here ripple through every builder.
+#
+# Per ADR 0007 the schema discriminates row_kind:
+#   - "instance" rows (the 5 atomic v0 providers): hourly_usd/monthly_usd are
+#     per-instance costs; vcpu and ram_gb describe the priced shape.
+#   - "rate" rows (GCP, Oracle): hourly_usd is a per-unit rate (per vCPU/hour or
+#     per GB-RAM/hour). vcpu and ram_gb are null. rate_unit names the unit.
+# Readers MUST branch on row_kind before aggregating prices.
 INDEX_SCHEMA: dict[str, pl.DataType] = {
     "provider":             pl.String,
     "snapshot_iso":         pl.String,
@@ -23,20 +30,26 @@ INDEX_SCHEMA: dict[str, pl.DataType] = {
     "family":               pl.String,        # taxonomy match; "unclassified" if no prefix matched
     "region_native":        pl.String,
     "region_canonical":     pl.String,        # nullable; null when outside the 3 v0 buckets
-    "vcpu":                 pl.Int32,
-    "ram_gb":               pl.Float64,
-    "hourly_usd":           pl.Float64,       # nullable when only monthly is published
-    "monthly_usd":          pl.Float64,       # nullable when only hourly is published
+    "row_kind":             pl.String,        # "instance" or "rate" (ADR 0007)
+    "rate_unit":            pl.String,        # null for instance rows; "per_vcpu_hour"|"per_gb_ram_hour"|"per_ocpu_hour" for rate rows
+    "vcpu":                 pl.Int32,         # null for rate rows
+    "ram_gb":               pl.Float64,       # null for rate rows
+    "hourly_usd":           pl.Float64,       # per-instance for "instance" rows; per-unit for "rate" rows
+    "monthly_usd":          pl.Float64,       # per-instance for "instance" rows; null for "rate" rows (rates are inherently hourly)
     "source_url":           pl.String,
     "store_path":           pl.String,
     "json_path":            pl.String,        # JSONPath into store_path resolving to the price node
-    "cited_price_kind":     pl.String,        # "hourly" or "monthly"; tells the verifier which column the json_path leaf equals
+    "cited_price_kind":     pl.String,        # "hourly" | "monthly" | "rate_hourly"; tells the verifier which column the json_path leaf equals
 }
 
 
 @dataclass
 class IndexRow:
-    """A single parquet row. Builders return lists of these."""
+    """A single parquet row. Builders return lists of these.
+
+    `row_kind` defaults to "instance" so the 5 v0 atomic-pricing builders do not
+    have to pass it explicitly. Rate-row builders (GCP, Oracle) override.
+    """
 
     provider: str
     snapshot_iso: str
@@ -44,14 +57,16 @@ class IndexRow:
     family: str
     region_native: str
     region_canonical: str | None
-    vcpu: int
-    ram_gb: float
     hourly_usd: float | None
     monthly_usd: float | None
     source_url: str
     store_path: str
     json_path: str
-    cited_price_kind: str  # "hourly" or "monthly"
+    cited_price_kind: str  # "hourly" | "monthly" | "rate_hourly"
+    vcpu: int | None = None
+    ram_gb: float | None = None
+    row_kind: str = "instance"
+    rate_unit: str | None = None
 
     def as_record(self) -> dict[str, Any]:
         return {
@@ -61,6 +76,8 @@ class IndexRow:
             "family":           self.family,
             "region_native":    self.region_native,
             "region_canonical": self.region_canonical,
+            "row_kind":         self.row_kind,
+            "rate_unit":        self.rate_unit,
             "vcpu":             self.vcpu,
             "ram_gb":           self.ram_gb,
             "hourly_usd":       self.hourly_usd,

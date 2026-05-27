@@ -33,7 +33,7 @@ Stable identifiers per provider:
 | Oracle | `partNumber` (`B`-prefixed) | `$.items[?(@.partNumber=='<id>')].currencyCodeLocalizations[?(@.currencyCode=='USD')].prices[0].value` |
 | Vultr | `id` (plan slug) | `$.plans[?(@.id=='<id>')].monthly_cost` |
 | Linode | `id` (type slug) plus optional region override id | `$.types[?(@.id=='<id>')].price.monthly` or `$.types[?(@.id=='<id>')].region_prices[?(@.id=='<region>')].monthly` |
-| IBM | `plan_id` (UUID), `deployment_region`, `metric_id` | `$.compute['<service>'].pricing['<plan_id>'].resources[?(@.deployment_region=='<region>')].metrics[?(@.metric_id=='<metric>')].amounts[?(@.country=='USA' && @.currency=='USD')].prices[0].price` |
+| IBM | `plan_id` (UUID), `deployment_region`, `metric_id` | `$.compute['<service>'].pricing['<plan_id>'].resources[?(@.deployment_region=='<region>')].metrics[?(@.metric_id=='<metric>')].amounts[?(@.country=='USA' & @.currency=='USD')].prices[0].price` (single `&`, not `&&`: jsonpath_ng.ext's filter dialect does not accept the C-style double-ampersand) |
 
 Oracle Flex shapes (E3+, A1+, X9+) price OCPU and memory as separate parts. We do NOT synthesize a single `json_path` for the composite. Instead the parquet keeps one row per atomic SKU (one for OCPU, one for memory), and the response carries a `composite: [citation_a, citation_b]` field on the result. The agent's prose flags this to the user (see SPEC.md).
 

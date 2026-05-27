@@ -68,4 +68,6 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 ## Status
 
-Gates ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. Normalization layer, agent UI, and eval are next per SPEC.md's build sequence.
+Gates ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `python -m normalize compare --vcpu 4 --ram 8 --region eu-central --family general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
+
+Next per SPEC.md's build sequence: FastAPI wrapper over `compare()`/`lookup()`, the Next.js plus assistant-ui agent UI, and the LLM-judge eval over `eval/v0.jsonl`.

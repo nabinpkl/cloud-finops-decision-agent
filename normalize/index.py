@@ -38,7 +38,7 @@ ROW_DROP_HARD_FAIL_PCT = 50.0
 ROW_DROP_WARN_PCT = 30.0
 CITATION_FAIL_HARD_FAIL_PCT = 1.0
 
-SUPPORTED_PROVIDERS = ["linode", "vultr"]  # expanded as more builders land
+SUPPORTED_PROVIDERS = ["linode", "vultr", "azure", "ibm", "aws", "gcp", "oracle"]  # all v0 providers
 
 
 @dataclass

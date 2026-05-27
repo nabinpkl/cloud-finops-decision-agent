@@ -15,6 +15,8 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | [0003](0003-citation-stable-id-jsonpath.md) | Citations use stable-ID JSONPath, verified at index build | Accepted |
 | [0004](0004-schema-drift-detection.md) | Schema drift detection via fingerprint plus coverage report | Accepted |
 | [0005](0005-data-quality-envelope.md) | `data_quality` envelope on normalize responses | Accepted |
+| [0006](0006-flex-rules-over-shape-catalog.md) | Flex-rules JSON over a fetched shape catalog for GCP and Oracle (v0) | Accepted |
+| [0007](0007-rate-rows-composite-citations.md) | Rate rows and composite citations for resource-priced providers | Accepted |
 
 ## When to write an ADR
 

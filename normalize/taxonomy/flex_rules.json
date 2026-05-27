@@ -1,0 +1,359 @@
+{
+  "_meta": {
+    "version": "v0",
+    "description": "Per-family pricing rules for resource-priced providers (GCP, Oracle). Each entry tells compare() how to take an upstream rate row plus a (vcpu, ram_gb) ask and synthesize a composite result with a custom-shape name and a composite citation. See ADR 0006 (decision) and ADR 0007 (parquet schema).",
+    "schema": {
+      "<provider>.<family>.vcpu_per_unit": "How many vCPU one priced unit covers. GCP prices per vCPU directly (1). Oracle x86 prices per OCPU = 2 vCPU (2). Oracle Ampere ARM prices per OCPU = 1 vCPU (1).",
+      "<provider>.<family>.vcpu_min": "Minimum vCPU count for a valid configuration.",
+      "<provider>.<family>.vcpu_max": "Maximum vCPU count.",
+      "<provider>.<family>.vcpu_step": "Allowed vCPU increment (1 = any integer, 2 = even-only, etc.).",
+      "<provider>.<family>.custom_name_template": "Python str.format pattern for the synthesized instance_type label. Supported placeholders: {vcpu}, {ram_gb}, {ram_mb}, {ocpu}.",
+      "<provider>.<family>.taxonomy_family": "Cross-provider family slug from families.json that this flex family maps into.",
+      "<provider>.<family>.notes": "Architecture context for agent prose.",
+      "<provider>.<family>.ram_per_unit_gb": "{min, max} legal RAM-per-priced-unit ratio. For GCP the unit is vCPU; for Oracle Flex the unit is OCPU. compare() multiplies vcpu_per_unit through the constraint check so the user-facing ask in vCPU resolves correctly."
+    },
+    "v0_coverage": "GCP general-purpose (n1/n2/n2d/n4/n4a/n4d/e2/t2a/t2d), compute-optimized (c2/c2d/c3/c3d/c4/c4a/c4d), memory-optimized (m1/m2/m3/m4), storage-optimized (z3). Oracle Flex (E3/E4/E5/E6 AMD, A1/A2/A4 Ampere ARM, X9 Intel). GPU families and HPC families are out of v0 because their pricing includes a third atomic resource (GPU-hour) and we have not yet wired three-way composition."
+  },
+  "gcp": {
+    "n1": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 1,
+      "vcpu_max": 96,
+      "vcpu_step": 2,
+      "custom_name_template": "n1-custom-{vcpu}-{ram_mb}",
+      "taxonomy_family": "general-purpose",
+      "notes": "Intel Haswell/Broadwell/Skylake. Custom Machine Types supported. vCPU 1 allowed; otherwise even.",
+      "ram_per_unit_gb": {
+        "min": 0.95,
+        "max": 6.5
+      }
+    },
+    "n2": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 2,
+      "vcpu_max": 128,
+      "vcpu_step": 2,
+      "custom_name_template": "n2-custom-{vcpu}-{ram_mb}",
+      "taxonomy_family": "general-purpose",
+      "notes": "Intel Cascade Lake / Ice Lake. Custom Machine Types supported.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 8.0
+      }
+    },
+    "n2d": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 2,
+      "vcpu_max": 224,
+      "vcpu_step": 2,
+      "custom_name_template": "n2d-custom-{vcpu}-{ram_mb}",
+      "taxonomy_family": "general-purpose",
+      "notes": "AMD EPYC Milan.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 8.0
+      }
+    },
+    "n4": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 2,
+      "vcpu_max": 80,
+      "vcpu_step": 2,
+      "custom_name_template": "n4-custom-{vcpu}-{ram_mb}",
+      "taxonomy_family": "general-purpose",
+      "notes": "Intel Emerald Rapids. Newer NIC.",
+      "ram_per_unit_gb": {
+        "min": 2.0,
+        "max": 8.0
+      }
+    },
+    "e2": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 2,
+      "vcpu_max": 32,
+      "vcpu_step": 2,
+      "custom_name_template": "e2-custom-{vcpu}-{ram_mb}",
+      "taxonomy_family": "general-purpose",
+      "notes": "Cost-optimized burstable. Mix of Intel/AMD hosts.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 8.0
+      }
+    },
+    "t2d": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 1,
+      "vcpu_max": 60,
+      "vcpu_step": 1,
+      "custom_name_template": "t2d-standard-{vcpu}",
+      "taxonomy_family": "general-purpose",
+      "notes": "AMD Milan scale-out. Fixed 4 GB/vCPU; no custom shapes.",
+      "ram_per_unit_gb": {
+        "min": 4.0,
+        "max": 4.0
+      }
+    },
+    "t2a": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 1,
+      "vcpu_max": 48,
+      "vcpu_step": 1,
+      "custom_name_template": "t2a-standard-{vcpu}",
+      "taxonomy_family": "general-purpose",
+      "notes": "Ampere Altra ARM scale-out. Fixed 4 GB/vCPU.",
+      "ram_per_unit_gb": {
+        "min": 4.0,
+        "max": 4.0
+      }
+    },
+    "c2": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 4,
+      "vcpu_max": 60,
+      "vcpu_step": 2,
+      "custom_name_template": "c2-standard-{vcpu}",
+      "taxonomy_family": "compute-optimized",
+      "notes": "Intel Cascade Lake compute-optimized. Fixed 4 GB/vCPU.",
+      "ram_per_unit_gb": {
+        "min": 4.0,
+        "max": 4.0
+      }
+    },
+    "c2d": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 2,
+      "vcpu_max": 112,
+      "vcpu_step": 2,
+      "custom_name_template": "c2d-custom-{vcpu}-{ram_mb}",
+      "taxonomy_family": "compute-optimized",
+      "notes": "AMD Milan compute-optimized.",
+      "ram_per_unit_gb": {
+        "min": 2.0,
+        "max": 8.0
+      }
+    },
+    "c3": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 4,
+      "vcpu_max": 176,
+      "vcpu_step": 2,
+      "custom_name_template": "c3-standard-{vcpu}",
+      "taxonomy_family": "compute-optimized",
+      "notes": "Intel Sapphire Rapids. Default 4 GB/vCPU.",
+      "ram_per_unit_gb": {
+        "min": 2.0,
+        "max": 8.0
+      }
+    },
+    "c3d": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 4,
+      "vcpu_max": 360,
+      "vcpu_step": 2,
+      "custom_name_template": "c3d-standard-{vcpu}",
+      "taxonomy_family": "compute-optimized",
+      "notes": "AMD Genoa compute-optimized.",
+      "ram_per_unit_gb": {
+        "min": 2.0,
+        "max": 8.0
+      }
+    },
+    "c4": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 2,
+      "vcpu_max": 192,
+      "vcpu_step": 2,
+      "custom_name_template": "c4-standard-{vcpu}",
+      "taxonomy_family": "compute-optimized",
+      "notes": "Intel Emerald Rapids compute-optimized.",
+      "ram_per_unit_gb": {
+        "min": 2.0,
+        "max": 8.0
+      }
+    },
+    "c4a": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 1,
+      "vcpu_max": 72,
+      "vcpu_step": 1,
+      "custom_name_template": "c4a-standard-{vcpu}",
+      "taxonomy_family": "compute-optimized",
+      "notes": "Google Axion ARM compute-optimized.",
+      "ram_per_unit_gb": {
+        "min": 2.0,
+        "max": 8.0
+      }
+    },
+    "m1": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 40,
+      "vcpu_max": 160,
+      "vcpu_step": 1,
+      "custom_name_template": "m1-megamem-{vcpu}",
+      "taxonomy_family": "memory-optimized",
+      "notes": "Intel Skylake mega-memory.",
+      "ram_per_unit_gb": {
+        "min": 14.93,
+        "max": 24.0
+      }
+    },
+    "m2": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 208,
+      "vcpu_max": 416,
+      "vcpu_step": 1,
+      "custom_name_template": "m2-ultramem-{vcpu}",
+      "taxonomy_family": "memory-optimized",
+      "notes": "Ultra-memory SAP HANA.",
+      "ram_per_unit_gb": {
+        "min": 28.0,
+        "max": 29.0
+      }
+    },
+    "m3": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 32,
+      "vcpu_max": 128,
+      "vcpu_step": 1,
+      "custom_name_template": "m3-ultramem-{vcpu}",
+      "taxonomy_family": "memory-optimized",
+      "notes": "Intel Ice Lake memory-optimized.",
+      "ram_per_unit_gb": {
+        "min": 8.0,
+        "max": 31.0
+      }
+    },
+    "m4": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 8,
+      "vcpu_max": 224,
+      "vcpu_step": 1,
+      "custom_name_template": "m4-megamem-{vcpu}",
+      "taxonomy_family": "memory-optimized",
+      "notes": "Intel Emerald Rapids memory-optimized.",
+      "ram_per_unit_gb": {
+        "min": 8.0,
+        "max": 14.6
+      }
+    },
+    "z3": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 8,
+      "vcpu_max": 176,
+      "vcpu_step": 1,
+      "custom_name_template": "z3-highmem-{vcpu}",
+      "taxonomy_family": "storage-optimized",
+      "notes": "Intel storage-optimized with local SSD.",
+      "ram_per_unit_gb": {
+        "min": 4.0,
+        "max": 8.0
+      }
+    }
+  },
+  "oracle": {
+    "E3": {
+      "vcpu_per_unit": 2,
+      "vcpu_min": 2,
+      "vcpu_max": 128,
+      "vcpu_step": 2,
+      "custom_name_template": "VM.Standard.E3.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "AMD EPYC Rome Flex. 1 OCPU = 2 vCPU.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 32.0
+      }
+    },
+    "E4": {
+      "vcpu_per_unit": 2,
+      "vcpu_min": 2,
+      "vcpu_max": 256,
+      "vcpu_step": 2,
+      "custom_name_template": "VM.Standard.E4.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "AMD EPYC Milan Flex.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 64.0
+      }
+    },
+    "E5": {
+      "vcpu_per_unit": 2,
+      "vcpu_min": 2,
+      "vcpu_max": 188,
+      "vcpu_step": 2,
+      "custom_name_template": "VM.Standard.E5.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "AMD EPYC Genoa Flex.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 64.0
+      }
+    },
+    "E6": {
+      "vcpu_per_unit": 2,
+      "vcpu_min": 2,
+      "vcpu_max": 256,
+      "vcpu_step": 2,
+      "custom_name_template": "VM.Standard.E6.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "AMD EPYC Turin Flex.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 64.0
+      }
+    },
+    "A1": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 1,
+      "vcpu_max": 80,
+      "vcpu_step": 1,
+      "custom_name_template": "VM.Standard.A1.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "Ampere Altra ARM Flex. 1 OCPU = 1 vCPU (Ampere convention).",
+      "ram_per_unit_gb": {
+        "min": 1.0,
+        "max": 64.0
+      }
+    },
+    "A2": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 2,
+      "vcpu_max": 78,
+      "vcpu_step": 2,
+      "custom_name_template": "VM.Standard.A2.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "AmpereOne Flex.",
+      "ram_per_unit_gb": {
+        "min": 1.0,
+        "max": 64.0
+      }
+    },
+    "A4": {
+      "vcpu_per_unit": 1,
+      "vcpu_min": 1,
+      "vcpu_max": 76,
+      "vcpu_step": 1,
+      "custom_name_template": "VM.Standard.A4.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "AmpereOne newer-gen Flex.",
+      "ram_per_unit_gb": {
+        "min": 1.0,
+        "max": 64.0
+      }
+    },
+    "X9": {
+      "vcpu_per_unit": 2,
+      "vcpu_min": 2,
+      "vcpu_max": 128,
+      "vcpu_step": 2,
+      "custom_name_template": "VM.Standard.X9.Flex ({ocpu} OCPU, {ram_gb} GB)",
+      "taxonomy_family": "general-purpose",
+      "notes": "Intel Ice Lake Flex.",
+      "ram_per_unit_gb": {
+        "min": 0.5,
+        "max": 32.0
+      }
+    }
+  }
+}
