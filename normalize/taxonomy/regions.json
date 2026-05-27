@@ -1,0 +1,69 @@
+{
+  "_meta": {
+    "version": "v0",
+    "description": "Canonical region buckets that all 7 v0 providers serve. The normalization layer accepts either the canonical key (us-east, eu-central, ap-southeast) or any provider-native code on input, and always emits the provider-native code in `region_native` on output. See SPEC.md for the schema.",
+    "schema": {
+      "<canonical>.label": "Human-readable label for the bucket.",
+      "<canonical>.providers.<provider>": "Provider-native region code that maps to this canonical bucket. NULL means the provider does not operate in the bucket.",
+      "<canonical>.providers.<provider>_notes": "Optional. Free-text caveats the agent surfaces in prose (e.g. 'IBM does not operate in Singapore; jp-tok is the canonical APAC fallback')."
+    },
+    "v0_coverage": "AWS and Azure fetched only three regions in v0 (us-east-1/eu-central-1/ap-southeast-1 for AWS; eastus/westeurope/southeastasia for Azure). GCP, IBM, Oracle, Vultr, and Linode have wider snapshots but the comparable surface caps at the three canonical buckets below."
+  },
+  "us-east": {
+    "label": "US East",
+    "providers": {
+      "aws": "us-east-1",
+      "aws_notes": "N. Virginia. AWS's largest region. Snapshot file: store/aws/<ISO>/us-east-1.json.",
+      "gcp": "us-east4",
+      "gcp_notes": "N. Virginia. us-east1 (S. Carolina) and us-east5 (Columbus) also exist but us-east4 is the canonical pick (closest to Ashburn).",
+      "azure": "eastus",
+      "azure_notes": "Virginia. Snapshot file: store/azure/<ISO>/eastus.json.",
+      "ibm": "us-east",
+      "ibm_notes": "Washington DC region (multi-zone). Distinct from us-south (Dallas).",
+      "oracle": "us-ashburn-1",
+      "oracle_notes": "Oracle publishes a global list price; region is availability only, not a price dimension.",
+      "vultr": "ewr",
+      "vultr_notes": "Newark, NJ. Closest US-east point of presence in the Vultr catalog. Price is global per plan.",
+      "linode": "us-east",
+      "linode_notes": "Newark, NJ. Base price applies; this region is not in region_prices[] overrides."
+    }
+  },
+  "eu-central": {
+    "label": "EU Central",
+    "providers": {
+      "aws": "eu-central-1",
+      "aws_notes": "Frankfurt. Snapshot file: store/aws/<ISO>/eu-central-1.json.",
+      "gcp": "europe-west3",
+      "gcp_notes": "Frankfurt. europe-west1 (Belgium) and europe-west4 (Netherlands) are common alternates; west3 is the canonical pick for Frankfurt parity.",
+      "azure": "westeurope",
+      "azure_notes": "Amsterdam (Netherlands). Azure does not have a Frankfurt-labeled region; westeurope is the closest peer to AWS/GCP Frankfurt. Snapshot file: store/azure/<ISO>/westeurope.json.",
+      "ibm": "eu-de",
+      "ibm_notes": "Frankfurt multi-zone region.",
+      "oracle": "eu-frankfurt-1",
+      "oracle_notes": "Oracle publishes a global list price; region is availability only.",
+      "vultr": "fra",
+      "vultr_notes": "Frankfurt. Price is global per plan.",
+      "linode": "eu-central",
+      "linode_notes": "Frankfurt. Base price applies; this region is not in region_prices[] overrides."
+    }
+  },
+  "ap-southeast": {
+    "label": "Asia-Pacific Southeast",
+    "providers": {
+      "aws": "ap-southeast-1",
+      "aws_notes": "Singapore. Snapshot file: store/aws/<ISO>/ap-southeast-1.json.",
+      "gcp": "asia-southeast1",
+      "gcp_notes": "Singapore (Jurong West).",
+      "azure": "southeastasia",
+      "azure_notes": "Singapore. Snapshot file: store/azure/<ISO>/southeastasia.json.",
+      "ibm": "jp-tok",
+      "ibm_notes": "IBM does NOT operate in Singapore. jp-tok (Tokyo) is the canonical APAC fallback for v0. Alternates: au-syd, jp-osa, in-mum, in-che. Surface this substitution in prose whenever AP-southeast is queried for IBM.",
+      "oracle": "ap-singapore-1",
+      "oracle_notes": "Oracle publishes a global list price; region is availability only.",
+      "vultr": "sgp",
+      "vultr_notes": "Singapore. Price is global per plan.",
+      "linode": "ap-south",
+      "linode_notes": "Singapore. Base price applies; this region is not in region_prices[] overrides (id-cgk and br-gru are the only overrides in v0)."
+    }
+  }
+}

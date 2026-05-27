@@ -1,0 +1,90 @@
+{
+  "_meta": {
+    "version": "v0",
+    "description": "Cross-provider instance family taxonomy. Prefixes are matched case-insensitively against the provider's native instance-type or plan-name strings. Hand-seeded from the v0 snapshot set; AWS, GCP, Azure, IBM, Oracle, Vultr, Linode all covered. See SPEC.md for the schema and AGENTS.md for how the agent surfaces the dimensions_matched / dimensions_not_normalized fields.",
+    "schema": {
+      "members[].prefix": "Provider-native instance-type or plan-name prefix. Matched case-insensitively. Anchored at the start of the identifier.",
+      "members[].notes": "Free-text architecture / generation notes for agent prose.",
+      "dimensions_matched": "Dimensions the cross-provider equivalence holds on.",
+      "dimensions_not_normalized": "Dimensions the equivalence does NOT hold on. The agent must surface these in prose."
+    }
+  },
+  "general-purpose": {
+    "members": [
+      {"provider": "aws", "prefix": ["m3", "m4", "m5", "m5a", "m5ad", "m5d", "m5dn", "m5n", "m5zn", "m6a", "m6g", "m6gd", "m6i", "m6id", "m6idn", "m6in", "m7a", "m7g", "m7gd", "m7i", "m8a", "m8azn", "m8g", "m8gd", "m8i", "m8id", "t2", "t3", "t3a", "t4g", "a1"], "notes": "M-series = balanced Intel/AMD/Graviton x86 + ARM. T-series = burstable. a1 = first-gen Graviton ARM. Source attribute: instanceFamilyCategory == 'General Purpose'."},
+      {"provider": "gcp", "prefix": ["n1", "n2", "n2d", "n4", "n4a", "n4d", "e2", "t2a", "t2d"], "notes": "N-series = balanced Intel (n2 = Cascade Lake, n4 = Emerald Rapids). N2D/N4D = AMD EPYC. E2 = cost-optimized burstable. T2A = Ampere ARM, T2D = AMD Milan ARM-replacement scale-out."},
+      {"provider": "azure", "prefix": ["Standard_D", "Standard_B", "Standard_A", "Standard_DS"], "notes": "D-series = balanced (Dsv5/Dasv5/Dasv6 = Intel Ice Lake / AMD Milan / Genoa). B = burstable. A = legacy basic tier. DS = D-series with premium storage attached. Source attribute: armSkuName prefix."},
+      {"provider": "ibm", "prefix": ["bx2", "bx3d", "bx4", "bx4d"], "notes": "bx = balanced VPC virtual server. bx3d adds local NVMe instance storage. bx4 = 4th gen Intel Sapphire Rapids. Plan-name suffix '-NxN' encodes vCPU x RAM_GB."},
+      {"provider": "oracle", "prefix": ["VM.Standard.E2", "VM.Standard.E3", "VM.Standard.E4", "VM.Standard.E5", "VM.Standard.E6", "VM.Standard.A1", "VM.Standard.A2", "VM.Standard.A4", "VM.Standard.X5", "VM.Standard.X7", "VM.Standard.X9", "VM.Standard.X12"], "notes": "Standard shapes. E-series = AMD EPYC (E5 = Genoa, E6 = Turin). A-series = Ampere ARM (A1 = Altra, A2/A4 = AmpereOne). X-series = Intel (X9 = Ice Lake, X12 = Granite Rapids). E3/E4/E5/E6/A1/A2/A4/X9/X12 are Flex shapes with separate per-OCPU and per-GB-RAM parts; X5/X7 are fixed-shape single-OCPU."},
+      {"provider": "vultr", "prefix": ["vc2", "vhf", "vhp", "voc-g"], "notes": "vc2 = Cloud Compute (shared CPU, Intel). vhf = High Frequency (3GHz+ Intel). vhp = High Performance (AMD or Intel dedicated cores). voc-g = Optimized Cloud general-purpose. Distinguished by the plan id `type` field plus voc subprefix."},
+      {"provider": "linode", "prefix": ["g6-nanode", "g6-standard", "g6-dedicated", "g7-dedicated", "g7-premium", "g8-dedicated"], "notes": "Linode `class` field: nanode (single shared vCPU), standard (shared), dedicated/premium (dedicated vCPU). g7-dedicated and g8-dedicated are newer dedicated-CPU generations alongside g6-dedicated. All map to general-purpose for v0."}
+    ],
+    "dimensions_matched": ["vcpu", "ram_gb"],
+    "dimensions_not_normalized": ["cpu_generation", "cpu_architecture", "baseline_performance", "network_bandwidth", "included_storage", "noisy_neighbor_class"]
+  },
+  "compute-optimized": {
+    "members": [
+      {"provider": "aws", "prefix": ["c3", "c4", "c5", "c5a", "c5ad", "c5d", "c5n", "c6a", "c6g", "c6gd", "c6gn", "c6i", "c6id", "c6in", "c7a", "c7g", "c7gd", "c7i", "c8a", "c8g", "c8gd", "c8gn", "c8i", "c8id"], "notes": "C-series. Suffix letters: a = AMD, g = Graviton ARM, i = Intel, d = NVMe local storage, n = enhanced networking. Source attribute: instanceFamilyCategory == 'Compute Optimized'."},
+      {"provider": "gcp", "prefix": ["c2", "c2d", "c3", "c3d", "c4", "c4a", "c4d", "h3", "h4d"], "notes": "C-series = compute-optimized (C2 = Cascade Lake, C3 = Sapphire Rapids, C4 = Emerald Rapids). C2D/C3D/C4D = AMD. C4A = Google Axion ARM. H3/H4D = HPC-optimized compute."},
+      {"provider": "azure", "prefix": ["Standard_F", "Standard_FX", "Standard_H", "Standard_HB", "Standard_HC", "Standard_HX"], "notes": "F = compute-optimized (Fsv2 = Intel Cascade Lake, Falsv6 = AMD). FX = high-frequency Intel for EDA. H/HB/HC/HX = HPC-class (HBv4 = AMD EPYC Genoa with InfiniBand)."},
+      {"provider": "ibm", "prefix": ["cx2", "cx3d", "cx4", "cx4d", "cxf"], "notes": "cx = compute-optimized VPC. cx4 = 4th gen Intel Sapphire Rapids. cxf = compute-on-FPGA-host (preview tier in some regions)."},
+      {"provider": "oracle", "prefix": ["VM.Optimized3", "VM.Standard.X9.Optimized", "BM.HPC2", "BM.HPC.E5"], "notes": "Oracle does not bucket compute-optimized as a top-level shape line. 'Optimized' shapes (X9-Optimized) and HPC bare-metal serve this role. HPC nodes ship with cluster networking. Listed VM members are partial; verify against snapshot."},
+      {"provider": "vultr", "prefix": ["voc-c"], "notes": "Optimized Cloud Compute, compute-tier variant. Plan id pattern voc-c-<vcpu>c-<ram>gb-<disk>s-<vendor>. Always dedicated cores."},
+      {"provider": "linode", "prefix": [], "notes": "Linode does not publish a separate compute-optimized class. Dedicated CPU plans (g6-dedicated, g7-premium) are the closest analogue; surface that caveat when the user asks for compute-optimized on Linode."}
+    ],
+    "dimensions_matched": ["vcpu", "ram_gb"],
+    "dimensions_not_normalized": ["cpu_generation", "cpu_architecture", "clock_speed", "network_bandwidth", "included_storage", "interconnect_class"]
+  },
+  "memory-optimized": {
+    "members": [
+      {"provider": "aws", "prefix": ["r3", "r4", "r5", "r5a", "r5ad", "r5b", "r5d", "r5dn", "r5n", "r6a", "r6g", "r6gd", "r6i", "r6id", "r6idn", "r6in", "r7a", "r7g", "r7gd", "r7i", "r7iz", "r8a", "r8g", "r8gd", "r8i", "r8id", "u7i", "u7in", "x1", "x1e", "x2idn", "x2iedn", "x8g", "x8i", "z1d"], "notes": "R-series = 1:8 vCPU:GB. X-series = 1:16+ ratio (in-memory DB / SAP HANA). U-series = up to 32 TB RAM. Z1D = high-frequency memory-optimized. Source attribute: instanceFamilyCategory == 'Memory Optimized'."},
+      {"provider": "gcp", "prefix": ["m1", "m2", "m3", "m4"], "notes": "M-series = SAP HANA / in-memory analytics. M3/M4 = newer Intel generations with persistent memory options."},
+      {"provider": "azure", "prefix": ["Standard_E", "Standard_EC", "Standard_M", "Standard_G", "Standard_GS"], "notes": "E-series = 1:8 memory-optimized (Esv5 = Ice Lake, Easv5 = Milan, Eadsv7 = Genoa). EC = confidential compute. M-series = very large RAM (up to 11.4 TB). G/GS = legacy memory-optimized (deprecated for new deployments but still priced)."},
+      {"provider": "ibm", "prefix": ["mx2", "mx3d", "mx4", "mx4d", "mxf", "mz2"], "notes": "mx = memory-optimized VPC (1:8 ratio). mz2 = large-memory SAP-certified variant. Plan-name suffix '-NxN' encodes vCPU x RAM_GB; ratios will exceed 1:4."},
+      {"provider": "oracle", "prefix": [], "notes": "Oracle does NOT have a dedicated memory-optimized shape line. Modern Flex shapes (E5/E6/A2/A4/X9/X12) let the user pick the OCPU:RAM ratio at provision time (typically up to 1:16). Surface that the equivalence-by-family does not apply: pick a Flex shape and set memory >= the requested GB explicitly."},
+      {"provider": "vultr", "prefix": ["voc-m"], "notes": "Optimized Cloud Compute, memory-tier variant. Plan id pattern voc-m-<vcpu>c-<ram>gb-<disk>s-<vendor>. 1:8 ratio."},
+      {"provider": "linode", "prefix": ["g7-highmem"], "notes": "Linode `class` == 'highmem'. 1:30 vCPU:GB ratio (very memory-heavy)."}
+    ],
+    "dimensions_matched": ["vcpu", "ram_gb"],
+    "dimensions_not_normalized": ["cpu_generation", "cpu_architecture", "vcpu_to_ram_ratio", "network_bandwidth", "included_storage"]
+  },
+  "storage-optimized": {
+    "members": [
+      {"provider": "aws", "prefix": ["i2", "i3", "i3en", "i4i", "i7i", "i7ie", "i8g", "i8ge", "d2", "d3", "d3en"], "notes": "I-series = high-IOPS NVMe local SSD. D-series = dense HDD storage (warehousing). Source attribute: instanceFamilyCategory == 'Storage Optimized'."},
+      {"provider": "gcp", "prefix": ["z3"], "notes": "Z3 = storage-optimized with local SSD attached. GCP's only storage-optimized family in v0."},
+      {"provider": "azure", "prefix": ["Standard_L"], "notes": "L-series = storage-optimized with local NVMe (Lsv2 = AMD EPYC, Lsv3 = Intel Ice Lake, Laosv4 = AMD)."},
+      {"provider": "ibm", "prefix": ["vx3d"], "notes": "vx = very-high-storage VPC. vx3d adds local NVMe."},
+      {"provider": "oracle", "prefix": ["VM.DenseIO.E4", "VM.DenseIO.E5", "VM.DenseIO.X7", "BM.DenseIO.E4", "BM.DenseIO.E5"], "notes": "DenseIO shapes price OCPU, Memory, AND NVMe-TB separately (three SKU lines). E5 DenseIO is the current-gen storage-optimized line."},
+      {"provider": "vultr", "prefix": ["voc-s"], "notes": "voc-s = Optimized Cloud storage-tier variant. Plan id pattern voc-s-<vcpu>c-<ram>gb-<disk>s-<vendor>. Distinct from voc-c/voc-m/voc-g which are compute/memory/general-purpose."},
+      {"provider": "linode", "prefix": [], "notes": "Linode does not publish a storage-optimized class. Disk size scales with the standard plans; surface that caveat."}
+    ],
+    "dimensions_matched": ["vcpu", "ram_gb"],
+    "dimensions_not_normalized": ["cpu_generation", "local_storage_capacity", "local_storage_type", "iops", "throughput", "network_bandwidth"]
+  },
+  "gpu": {
+    "members": [
+      {"provider": "aws", "prefix": ["g2", "g3", "g3s", "g4ad", "g4dn", "g5", "g5g", "g6", "g6e", "g6f", "p2", "p3", "p4d", "p4de", "f1", "f2"], "notes": "G-series = graphics/inference (NVIDIA T4/A10G/L4/L40S). P-series = training (V100/A100/H100/H200). F1/F2 = FPGA (grouped under accelerated for v0). Source attribute: instanceFamilyCategory == 'Accelerated Computing'."},
+      {"provider": "gcp", "prefix": ["a2", "a3", "a4", "g2", "g4"], "notes": "A-series = NVIDIA A100 (a2) / H100 (a3) / B200 (a4). G2/G4 = NVIDIA L4 / L40 graphics. TPU SKUs are separate and not in v0 GPU family."},
+      {"provider": "azure", "prefix": ["Standard_NC", "Standard_NCC", "Standard_ND", "Standard_NV", "Standard_NG", "Standard_NP", "Standard_NM"], "notes": "NC = compute GPU (V100/A100/H100). ND = training (A100/H100). NV = visualization (A10/T4/V710). NG = AMD MI200/Radeon. NP = FPGA. NM = AI accelerator. NCC = confidential GPU."},
+      {"provider": "ibm", "prefix": ["gx3", "gx3d"], "notes": "gx3 = GPU VPC (NVIDIA L40S / H100). gx3d adds local NVMe. Bare-metal GPU lives under is.bare-metal-server, not is.instance."},
+      {"provider": "oracle", "prefix": ["VM.GPU.A10", "VM.GPU.A100", "VM.GPU3", "BM.GPU.A10", "BM.GPU.A100", "BM.GPU.H100", "BM.GPU.H200", "BM.GPU.B200", "BM.GPU.GB200", "BM.GPU.L40S", "BM.GPU.MI300X"], "notes": "Oracle GPU SKUs price the GPU itself per-hour (one part per GPU model). The compute envelope (OCPU + Memory) is included in the GPU SKU price. Power Systems (power-iaas) is out of v0."},
+      {"provider": "vultr", "prefix": ["vcg"], "notes": "vcg = Cloud GPU. Plan id pattern vcg-<gpu-model>-<vcpu>c-<ram>g-<vramGB>vram. Supports NVIDIA A16, A40, A100, L40S."},
+      {"provider": "linode", "prefix": ["g1-gpu", "g2-gpu", "g1-accelerated"], "notes": "Linode `class` == 'gpu' or 'accelerated'. gpu = NVIDIA RTX 6000 / RTX 4000. accelerated = Netint VPU (video codec acceleration)."}
+    ],
+    "dimensions_matched": ["gpu_count", "gpu_model"],
+    "dimensions_not_normalized": ["gpu_memory", "gpu_interconnect", "host_vcpu", "host_ram_gb", "nvlink_topology", "rdma_support"]
+  },
+  "bare-metal": {
+    "members": [
+      {"provider": "aws", "prefix": [], "notes": "AWS bare-metal shapes share parent family prefixes (e.g. m7i.metal-48xl, c7i.metal-48xl). productFamily == 'Compute Instance (bare metal)' in the snapshot identifies them. The agent must filter by productFamily, not by prefix, for AWS bare-metal queries."},
+      {"provider": "gcp", "prefix": [], "notes": "GCP does not publish bare-metal compute in the standard Compute Engine catalog. Bare Metal Solution is a separate product not fetched in v0. Surface the absence."},
+      {"provider": "azure", "prefix": [], "notes": "Azure does not publish standalone bare-metal VMs in the Retail Prices API for v0. Azure Dedicated Host and Azure VMware Solution exist as separate products. Surface the absence."},
+      {"provider": "ibm", "prefix": ["bx2", "bx2d", "bx3", "bx3d", "cx2", "cx2d", "cx3", "cx3d", "mx2", "mx2d", "mx2de", "mx3", "mx3d", "mx3de", "ux2d", "ux3", "ux3d", "ux3de", "vx2d", "vx3", "vx3d"], "notes": "These are bare-metal-server plans (service is.bare-metal-server, NOT is.instance). Same family letters as VPC but on dedicated hardware. ux = ultra-memory (up to multi-TB)."},
+      {"provider": "oracle", "prefix": ["BM.Standard", "BM.DenseIO", "BM.GPU", "BM.HPC"], "notes": "BM = Bare Metal. Oracle prices these as separate part numbers under serviceCategory == 'Compute - Bare Metal' or 'Compute - GPU'."},
+      {"provider": "vultr", "prefix": [], "notes": "Vultr Bare Metal is a separate product line and not in the /v2/plans response. Surface the absence."},
+      {"provider": "linode", "prefix": [], "notes": "Linode does not publish bare-metal VMs in /v4/linode/types. Surface the absence."}
+    ],
+    "dimensions_matched": ["vcpu", "ram_gb"],
+    "dimensions_not_normalized": ["cpu_generation", "cpu_architecture", "physical_cores", "numa_topology", "local_storage_capacity", "network_bandwidth"]
+  }
+}
