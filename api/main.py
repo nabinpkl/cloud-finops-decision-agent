@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from gates._shared import PROJECT_ROOT
 from normalize.citation_excerpt import build_excerpt
+from normalize.data_quality import compute_envelope
 from normalize.index import SUPPORTED_PROVIDERS
 from normalize.query import compare, lookup
 
@@ -50,7 +51,15 @@ class CompareRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"status": "ok", "providers": SUPPORTED_PROVIDERS}
+    # Liveness is the process answering at all. Freshness and dependency status
+    # come from the data_quality envelope: each provider's snapshot age plus an
+    # overall rollup that goes "broken" when a provider has no usable snapshot.
+    envelope = compute_envelope(SUPPORTED_PROVIDERS)
+    return {
+        "status":        "ok",
+        "providers":     SUPPORTED_PROVIDERS,
+        "data_quality":  envelope,
+    }
 
 
 @app.post("/compare")
