@@ -147,10 +147,14 @@ async def fetch_compute_pricing(
             compute[name] = {"service_id": None, "plans": [], "pricing": {}}
             continue
         service_id = svc.get("id")
+        if not service_id:
+            log(f"compute service {name!r} has no id in catalog; skipping")
+            compute[name] = {"service_id": None, "plans": [], "pricing": {}}
+            continue
         plans = await fetch_children(client, service_id)
         log(f"{name}: {len(plans)} plans, fetching deployment pricing...")
 
-        plan_ids = [p.get("id") for p in plans if p.get("id")]
+        plan_ids = [pid for p in plans if (pid := p.get("id"))]
         results = await asyncio.gather(
             *(fetch_plan_pricing(client, pid, sem) for pid in plan_ids),
             return_exceptions=True,
@@ -158,7 +162,7 @@ async def fetch_compute_pricing(
 
         pricing: dict[str, dict] = {}
         for pid, result in zip(plan_ids, results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 log(f"  plan {pid} pricing failed: {result!r}")
                 pricing[pid] = {"error": str(result)}
                 continue
@@ -178,7 +182,7 @@ async def fetch_compute_pricing(
 async def fetch_all() -> tuple[list[dict], int, dict[str, dict], int, set[str]]:
     async with httpx.AsyncClient(follow_redirects=True) as client:
         services, page_count = await fetch_all_services(client)
-        services_by_name = {s.get("name"): s for s in services if s.get("name")}
+        services_by_name = {nm: s for s in services if (nm := s.get("name"))}
         compute, pricing_calls, regions = await fetch_compute_pricing(client, services_by_name)
     return services, page_count, compute, pricing_calls, regions
 

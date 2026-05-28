@@ -7,9 +7,11 @@ import hashlib
 import json
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import NoReturn
 
 import httpx
 
@@ -74,7 +76,7 @@ def load_dotenv_if_present() -> None:
         os.environ.setdefault(key, value)
 
 
-def emit(payload: dict, code: int = 0) -> None:
+def emit(payload: dict, code: int = 0) -> NoReturn:
     print(json.dumps(payload, indent=2))
     sys.exit(code)
 
@@ -93,7 +95,7 @@ async def fetch_polite(
     max_retries: int = DEFAULT_MAX_RETRIES,
     initial_backoff: float = DEFAULT_INITIAL_BACKOFF,
     max_backoff: float = DEFAULT_MAX_BACKOFF,
-    on_retry: "callable | None" = None,
+    on_retry: Callable[[int, int, float], object] | None = None,
 ) -> httpx.Response:
     # Honor Retry-After when present, exponential backoff otherwise. Retries on 429
     # and 5xx; 4xx other than 429 raise immediately. on_retry(attempt, status, wait)

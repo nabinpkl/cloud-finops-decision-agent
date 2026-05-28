@@ -37,6 +37,14 @@ lookup provider instance_type region:
 api:
     uv run uvicorn api.main:app --reload --port 8000
 
+# Lint with ruff.
+lint:
+    uv run ruff check .
+
+# Type-check with ty.
+typecheck:
+    uv run ty check
+
 # Run the mocked integration tests (fast, no store/ dependency).
 test:
     uv run pytest -m "not e2e"
@@ -45,6 +53,5 @@ test:
 test-e2e:
     uv run pytest -m e2e
 
-# Run the full suite.
-check:
-    uv run pytest
+# Full gate: lint, type-check, mocked tests. e2e is separate (needs a store).
+check: lint typecheck test

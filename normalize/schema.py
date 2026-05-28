@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import Any
 
 import polars as pl
+from polars.datatypes import DataTypeClass
 
 
 # One row per priced SKU. The columns are the citation contract plus the
@@ -23,7 +24,7 @@ import polars as pl
 #   - "rate" rows (GCP, Oracle): hourly_usd is a per-unit rate (per vCPU/hour or
 #     per GB-RAM/hour). vcpu and ram_gb are null. rate_unit names the unit.
 # Readers MUST branch on row_kind before aggregating prices.
-INDEX_SCHEMA: dict[str, pl.DataType] = {
+INDEX_SCHEMA: dict[str, DataTypeClass] = {
     "provider":             pl.String,
     "snapshot_iso":         pl.String,
     "instance_type":        pl.String,
