@@ -1,0 +1,153 @@
+"""FastAPI wrapper over the normalize query layer, per ADR 0008.
+
+Surface:
+  POST /compare            -> normalize.query.compare
+  GET  /lookup             -> normalize.query.lookup
+  GET  /citation/excerpt   -> normalize.citation_excerpt.build_excerpt
+  GET  /health
+
+The wire shape matches the query layer's dicts with one change: the internal
+`store_path` filesystem path is dropped from every citation and replaced by a
+logical `snapshot` ref ({provider, snapshot_iso, filename}). The excerpt
+endpoint consumes that ref. `normalize/` itself is unchanged; the translation
+lives here.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from gates._shared import PROJECT_ROOT
+from normalize.citation_excerpt import build_excerpt
+from normalize.index import SUPPORTED_PROVIDERS
+from normalize.query import compare, lookup
+
+STORE_ROOT = PROJECT_ROOT / "store"
+ALLOWED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+app = FastAPI(title="cloud-finops-decision-agent", version="0.0.1")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+
+class CompareRequest(BaseModel):
+    vcpu: int = Field(gt=0)
+    ram_gb: float = Field(gt=0)
+    region: str
+    family: str = "any"
+    providers: list[str] | None = None
+    expand: str = "cheapest"
+
+
+@app.get("/health")
+def health() -> dict[str, Any]:
+    return {"status": "ok", "providers": SUPPORTED_PROVIDERS}
+
+
+@app.post("/compare")
+def post_compare(req: CompareRequest) -> dict[str, Any]:
+    result = compare(
+        vcpu=req.vcpu,
+        ram_gb=req.ram_gb,
+        region=req.region,
+        family=req.family,
+        providers=req.providers,
+        expand=req.expand,
+    )
+    return _wire_response(result)
+
+
+@app.get("/lookup")
+def get_lookup(
+    provider: str = Query(...),
+    instance_type: str = Query(...),
+    region: str = Query(...),
+) -> dict[str, Any]:
+    result = lookup(provider=provider, instance_type=instance_type, region=region)
+    return _wire_response(result)
+
+
+@app.get("/citation/excerpt")
+def get_excerpt(
+    provider: str = Query(...),
+    snapshot_iso: str = Query(...),
+    filename: str = Query(...),
+    path: str = Query(..., description="json_path into the snapshot file"),
+    context: int = Query(4, ge=0, le=40),
+) -> dict[str, Any]:
+    abs_path = _resolve_snapshot_file(provider, snapshot_iso, filename)
+    return build_excerpt(abs_path=abs_path, json_path=path, context=context)
+
+
+# ---------- wire translation ----------
+
+
+def _wire_response(result: dict[str, Any]) -> dict[str, Any]:
+    """Rewrite every citation in a query-layer response: drop store_path, add a
+    snapshot ref. Mutates a shallow copy; the query layer's dict is not reused."""
+    out = dict(result)
+    if "results" in out:
+        out["results"] = [_wire_result(r) for r in out["results"]]
+    if out.get("result") is not None:
+        out["result"] = _wire_result(out["result"])
+    return out
+
+
+def _wire_result(r: dict[str, Any]) -> dict[str, Any]:
+    out = dict(r)
+    if "citation" in out:
+        out["citation"] = _wire_citation(out["citation"])
+    return out
+
+
+def _wire_citation(c: dict[str, Any]) -> dict[str, Any]:
+    if "composite" in c:
+        return {
+            **{k: v for k, v in c.items() if k != "composite"},
+            "composite": [_wire_entry(e) for e in c["composite"]],
+        }
+    return _wire_entry(c)
+
+
+def _wire_entry(e: dict[str, Any]) -> dict[str, Any]:
+    out = {k: v for k, v in e.items() if k != "store_path"}
+    ref = _store_path_to_ref(e.get("store_path", ""))
+    if ref is not None:
+        out["snapshot"] = ref
+    return out
+
+
+def _store_path_to_ref(store_path: str) -> dict[str, str] | None:
+    """store/<provider>/<iso>/<filename> -> {provider, snapshot_iso, filename}."""
+    parts = store_path.split("/")
+    if len(parts) < 4 or parts[0] != "store":
+        return None
+    return {"provider": parts[1], "snapshot_iso": parts[2], "filename": parts[-1]}
+
+
+# ---------- excerpt path safety ----------
+
+
+def _resolve_snapshot_file(provider: str, snapshot_iso: str, filename: str) -> Path:
+    if provider not in SUPPORTED_PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"unknown provider {provider!r}")
+    for label, value in (("snapshot_iso", snapshot_iso), ("filename", filename)):
+        if "/" in value or "\\" in value or ".." in value or value in ("", "."):
+            raise HTTPException(status_code=400, detail=f"invalid {label}")
+
+    candidate = (STORE_ROOT / provider / snapshot_iso / filename).resolve()
+    provider_root = (STORE_ROOT / provider).resolve()
+    if not candidate.is_relative_to(provider_root):
+        raise HTTPException(status_code=400, detail="path escapes provider store")
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="snapshot file not found")
+    return candidate

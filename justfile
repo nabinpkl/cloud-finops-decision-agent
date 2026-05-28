@@ -33,6 +33,18 @@ compare vcpu ram region family="any":
 lookup provider instance_type region:
     uv run python -m normalize lookup --provider {{provider}} --instance-type {{instance_type}} --region {{region}}
 
-# Placeholder until ruff and pytest land.
+# Run the FastAPI app (compare/lookup/citation excerpt) on localhost:8000.
+api:
+    uv run uvicorn api.main:app --reload --port 8000
+
+# Run the mocked integration tests (fast, no store/ dependency).
+test:
+    uv run pytest -m "not e2e"
+
+# Run the real-file end-to-end tests (needs a populated store/).
+test-e2e:
+    uv run pytest -m e2e
+
+# Run the full suite.
 check:
-    @echo "no checks defined yet"
+    uv run pytest

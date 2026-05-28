@@ -4,9 +4,23 @@ version = "0.0.1"
 description = "Citation-backed cloud pricing tool where an agent does the work"
 requires-python = ">=3.13"
 dependencies = [
+    "fastapi[standard]>=0.115",
     "httpx>=0.28",
     "jsonpath-ng>=1.8.0",
     "orjson>=3.11.9",
     "polars>=1.41.0",
     "pyarrow>=24.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "e2e: end-to-end tests that run against the real snapshots in store/ (skipped when none are present)",
 ]
