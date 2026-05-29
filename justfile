@@ -39,6 +39,10 @@ lookup provider instance_type region:
 api:
     uv run uvicorn api.main:app --reload --port ${API_PORT:-8000}
 
+# Run the frontend dev server (Next.js + assistant-ui) on localhost:3000.
+web:
+    pnpm --dir web dev
+
 # Lint with ruff.
 lint:
     uv run ruff check .

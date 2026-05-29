@@ -19,16 +19,23 @@ The normalize layer (7-provider parquet index, `compare`/`lookup`, citations,
 `/citation/excerpt`, `/health`) are built and tested. Both test lanes pass and
 `just check` (ruff + ty + pytest) is green.
 
-The immediate next task is R7 (architecture set by ADR-0009): the agent loop
-runs server-side in FastAPI on the Python OpenAI Agents SDK, not in the Next.js
-layer; `web/` is a frontend-only assistant-ui client that renders the stream;
-the model provider is an OpenAI-compatible base-URL knob, not a fixed vendor.
-R7 scaffolds the agent runtime in the API package plus the frontend-only `web/`,
-and moves CORS origins + port and the provider knobs (`PROVIDER_BASE_URL`,
-`PROVIDER_API_KEY`, `MODEL_NAME`) into `.env.example`. The first integration
-risk is the Python-to-assistant-ui stream bridge (R8), which has no first-party
-helper. The ordering rationale for everything after R7 is in TASKS.md's Position
-block.
+R7 (D7) is done, uncommitted (architecture set by ADR-0009): the agent loop runs
+server-side in FastAPI on the Python OpenAI Agents SDK, not in the Next.js layer.
+Backend: `api/config.py` (central settings), `api/agent.py` (`build_agent()` on
+`OpenAIChatCompletionsModel`, provider via OpenAI-compatible base-URL knob),
+CORS/port lifted to config, knobs in `.env.example`. Frontend: `web/` scaffolded
+from assistant-ui's `with-assistant-transport` example, frontend-only;
+`useAssistantTransportRuntime` POSTs to a same-origin `/assistant` that
+`next.config.js` proxies to `BACKEND_ORIGIN` (no CORS round-trip). Renders on
+:3000; `just web` runs it. `just check` still green (backend untouched).
+
+The immediate next task is R8: the backend `POST /assistant`. The frontend is
+already wired, so R8 is backend-only. It uses assistant-ui's first-party Python
+`assistant-stream` package (reference: assistant-ui's `python/assistant-transport-backend`)
+to bridge the OpenAI Agents SDK's `Runner.run_streamed()` events into the
+assistant-transport stream, plus the in-process `compare` tool. That bridge is
+the first integration risk; prove a tool call round-trips before R9 (rendering).
+The ordering rationale for everything after R8 is in TASKS.md's Position block.
 
 ## Git state
 

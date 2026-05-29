@@ -21,7 +21,7 @@ Separately, fixing the provider to one vendor is a hardcoded config value by the
 
 ### 1. The agent loop runs server-side in FastAPI on the Python OpenAI Agents SDK
 
-`openai-agents` (Python) hosts the loop. An `Agent` is built with `instructions`, the `compare` tool, and a model (see 3). FastAPI exposes a streaming chat endpoint the frontend consumes.
+`openai-agents` (Python) hosts the loop. An `Agent` is built with `instructions`, the `compare` tool, and a model (see 3). FastAPI exposes `POST /assistant` implementing assistant-ui's assistant-transport protocol, which the frontend consumes.
 
 `web/` is a **pure frontend**: Next.js + assistant-ui that renders the stream. It holds no agent logic, no tool definitions, no model keys, and no route handler running the loop. The browser talks to one backend.
 
@@ -61,7 +61,7 @@ The snapshot-ref citation (no leaked `store_path`), the serve-time lazy excerpt 
 ### Negative
 
 - FastAPI now carries two concerns: the deterministic `compare`/`lookup`/`excerpt` API and the agent runtime. If the agent file grows, it gets its own module under the API package rather than piling into `main.py`.
-- **Stream bridge is not free.** The JS Agents SDK has a first-party `@openai/agents-extensions/ai-sdk-ui` helper that emits an assistant-ui-compatible UIMessage stream. The Python SDK has no such helper. FastAPI must emit a stream shape assistant-ui can consume (the AI SDK data-stream/SSE protocol, or an assistant-ui external-runtime shape). This bridge must be built and verified before R9 can render; it is the first real integration risk of the new architecture and R8 calls it out explicitly. Do not assume it works until a tool call round-trips through the rendered UI.
+- **Stream bridge is real work, but bounded.** The frontend uses assistant-ui's `useAssistantTransportRuntime` (POSTs to `/assistant`). assistant-ui ships a first-party Python package (`assistant-stream`) and a reference `assistant-transport-backend`, so the emit side has a helper; the work is bridging the OpenAI Agents SDK's `Runner.run_streamed()` events into assistant-stream state updates (the OpenAI SDK has no assistant-ui adapter of its own). This must be built and verified before R9 can render; it is the first real integration risk of the new architecture and R8 calls it out explicitly. Do not assume it works until a tool call round-trips through the rendered UI.
 
 ### Neutral
 
