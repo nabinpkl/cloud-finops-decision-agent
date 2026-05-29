@@ -1,3 +1,5 @@
+set dotenv-load := true
+
 default:
     @just --list
 
@@ -33,9 +35,9 @@ compare vcpu ram region family="any":
 lookup provider instance_type region:
     uv run python -m normalize lookup --provider {{provider}} --instance-type {{instance_type}} --region {{region}}
 
-# Run the FastAPI app (compare/lookup/citation excerpt) on localhost:8000.
+# Run the FastAPI app (compare/lookup/citation excerpt + agent). Port from API_PORT (.env), default 8000.
 api:
-    uv run uvicorn api.main:app --reload --port 8000
+    uv run uvicorn api.main:app --reload --port ${API_PORT:-8000}
 
 # Lint with ruff.
 lint:

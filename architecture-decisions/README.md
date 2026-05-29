@@ -17,6 +17,8 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | [0005](0005-data-quality-envelope.md) | `data_quality` envelope on normalize responses | Accepted |
 | [0006](0006-flex-rules-over-shape-catalog.md) | Flex-rules JSON over a fetched shape catalog for GCP and Oracle (v0) | Accepted |
 | [0007](0007-rate-rows-composite-citations.md) | Rate rows and composite citations for resource-priced providers | Accepted |
+| [0008](0008-vertical-slice-api-and-citation-excerpt.md) | Vertical slice for the agent UI, and serve-time citation excerpts | Accepted (partially superseded by 0009) |
+| [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md) | Agent runtime in FastAPI on the OpenAI Agents SDK; web/ frontend-only; provider is a base-URL knob | Accepted |
 
 ## When to write an ADR
 

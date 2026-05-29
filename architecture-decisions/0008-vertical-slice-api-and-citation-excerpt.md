@@ -1,9 +1,9 @@
 # ADR 0008: Vertical slice for the agent UI, and serve-time citation excerpts
 
-- **Status:** Accepted
+- **Status:** Accepted (agent-runtime location and the fixed-Anthropic provider line superseded by [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md); citation snapshot-ref and serve-time excerpt decisions stand)
 - **Date:** 2026-05-27
 - **Supersedes:** N/A
-- **Related:** [0001](0001-parquet-index.md), [0003](0003-citation-stable-id-jsonpath.md), [0007](0007-rate-rows-composite-citations.md)
+- **Related:** [0001](0001-parquet-index.md), [0003](0003-citation-stable-id-jsonpath.md), [0007](0007-rate-rows-composite-citations.md), [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md)
 
 ## Context
 
@@ -37,7 +37,9 @@ Slice scope:
 
 - `compare` ships end-to-end. `lookup` gets an API endpoint but no dedicated UI
   component in the slice.
-- LLM provider is Anthropic.
+- LLM provider: superseded by [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md).
+  The provider is no longer fixed to Anthropic; it is an OpenAI-compatible
+  base-URL knob, and the agent loop runs in FastAPI, not the Next.js layer.
 - API and web run on `localhost` (`uvicorn` on 8000, `next dev` on 3000). The
   production deploy story is a v1 conversation.
 - No auth, no rate limiting. The citation contract is the trust layer: every

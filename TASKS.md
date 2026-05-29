@@ -4,18 +4,19 @@
 
 ## Position
 
-The normalize layer and its HTTP surface are done. What is left in v0 is the agent UI that calls them and the eval that scores it. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. Reasons:
+The normalize layer and its HTTP surface are done. What is left in v0 is the agent runtime, the frontend that renders it, and the eval that scores it. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. ADR-0009 fixes where the agent runs: the loop is server-side in FastAPI on the Python OpenAI Agents SDK, `web/` is a frontend-only client that renders the stream, and the model provider is an OpenAI-compatible base-URL knob (not a hardcoded vendor). Reasons:
 
 - A thin end-to-end slice surfaces integration bugs (tool-call wiring, citation shape) on the first real query, not after both halves are built.
 - The eval lane replays scenarios through the rendered slice, so it cannot start until the slice renders.
 
 Ordering edges:
 
+- Stream bridge (R8) before any rendering: the Python Agents SDK has no first-party assistant-ui stream helper (the JS SDK's `ai-sdk-ui` extension does not exist for Python). FastAPI must emit a stream shape assistant-ui consumes, and that must round-trip a real tool call before R9 renders anything. This is the first integration risk of the ADR-0009 architecture; do not assume it works.
 - Slice (Phase 2) before citation depth (Phase 3): a rendered table with one citation widget proves the chain; composite and excerpt rendering are depth on a working spine.
 - Agent prose tuning (Phase 4) after the components render, because tuning needs real rendered output to judge against.
 - Eval (Phase 5) last: it scores the finished slice.
 
-Config note: the API's CORS origins and port are literals in `api/main.py` today, acceptable as the first consumer. The moment `web/` lands (R7) it is the second consumer, so R7 moves them to `.env.example` knobs per the no-hardcoded-config rule.
+Config note: the API's CORS origins and port are literals in `api/main.py` today, acceptable as the first consumer. R7 lands `web/` (a second consumer of the origin/port) and the agent runtime (a consumer of the provider knobs), so R7 moves both to `.env.example`: `API_PORT`, `CORS_ALLOWED_ORIGINS`, plus the agent's `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`. Per the no-hardcoded-config rule, `api/main.py` reads them from a central config module rather than `process.env`-style scattered reads.
 
 ## Phase 0: readiness ADR (gate) [done]
 
@@ -31,9 +32,9 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 
 ## Phase 2: the vertical slice (compare end-to-end in a browser)
 
-- R7. Scaffold `web/`: Next.js app-router, assistant-ui chat shell, Vercel AI SDK on the Anthropic provider. One bare chat route round-tripping to the model. Move `api/main.py` CORS origins and port to `.env.example` knobs (second-consumer trigger). [ADR-0008]
-- R8. `web/app/api/chat/route.ts`: define a `compare` tool whose execute fetches `POST {NORMALIZE_API_URL}/compare` and returns the JSON tool result. Verify the agent calls it and the raw result lands in the chat.
-- R9. `web/components/ComparisonTable.tsx`: assistant-ui Tool component rendering the ranked results. Discriminated union on `synthesized` for atomic vs composite rows. One `AtomicCitation` widget per row (age badge, `json_path`, `source_url` link).
+- R7. Two parts. (a) Add the `openai-agents` dependency and scaffold the agent runtime home in the API package (its own module, not `main.py`): an `Agent` built with `OpenAIChatCompletionsModel(model=MODEL_NAME, openai_client=AsyncOpenAI(base_url=PROVIDER_BASE_URL, api_key=PROVIDER_API_KEY))` so the provider is config, and Chat Completions (not Responses) so non-OpenAI compat endpoints do not 404. (b) Scaffold `web/`: Next.js app-router + assistant-ui chat shell, frontend-only (no `app/api/*` route handlers, no agent logic, no model keys). Move CORS origins + port and add the provider knobs to `.env.example` per the config note. [ADR-0009]
+- R8. The `compare` tool + the stream bridge. Define a Python `compare` tool whose body calls `normalize.compare()` in-process (no HTTP self-hop) and returns the result dict (wire-translated: `store_path` dropped for a `snapshot` ref, as `api/main.py` already does). Add a FastAPI streaming chat endpoint that runs the agent (`Runner.run(..., stream=True)`) and emits a stream assistant-ui consumes. Verify end-to-end: the agent calls the tool and the raw result reaches the browser. The stream-shape bridge is the load-bearing unknown here (ADR-0009 negative); prove it before R9.
+- R9. `web/components/ComparisonTable.tsx`: assistant-ui Tool component rendering the ranked results streamed from FastAPI. Discriminated union on `synthesized` for atomic vs composite rows. One `AtomicCitation` widget per row (age badge, `json_path`, `source_url` link).
 - R10. Slice smoke test: in a browser, "cheapest 4 vCPU 8 GB general-purpose in EU" renders the ranked table with citations. State explicitly if the UI cannot be exercised; do not claim success otherwise.
 
 ## Phase 3: citation depth
@@ -76,8 +77,8 @@ D3   2026-05-28  committed   citation_excerpt serve-time hunk builder
 D4   2026-05-28  committed   mocked + real-file test lanes
 D5   2026-05-28  committed   just check = ruff+ty+pytest, debt cleared
 D6   2026-05-28  committed   /health carries data_quality envelope
-R7   pending     pending     web/ scaffold + CORS config extraction
-R8   pending     pending     compare tool wiring
+R7   pending     pending     agent runtime (OpenAI Agents SDK) + frontend-only web/ scaffold + config knobs
+R8   pending     pending     in-process compare tool + FastAPI stream bridge to assistant-ui
 R9   pending     pending     ComparisonTable component
 R10  pending     pending     slice smoke test
 R11  pending     pending     CompositeCitation component

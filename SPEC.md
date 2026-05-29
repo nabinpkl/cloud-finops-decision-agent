@@ -4,24 +4,33 @@ Technical contract for cloud-finops-decision-agent. Three layers, one repo. PRD.
 
 ## Architecture
 
-Three layers, each independently defensible. If the agent UI fails, the normalization layer still answers questions. If the agent's judgment diverges from the normalization layer's ranking, that divergence is what eval surfaces.
+Three layers, each independently defensible. If the frontend fails, the normalization layer still answers questions over its API and CLI. If the agent's judgment diverges from the normalization layer's ranking, that divergence is what eval surfaces. Per ADR-0009 the agent runtime is server-side, inside the FastAPI process, not in the browser tier.
 
 ```
                     ┌──────────────────────────────────┐
-                    │  Agent UI (web/)                 │
-                    │  Next.js + assistant-ui          │
-                    │  Renders generative tool         │
-                    │  components: ComparisonTable,    │
-                    │  PriceCard. Calls the            │
-                    │  normalization layer over HTTP.  │
+                    │  Frontend (web/)                 │
+                    │  Next.js + assistant-ui.         │
+                    │  Frontend-only: renders the      │
+                    │  chat stream and the generative  │
+                    │  tool components (ComparisonTable│
+                    │  PriceCard). No agent logic,     │
+                    │  no model keys.                  │
                     └────────────────┬─────────────────┘
-                                     │ HTTP
+                                     │ HTTP (chat stream)
                     ┌────────────────▼─────────────────┐
-                    │  Normalization layer (normalize/)│
-                    │  Python module + FastAPI + CLI.  │
+                    │  Backend (api/ + normalize/)     │
+                    │  FastAPI hosts two concerns:     │
+                    │  (1) agent runtime on the Python │
+                    │      OpenAI Agents SDK, model via│
+                    │      an OpenAI-compatible base   │
+                    │      URL; tools call normalize   │
+                    │      in-process.                 │
+                    │  (2) deterministic query API     │
+                    │      (compare/lookup/excerpt) +  │
+                    │      the normalize/ module + CLI.│
                     │  Reads store/<provider>/<ISO>/   │
-                    │  snapshots and taxonomy JSON.    │
-                    │  Returns ranked candidates with  │
+                    │  snapshots and taxonomy JSON,    │
+                    │  returns ranked candidates with  │
                     │  citation blocks.                │
                     └────────────────┬─────────────────┘
                                      │ filesystem
@@ -32,9 +41,9 @@ Three layers, each independently defensible. If the agent UI fails, the normaliz
                     │  Already in place.               │
                     └──────────────────────────────────┘
 
-                    Eval (eval/) runs scenarios end-to-end through the Agent UI,
-                    with an LLM-as-judge scoring two lanes: citation correctness
-                    and staleness / refusal behavior.
+                    Eval (eval/) runs scenarios end-to-end through the agent
+                    runtime, with an LLM-as-judge scoring two lanes: citation
+                    correctness and staleness / refusal behavior.
 ```
 
 ## Normalization layer
@@ -283,9 +292,11 @@ Two JSON files in `normalize/taxonomy/`, editable in PRs, readable by the agent 
 
 The normalization layer accepts either form on input. Output always carries the provider-native code in `region_native` so the agent can quote it back exactly.
 
-## UI surface
+## Agent runtime and UI surface
 
-`web/` is a Next.js app using `assistant-ui` as the chat shell. The agent runs through Vercel AI SDK with the normalization layer's HTTP endpoints exposed as tools. The agent decides which custom tool component to render based on the query shape.
+Per ADR-0009 the agent loop runs server-side in FastAPI on the Python OpenAI Agents SDK (`openai-agents`). The model is built against an OpenAI-compatible base URL (`OpenAIChatCompletionsModel` over `AsyncOpenAI(base_url, api_key)`, Chat Completions not Responses), so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tools call `normalize.compare` / `normalize.lookup` in-process; the wire translation (drop `store_path`, add a `snapshot` ref) is the same one `api/main.py` applies. FastAPI exposes a streaming chat endpoint.
+
+`web/` is a Next.js app using `assistant-ui` as the chat shell, and it is frontend-only: it consumes the chat stream from FastAPI and renders the custom tool components. It holds no agent logic and no model keys. The agent decides which custom tool component to render based on the query shape; the frontend maps tool names to components.
 
 ### Custom tool components
 
@@ -298,7 +309,9 @@ Staleness is surfaced inline in the agent's prose (`(snapshot 6h old)` per AGENT
 
 ### Streaming and tool calls
 
-assistant-ui's `Tool` primitive wraps each custom component. The agent calls `normalize.compare` or `normalize.lookup` via the AI SDK tool-calling layer; the response JSON is passed to the matching component for rendering. No bespoke RSC streaming for v0.
+assistant-ui's `Tool` primitive wraps each custom component. The OpenAI Agents SDK runs the tool-calling loop server-side; `Runner.run(..., stream=True)` produces the event stream. FastAPI emits that stream in a shape assistant-ui consumes, and the response JSON for each tool call is passed to the matching component for rendering.
+
+The stream bridge is the one piece without a first-party helper: the JS Agents SDK ships `@openai/agents-extensions/ai-sdk-ui` to emit an assistant-ui-compatible UIMessage stream, but the Python SDK does not. FastAPI must produce a compatible stream (the AI SDK data-stream/SSE protocol, or an assistant-ui external-runtime shape) by hand, and that must round-trip a real tool call before any component renders (ADR-0009 negative, TASKS R8). No bespoke RSC streaming for v0.
 
 ## Eval
 
@@ -341,8 +354,9 @@ Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs 
 
 1. `normalize/taxonomy/families.json` and `regions.json` — the load-bearing data shapes.
 2. `normalize/` Python module + CLI — operates against snapshots already on disk.
-3. FastAPI wrapper — thin layer over the module.
-4. `web/` Next.js + assistant-ui app with the two custom tool components.
-5. `eval/v0.jsonl` + runner.
+3. FastAPI query wrapper (`compare`/`lookup`/`excerpt`/`health`) — thin layer over the module.
+4. Agent runtime in FastAPI on the OpenAI Agents SDK: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, a streaming chat endpoint.
+5. `web/` Next.js + assistant-ui frontend with the two custom tool components, consuming the chat stream.
+6. `eval/v0.jsonl` + runner.
 
-Each step is independently runnable. Steps 2 and 3 ship a usable comparator before the UI exists; the UI is the last layer, not the first.
+Each step is independently runnable. Steps 2 and 3 ship a usable comparator before the agent or UI exists; the frontend is the last product layer, not the first.

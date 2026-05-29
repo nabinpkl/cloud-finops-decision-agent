@@ -22,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from api.config import settings
 from gates._shared import PROJECT_ROOT
 from normalize.citation_excerpt import build_excerpt
 from normalize.data_quality import compute_envelope
@@ -29,12 +30,11 @@ from normalize.index import SUPPORTED_PROVIDERS
 from normalize.query import compare, lookup
 
 STORE_ROOT = PROJECT_ROOT / "store"
-ALLOWED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 app = FastAPI(title="cloud-finops-decision-agent", version="0.0.1")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=settings.cors_allowed_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )

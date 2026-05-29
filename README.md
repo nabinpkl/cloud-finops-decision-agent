@@ -18,7 +18,7 @@ Three layers in one repo. SPEC.md owns the contracts between them.
 
 **Normalization layer** (`normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
 
-**Agent UI** (`web/`) is a Next.js app using `assistant-ui` as the chat shell. The agent calls the normalization layer over HTTP as a tool and decides which custom component to render: `ComparisonTable` for ranking queries, `PriceCard` for single-instance lookups. The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure.
+**Agent** runs server-side in FastAPI on the OpenAI Agents SDK (ADR-0009). It calls the normalization layer in-process as a tool, on a model wired to an OpenAI-compatible base URL (the provider is a `.env` knob, not a fixed vendor), and decides which custom component to render: `ComparisonTable` for ranking queries, `PriceCard` for single-instance lookups. The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure. **Frontend** (`web/`) is a frontend-only Next.js app using `assistant-ui` as the chat shell; it renders the agent's stream and holds no agent logic or model keys.
 
 The citation contract is the only enforcement layer. Every price the agent quotes carries `source_url`, `store_path`, `json_path`, `fetched_at`, and `age_hours`. If the cited snapshot is over 24 hours old, the agent marks the answer stale and offers a refetch. AGENTS.md is the agent behavior contract; SPEC.md is the data shape contract.
 
@@ -59,7 +59,8 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 - `store/<provider>/<ISO>/`: timestamped snapshot directories holding raw data files plus `receipt.json`
 - `normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
 - `normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
-- `web/`: Next.js + assistant-ui app where the agent draws the comparison surface
+- `api/`: FastAPI. Deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`) plus the server-side agent runtime (OpenAI Agents SDK) and its streaming chat endpoint
+- `web/`: frontend-only Next.js + assistant-ui app that renders the agent's stream
 - `eval/v0.jsonl`: hand-written scenarios scored by an LLM judge on citation correctness + staleness/refusal
 - `cloud-providers.json`: provider registry
 - `AGENTS.md`: agent behavior contract (citation contract, mode switching)
@@ -70,4 +71,4 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 Gates ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `python -m normalize compare --vcpu 4 --ram 8 --region eu-central --family general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
 
-Next per SPEC.md's build sequence: FastAPI wrapper over `compare()`/`lookup()`, the Next.js plus assistant-ui agent UI, and the LLM-judge eval over `eval/v0.jsonl`.
+The FastAPI query wrapper over `compare()`/`lookup()` (plus `/citation/excerpt` and `/health`) is built and tested. Next per SPEC.md's build sequence: the server-side agent runtime on the OpenAI Agents SDK and its streaming chat endpoint, the frontend-only Next.js + assistant-ui app that renders it, and the LLM-judge eval over `eval/v0.jsonl`.

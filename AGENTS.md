@@ -27,7 +27,7 @@ This project is a citation-backed cloud pricing tool. The agent is the major pla
 
 ### Calling the normalization layer
 
-Once `normalize/` is in place, the agent's primary tool for pricing answers is the normalization layer (`normalize.compare`, `normalize.lookup`) called via the FastAPI HTTP endpoints or imported directly in a Python context. The normalization layer encapsulates the snapshot walk, taxonomy lookup, match policy (closest-larger), and citation block construction. The agent quotes its output and surfaces the citation in prose; it does not re-do the deterministic work.
+The agent's primary tool for pricing answers is the normalization layer (`normalize.compare`, `normalize.lookup`). Per ADR-0009 the runtime agent lives inside the FastAPI process (Python OpenAI Agents SDK), so its tools call `normalize.compare` / `normalize.lookup` **in-process** (a direct Python import, no HTTP self-hop). The FastAPI HTTP endpoints remain for external consumers (the CLI, other services) and are not the path the in-repo agent uses to reach its own data layer. The normalization layer encapsulates the snapshot walk, taxonomy lookup, match policy (closest-larger), and citation block construction. The agent quotes its output and surfaces the citation in prose; it does not re-do the deterministic work.
 
 Direct snapshot walking is still allowed when (a) the normalization layer does not cover the question (e.g. "are there any Power Systems prices in IBM's catalog?"), or (b) the user explicitly asks the agent to explore the raw data. In those cases the agent constructs the citation block by hand per SPEC.md.
 
