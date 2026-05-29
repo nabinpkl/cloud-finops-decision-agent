@@ -37,6 +37,18 @@ wheels = [
 ]
 
 [[package]]
+name = "assistant-stream"
+version = "0.0.32"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "starlette" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/43/758899c047454ce557dbe1f0a01805e822cf23bb2121fd8c6a71a2d0de1d/assistant_stream-0.0.32.tar.gz", hash = "sha256:0eb19473c123cb375e7ce36b4b42df76e6c9e1cb97cf22a91529ff5659c105ac", size = 83289, upload-time = "2026-04-29T05:40:38.066Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/55/39f56e0577bf970148544f11f9e3c24d0bb83dcea826e0defce0918710f8/assistant_stream-0.0.32-py3-none-any.whl", hash = "sha256:daf9be22771ee4eb20ec40ea1520fbec536056d9f9654876b096b4c23ceb710f", size = 21464, upload-time = "2026-04-29T05:40:36.698Z" },
+]
+
+[[package]]
 name = "attrs"
 version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -173,6 +185,7 @@ name = "cloud-finops-decision-agent"
 version = "0.0.1"
 source = { virtual = "." }
 dependencies = [
+    { name = "assistant-stream" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "jsonpath-ng" },
@@ -192,6 +205,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "assistant-stream", specifier = ">=0.0.32" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "jsonpath-ng", specifier = ">=1.8.0" },

@@ -4,6 +4,7 @@ version = "0.0.1"
 description = "Citation-backed cloud pricing tool where an agent does the work"
 requires-python = ">=3.13"
 dependencies = [
+    "assistant-stream>=0.0.32",
     "fastapi[standard]>=0.115",
     "httpx>=0.28",
     "jsonpath-ng>=1.8.0",

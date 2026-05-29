@@ -23,6 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from api.config import settings
+from api.transport import router as transport_router
+from api.wire import wire_response
 from gates._shared import PROJECT_ROOT
 from normalize.citation_excerpt import build_excerpt
 from normalize.data_quality import compute_envelope
@@ -38,6 +40,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+app.include_router(transport_router)
 
 
 class CompareRequest(BaseModel):
@@ -72,7 +75,7 @@ def post_compare(req: CompareRequest) -> dict[str, Any]:
         providers=req.providers,
         expand=req.expand,
     )
-    return _wire_response(result)
+    return wire_response(result)
 
 
 @app.get("/lookup")
@@ -82,7 +85,7 @@ def get_lookup(
     region: str = Query(...),
 ) -> dict[str, Any]:
     result = lookup(provider=provider, instance_type=instance_type, region=region)
-    return _wire_response(result)
+    return wire_response(result)
 
 
 @app.get("/citation/excerpt")
@@ -95,52 +98,6 @@ def get_excerpt(
 ) -> dict[str, Any]:
     abs_path = _resolve_snapshot_file(provider, snapshot_iso, filename)
     return build_excerpt(abs_path=abs_path, json_path=path, context=context)
-
-
-# ---------- wire translation ----------
-
-
-def _wire_response(result: dict[str, Any]) -> dict[str, Any]:
-    """Rewrite every citation in a query-layer response: drop store_path, add a
-    snapshot ref. Mutates a shallow copy; the query layer's dict is not reused."""
-    out = dict(result)
-    if "results" in out:
-        out["results"] = [_wire_result(r) for r in out["results"]]
-    if out.get("result") is not None:
-        out["result"] = _wire_result(out["result"])
-    return out
-
-
-def _wire_result(r: dict[str, Any]) -> dict[str, Any]:
-    out = dict(r)
-    if "citation" in out:
-        out["citation"] = _wire_citation(out["citation"])
-    return out
-
-
-def _wire_citation(c: dict[str, Any]) -> dict[str, Any]:
-    if "composite" in c:
-        return {
-            **{k: v for k, v in c.items() if k != "composite"},
-            "composite": [_wire_entry(e) for e in c["composite"]],
-        }
-    return _wire_entry(c)
-
-
-def _wire_entry(e: dict[str, Any]) -> dict[str, Any]:
-    out = {k: v for k, v in e.items() if k != "store_path"}
-    ref = _store_path_to_ref(e.get("store_path", ""))
-    if ref is not None:
-        out["snapshot"] = ref
-    return out
-
-
-def _store_path_to_ref(store_path: str) -> dict[str, str] | None:
-    """store/<provider>/<iso>/<filename> -> {provider, snapshot_iso, filename}."""
-    parts = store_path.split("/")
-    if len(parts) < 4 or parts[0] != "store":
-        return None
-    return {"provider": parts[1], "snapshot_iso": parts[2], "filename": parts[-1]}
 
 
 # ---------- excerpt path safety ----------

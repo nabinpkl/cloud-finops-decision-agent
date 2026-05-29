@@ -3,63 +3,88 @@
 import {
   AssistantRuntimeProvider,
   type AssistantTransportConnectionMetadata,
+  type ThreadMessageLike,
   unstable_createMessageConverter as createMessageConverter,
   useAssistantTransportRuntime,
+  useExternalMessageConverter,
 } from "@assistant-ui/react";
-import {
-  convertLangChainMessages,
-  type LangChainMessage,
-} from "@assistant-ui/react-langgraph";
 import type { ReactNode } from "react";
 
-type MyRuntimeProviderProps = {
-  children: ReactNode;
+type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [key: string]: JSONValue };
+type JSONObject = { [key: string]: JSONValue };
+
+// The backend (POST /assistant) streams assistant-ui-native messages: a role
+// plus an ordered list of parts. Text parts stream token-by-token; tool-call
+// parts carry the tool name, args, and (once done) the result. This is the
+// shape the backend in api/transport.py emits.
+type NativePart =
+  | { type: "text"; text: string }
+  | {
+      type: "tool-call";
+      toolCallId: string;
+      toolName: string;
+      argsText?: string;
+      args?: JSONObject;
+      result?: JSONValue;
+      done?: boolean;
+    };
+
+type NativeMessage = {
+  role: "user" | "assistant" | "system";
+  parts: NativePart[];
 };
 
-// The backend state shape and this converter are scaffold-derived (LangChain
-// message shape). They get replaced when the assistant-stream backend contract
-// is defined, at which point @assistant-ui/react-langgraph drops out.
 type State = {
-  messages: LangChainMessage[];
+  messages: NativeMessage[];
 };
 
-const LangChainMessageConverter = createMessageConverter(
-  convertLangChainMessages,
-);
+const convertMessage: useExternalMessageConverter.Callback<NativeMessage> = (
+  message,
+): ThreadMessageLike => ({
+  role: message.role,
+  content: message.parts.map((part) => {
+    if (part.type === "tool-call") {
+      return {
+        type: "tool-call",
+        toolCallId: part.toolCallId,
+        toolName: part.toolName,
+        argsText: part.argsText ?? "",
+        args: part.args ?? {},
+        ...(part.result !== undefined ? { result: part.result } : {}),
+      };
+    }
+    return { type: "text", text: part.text };
+  }),
+});
+
+const MessageConverter = createMessageConverter(convertMessage);
 
 const converter = (
   state: State,
   connectionMetadata: AssistantTransportConnectionMetadata,
 ) => {
-  const optimisticStateMessages = connectionMetadata.pendingCommands.map(
-    (c): LangChainMessage[] => {
-      if (c.type === "add-message") {
-        return [
-          {
-            type: "human" as const,
-            content: [
-              {
-                type: "text" as const,
-                text: c.message.parts
-                  .map((p) => (p.type === "text" ? p.text : ""))
-                  .join("\n"),
-              },
-            ],
-          },
-        ];
-      }
-      return [];
-    },
-  );
+  // Commands still in flight are not in state yet; surface them optimistically.
+  // An add-message command's `message` is already in native shape.
+  const optimistic = connectionMetadata.pendingCommands
+    .filter((c) => c.type === "add-message")
+    .map((c) => c.message as NativeMessage);
 
-  const messages = [...state.messages, ...optimisticStateMessages.flat()];
   return {
-    messages: LangChainMessageConverter.toThreadMessages(messages),
+    messages: MessageConverter.toThreadMessages([
+      ...state.messages,
+      ...optimistic,
+    ]),
     isRunning: connectionMetadata.isSending || false,
   };
 };
 
-export function MyRuntimeProvider({ children }: MyRuntimeProviderProps) {
+export function MyRuntimeProvider({ children }: { children: ReactNode }) {
   const runtime = useAssistantTransportRuntime({
     initialState: {
       messages: [],
