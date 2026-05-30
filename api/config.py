@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     provider_api_key: str = ""
     model_name: str = ""
 
+    # Observability (ADR-0010): JSONL OTel traces on disk so any OTel-aware
+    # backend can ingest them later without re-instrumenting. All optional.
+    otel_enabled: bool = True
+    # Resolved relative to PROJECT_ROOT when relative; absolute paths are kept
+    # as-is. The exporter creates the parent directory on first export.
+    otel_jsonl_path: str = "var/traces/traces.jsonl"
+    # Extra exporter that mirrors spans to stderr; useful in dev.
+    otel_console_export: bool = False
+    # OTel-standard env name (OTEL_GENAI_CAPTURE_MESSAGE_CONTENT). Off by
+    # default to keep user prompts and assistant prose out of on-disk traces.
+    otel_capture_content: bool = False
+
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:

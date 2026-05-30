@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from api.config import settings
+from api.observability import init_observability
 from api.transport import router as transport_router
 from api.wire import wire_response
 from gates._shared import PROJECT_ROOT
@@ -40,6 +41,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+init_observability(app)
 app.include_router(transport_router)
 
 

@@ -42,9 +42,11 @@ from assistant_stream import RunController, create_run
 from assistant_stream.serialization import DataStreamResponse
 from fastapi import APIRouter
 from openai.types.responses import ResponseTextDeltaEvent
+from opentelemetry.trace import Status, StatusCode
 from pydantic import BaseModel, Field
 
 from api.agent import build_agent
+from api.observability import get_tracer
 
 
 class MessagePart(BaseModel):
@@ -159,64 +161,75 @@ async def assistant_endpoint(request: AssistantRequest) -> DataStreamResponse:
                 return len(parts) - 1
             return _append_part({"type": "text", "text": ""})
 
-        agent = build_agent()
-        result = Runner.run_streamed(
-            agent, input=cast(list[TResponseInputItem], sdk_input)
-        )
-        try:
-            async for event in result.stream_events():
-                if isinstance(event, RawResponsesStreamEvent):
-                    data = event.data
-                    if isinstance(data, ResponseTextDeltaEvent) and data.delta:
-                        idx = _ensure_text_part()
-                        current = (
-                            controller.state["messages"][msg]["parts"][idx].get("text")
-                            or ""
-                        )
-                        controller.state["messages"][msg]["parts"][idx]["text"] = (
-                            current + data.delta
-                        )
-                elif isinstance(event, RunItemStreamEvent):
-                    item = event.item
-                    if event.name == "tool_called" and isinstance(item, ToolCallItem):
-                        call_id = item.call_id or f"call_{uuid.uuid4().hex}"
-                        args_text = _raw_field(item.raw_item, "arguments")
-                        try:
-                            args_obj: dict[str, Any] = (
-                                json.loads(args_text) if args_text else {}
-                            )
-                        except json.JSONDecodeError:
-                            args_obj = {}
-                        idx = _append_part(
-                            {
-                                "type":       "tool-call",
-                                "toolCallId": call_id,
-                                "toolName":   _raw_field(item.raw_item, "name"),
-                                "argsText":   args_text,
-                                "args":       args_obj,
-                                "done":       False,
-                            }
-                        )
-                        tool_part_by_call_id[call_id] = idx
-                    elif event.name == "tool_output" and isinstance(
-                        item, ToolCallOutputItem
-                    ):
-                        call_id = item.call_id
-                        if call_id and call_id in tool_part_by_call_id:
-                            idx = tool_part_by_call_id[call_id]
-                            controller.state["messages"][msg]["parts"][idx][
-                                "result"
-                            ] = item.output
-                            controller.state["messages"][msg]["parts"][idx][
-                                "done"
-                            ] = True
-        except Exception as exc:
-            # Surface the failure in the visible thread so the user sees why the
-            # turn stopped; the receipt remains the citation contract for prices.
-            _append_part(
-                {"type": "text", "text": f"\n\n[agent error: {type(exc).__name__}: {exc}]"}
+        tracer = get_tracer()
+        history_text_length = sum(len(item["content"]) for item in sdk_input)
+        last_user_length = len(sdk_input[-1]["content"]) if sdk_input else 0
+        with tracer.start_as_current_span("agent.turn") as turn_span:
+            turn_span.set_attribute("finops.user_message.length", last_user_length)
+            turn_span.set_attribute("finops.cross_turn_history.message_count", len(sdk_input))
+            turn_span.set_attribute("finops.cross_turn_history.text_length", history_text_length)
+            # build_agent() inside the span so a missing-credentials failure is
+            # captured by record_exception/set_status, not swallowed as a 500.
+            agent = build_agent()
+            result = Runner.run_streamed(
+                agent, input=cast(list[TResponseInputItem], sdk_input)
             )
-            raise
+            try:
+                async for event in result.stream_events():
+                    if isinstance(event, RawResponsesStreamEvent):
+                        data = event.data
+                        if isinstance(data, ResponseTextDeltaEvent) and data.delta:
+                            idx = _ensure_text_part()
+                            current = (
+                                controller.state["messages"][msg]["parts"][idx].get("text")
+                                or ""
+                            )
+                            controller.state["messages"][msg]["parts"][idx]["text"] = (
+                                current + data.delta
+                            )
+                    elif isinstance(event, RunItemStreamEvent):
+                        item = event.item
+                        if event.name == "tool_called" and isinstance(item, ToolCallItem):
+                            call_id = item.call_id or f"call_{uuid.uuid4().hex}"
+                            args_text = _raw_field(item.raw_item, "arguments")
+                            try:
+                                args_obj: dict[str, Any] = (
+                                    json.loads(args_text) if args_text else {}
+                                )
+                            except json.JSONDecodeError:
+                                args_obj = {}
+                            idx = _append_part(
+                                {
+                                    "type":       "tool-call",
+                                    "toolCallId": call_id,
+                                    "toolName":   _raw_field(item.raw_item, "name"),
+                                    "argsText":   args_text,
+                                    "args":       args_obj,
+                                    "done":       False,
+                                }
+                            )
+                            tool_part_by_call_id[call_id] = idx
+                        elif event.name == "tool_output" and isinstance(
+                            item, ToolCallOutputItem
+                        ):
+                            call_id = item.call_id
+                            if call_id and call_id in tool_part_by_call_id:
+                                idx = tool_part_by_call_id[call_id]
+                                controller.state["messages"][msg]["parts"][idx][
+                                    "result"
+                                ] = item.output
+                                controller.state["messages"][msg]["parts"][idx][
+                                    "done"
+                                ] = True
+            except Exception as exc:
+                # Surface the failure in the visible thread so the user sees why
+                # the turn stopped; the receipt remains the citation contract.
+                turn_span.record_exception(exc)
+                turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
+                _append_part(
+                    {"type": "text", "text": f"\n\n[agent error: {type(exc).__name__}: {exc}]"}
+                )
+                raise
 
     incoming_state = request.state or {"messages": []}
     incoming_state.setdefault("messages", [])
