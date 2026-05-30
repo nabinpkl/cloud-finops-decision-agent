@@ -43,6 +43,20 @@ api:
 web:
     pnpm --dir web dev
 
+# Run API (8000) + frontend (3000) together, freeing both ports first. Ctrl-C stops both.
+dev:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    for port in "${API_PORT:-8000}" 3000; do
+      pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+      if [ -n "$pids" ]; then echo "freeing port $port (pids: $pids)"; kill $pids 2>/dev/null || true; fi
+    done
+    sleep 1
+    trap 'kill $(jobs -p) 2>/dev/null' INT TERM EXIT
+    just api &
+    just web &
+    wait
+
 # Lint with ruff.
 lint:
     uv run ruff check .

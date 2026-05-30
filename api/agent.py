@@ -7,8 +7,8 @@ OpenAI, an Anthropic compat endpoint, OpenRouter, or a local server is a .env
 change. The Chat Completions model is required because most non-OpenAI compatible
 endpoints do not implement the Responses API.
 
-The pricing `compare` tool and the streaming chat endpoint are wired in a later
-step; this module owns the agent and its model wiring.
+Tools live in `api/tools.py` and are registered on the Agent here; the streaming
+endpoint that drives this agent is `api/transport.py`.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from __future__ import annotations
 from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel
 
 from api.config import settings
+from api.tools import compare as compare_tool
 
 INSTRUCTIONS = (
     "You are a cloud FinOps pricing agent. Every price you state must come from a "
@@ -52,4 +53,9 @@ def build_model() -> OpenAIChatCompletionsModel:
 
 
 def build_agent() -> Agent:
-    return Agent(name="finops", instructions=INSTRUCTIONS, model=build_model())
+    return Agent(
+        name="finops",
+        instructions=INSTRUCTIONS,
+        model=build_model(),
+        tools=[compare_tool],
+    )
