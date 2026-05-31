@@ -42,6 +42,11 @@ type NativeMessage = {
 
 type State = {
   messages: NativeMessage[];
+  // Set by the backend when the per-session token cap is hit (ADR-0011).
+  // The SessionLimitBanner reads it via useAssistantTransportState and
+  // renders the "Start new conversation" CTA. The frontend never writes
+  // this field directly: server-trusted enforcement is the point.
+  sessionLimitReached?: boolean;
 };
 
 const convertMessage: useExternalMessageConverter.Callback<NativeMessage> = (

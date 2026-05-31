@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from gates._shared import PROJECT_ROOT
@@ -50,6 +50,24 @@ class Settings(BaseSettings):
     # default to keep user prompts and assistant prose out of on-disk traces.
     otel_capture_content: bool = False
 
+    # Budget enforcement (ADR-0011). All limits are tokens; USD is a derived
+    # view via api.observability.PRICE_TABLE.
+    budget_enabled: bool = True
+    budget_db_path: str = "var/budgets.db"
+    # Required when budget_enabled=True; the model_validator below enforces
+    # presence at process start so we never silently run with a constant key.
+    budget_ip_hash_salt_secret: str = ""
+    global_daily_token_cap: int = 10_000_000
+    client_rate_requests_per_minute: int = 30
+    client_rate_tokens_per_hour: int = 200_000
+    session_token_cap: int = 50_000
+    session_idle_timeout_minutes: int = 60
+    session_cookie_name: str = "finops_session_id"
+    session_cookie_secure: bool = False
+    turn_token_cap: int = 20_000
+    max_turns_per_run: int = 3
+    trusted_proxy_count: int = 0
+
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
@@ -58,6 +76,18 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    @model_validator(mode="after")
+    def _require_salt_when_budget_enabled(self) -> Settings:
+        # Fail-fast: an empty salt with enforcement on means yesterday's
+        # hashed-IPs would be valid forever, undefeating ADR-0011's daily
+        # rotation. Better to refuse to boot than to ship a fixed key.
+        if self.budget_enabled and not self.budget_ip_hash_salt_secret:
+            raise ValueError(
+                "BUDGET_IP_HASH_SALT_SECRET must be set when BUDGET_ENABLED=true; "
+                "set a 32+ byte random value in .env or disable enforcement."
+            )
+        return self
 
 
 settings = Settings()

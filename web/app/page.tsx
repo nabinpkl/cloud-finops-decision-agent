@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionLimitBanner } from "@/components/SessionLimitBanner";
 import { Thread } from "@/components/assistant-ui/thread";
 import { useAui, AuiProvider, Suggestions } from "@assistant-ui/react";
 import { MyRuntimeProvider } from "./MyRuntimeProvider";
@@ -30,8 +31,11 @@ function ThreadWithSuggestions() {
 export default function Home() {
   return (
     <MyRuntimeProvider>
-      <div className="h-full">
-        <ThreadWithSuggestions />
+      <div className="flex h-full flex-col">
+        <SessionLimitBanner />
+        <div className="flex-1 overflow-hidden">
+          <ThreadWithSuggestions />
+        </div>
       </div>
     </MyRuntimeProvider>
   );
