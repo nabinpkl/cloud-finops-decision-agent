@@ -72,3 +72,28 @@ The snapshot-ref citation (no leaked `store_path`), the serve-time lazy excerpt 
 - **TS Agents SDK in the Next.js route** (0008's implied shape). Rejected: second runtime, second language, HTTP self-hop to reach an in-repo data layer.
 - **Fix the provider to Anthropic** (0008's slice scope). Rejected: a base-URL knob gives provider-agnosticism for free and removes a hardcoded config value.
 - **Keep a bare Vercel AI SDK `streamText`+tools loop, no Agents SDK.** Rejected: we want the Agents SDK primitives (typed tools, handoffs, sessions, tracing) and its provider-agnostic client, which the bare loop would re-implement by hand.
+
+## Amendment 2026-05-31: trust boundary for the round-tripped state
+
+The original decision left the trust model of the round-tripped `state` field
+implicit. Under [ADR-0011](0011-public-endpoint-threat-model.md) the runtime
+is a public anonymous endpoint, so the model needs to be made explicit:
+
+- The `state` field on the assistant-transport request is **UI scaffolding,
+  not a source of truth**. The backend uses `state.messages` to reconstruct
+  SDK input for the current turn and ignores any other client-supplied
+  field (usage counters, session ids, budget hints).
+- All enforcement state (per-session token totals, the cookie-keyed session
+  identity, the hashed-client-id rate-limit windows, the global daily
+  counters) lives server-side per ADR-0011's storage rules. The backend
+  reads identity from a first-party cookie it set itself, never from the
+  request body.
+- The backend continues to **write** UI scaffolding into the streamed
+  state (assistant turns, tool-call parts, and a `sessionLimitReached`
+  flag when the per-session cap trips). None of those writes carry
+  counters; they describe what the UI should render, not what the next
+  request is allowed to claim.
+
+This amendment does not change the transport contract or the data shapes
+ADR-0009 specifies. It records the trust boundary that every reader of
+`request.state` should now assume.
