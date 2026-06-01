@@ -58,34 +58,28 @@ def _emit(tag: str, **fields: Any) -> None:
 
 
 def _input_text_chars(input_items: list[TResponseInputItem]) -> int:
-    """Best-effort character count over the assembled context window for one
-    LLM call. The SDK's input shape varies (str | dict | pydantic model);
-    accept all three and skip what doesn't look textual."""
-    total = 0
-    for item in input_items:
-        if isinstance(item, str):
-            total += len(item)
-            continue
-        # dict-like (e.g. {"role": "...", "content": "..."}).
-        if isinstance(item, dict):
-            content = item.get("content")
-            if isinstance(content, str):
-                total += len(content)
-            elif isinstance(content, list):
-                for piece in content:
-                    if isinstance(piece, dict):
-                        text = piece.get("text")
-                        if isinstance(text, str):
-                            total += len(text)
-            continue
-        # Pydantic model fallback: dump and pull text fields.
-        dump = getattr(item, "model_dump", None)
+    """Recursively sum lengths of every string leaf across the items. The
+    SDK's input shape varies — plain str, dict with `content`, pydantic
+    model, function-call output items carrying `output: str`, image-part
+    lists. Rather than enumerate shapes, walk the structure and count
+    text wherever it appears; numbers and booleans contribute zero so
+    structural fields don't inflate the count."""
+
+    def walk(obj: object) -> int:
+        if obj is None or isinstance(obj, (int, float, bool)):
+            return 0
+        if isinstance(obj, str):
+            return len(obj)
+        if isinstance(obj, dict):
+            return sum(walk(v) for v in obj.values())
+        if isinstance(obj, (list, tuple)):
+            return sum(walk(x) for x in obj)
+        dump = getattr(obj, "model_dump", None)
         if callable(dump):
-            data = dump()
-            content = data.get("content")
-            if isinstance(content, str):
-                total += len(content)
-    return total
+            return walk(dump())
+        return 0
+
+    return sum(walk(item) for item in input_items)
 
 
 class MonitoringHooks(RunHooksBase[Any, Any]):
