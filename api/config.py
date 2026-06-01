@@ -77,6 +77,20 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @field_validator(
+        "provider_base_url", "provider_api_key", "model_name",
+        "budget_ip_hash_salt_secret",
+        mode="before",
+    )
+    @classmethod
+    def _strip_whitespace(cls, value: object) -> object:
+        # Secret managers (Infisical, Doppler, 1Password) often round-trip
+        # values with a trailing newline; httpx and HMAC are intolerant. Strip
+        # once at the boundary so downstream code stays clean.
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
     @model_validator(mode="after")
     def _require_salt_when_budget_enabled(self) -> Settings:
         # Fail-fast: an empty salt with enforcement on means yesterday's

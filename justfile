@@ -43,6 +43,10 @@ api:
 web:
     pnpm --dir web dev
 
+# Wrap `just dev` with `infisical run` so secrets come from Infisical (one-time: `infisical login` + `infisical init`). INFISICAL_ENV picks the slug, default dev.
+infcl-dev:
+    infisical run --env=${INFISICAL_ENV:-dev} -- just dev
+
 # Run API (8000) + frontend (3000) together, freeing both ports first. Ctrl-C stops both.
 dev:
     #!/usr/bin/env bash
@@ -56,6 +60,10 @@ dev:
     just api &
     just web &
     wait
+
+# Drive one live agent turn and print per-call context/token deltas. Expects creds in env (use `infisical run -- just smoke`).
+smoke:
+    uv run python -m scripts.agent_smoke
 
 # Lint with ruff.
 lint:
