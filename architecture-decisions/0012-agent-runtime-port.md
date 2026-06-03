@@ -1,0 +1,182 @@
+# ADR 0012: Agent-runtime port — a framework-neutral seam for swapping the agent loop
+
+- **Status:** Accepted
+- **Date:** 2026-06-02
+- **Related:** [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md),
+  [0010](0010-observability-via-otel-jsonl.md),
+  [0011](0011-public-endpoint-threat-model.md)
+
+## Context
+
+ADR-0009 put the agent loop in-process on the OpenAI Agents SDK. Since then
+the SDK has shown a sharp edge: models that carry provider-specific reasoning
+state (DeepSeek V4 thinking mode via OpenRouter) need their `reasoning_content`
+round-tripped on every turn, and the SDK's Chat Completions adapter does not do
+it, producing empty completions. That is one symptom of a general fact: the
+framework choice is not free, and we want the ability to run the same agent on a
+different framework (LangChain / DeepAgents next) to compare them on the same
+workload, behind one env var, without a rewrite.
+
+The risk in adding a second framework is entanglement. The valuable, hard-won
+parts of this repo are framework-independent: the citation contract
+(`normalize` + `api/wire.py`), budget enforcement (ADR-0011), session identity,
+and the assistant-ui wire shape. If a second framework's idioms leak into those,
+each framework swap re-touches the asset. The point of this ADR is to draw the
+boundary once so that adding, swapping, or removing a framework touches only an
+adapter.
+
+Before this change, the coupling was already small but unnamed: `api/transport.py`
+imported `agents` types in exactly two spots (constructing/running the agent, and
+the `stream_events()` translation loop), and the cross-turn input was already a
+neutral `[{role, content}]` list. This ADR names that seam and moves the two
+coupled spots behind it.
+
+## Decision
+
+### 1. A one-method port
+
+`api/runtime/types.py` defines the contract transport speaks, and it imports no
+agent framework:
+
+- `Turn(role, content)` — one cross-turn message in (text-only in v0).
+- `RunUsage(input_tokens, output_tokens)` — a **mutable** token accumulator the
+  caller owns and passes in. The runtime writes into it as the run progresses.
+- `Emitter` — a protocol with three neutral verbs: `text_delta(text)`,
+  `tool_call(call_id, name, args_text, args)`, `tool_result(call_id, result)`.
+- `TurnTokenCapExceeded` — the per-turn cap exception, neutral so transport
+  catches the same class no matter which runtime raised it.
+- `AgentRuntime` — the port: `async run(turns, emit, usage) -> None`.
+
+Transport hands a runtime the turns and an emitter, the runtime streams parts
+back through the emitter and accumulates into `usage`. That is the entire
+surface.
+
+### 2. Why `RunUsage` is passed in, not returned
+
+A turn can abort mid-stream (the cap fires, or the model errors). ADR-0011
+requires that a partial turn still pays for what it consumed. A returned value is
+lost when the call raises; a caller-owned accumulator the runtime mutates is
+readable in transport's `finally` regardless of how the run ended. This mirrors
+the pattern the Agents SDK `BudgetHooks` already used (counters on `self`),
+generalized so every adapter obeys it.
+
+### 3. Ours vs adapter — the boundary rule
+
+```
+ours/  (framework-free — the asset; must NOT import agents/langchain/deepagents)
+  api/runtime/types.py        the port + neutral types
+  api/transport.py            HTTP, session, budgets, _StateEmitter, the agent.turn span
+  api/budgets.py  api/middleware.py
+  api/tools_core.py           run_compare = normalize.compare + wire_response  (tool LOGIC)
+  normalize/...  api/wire.py  the deterministic data + citation layer
+
+adapter/  (framework glue — swappable; imports exactly one framework)
+  api/runtime/openai_agents.py   Agent + OpenAIChatCompletionsModel; Runner.run_streamed;
+                                 stream_events() -> Emitter; BudgetHooks for the cap
+  api/agent.py  api/hooks.py  api/tools.py   (the OpenAI-agents binding of the above)
+  api/runtime/deepagents.py      create_deep_agent; @tool wrapping run_compare;
+                                 LangGraph stream -> Emitter; @after_model cap middleware
+```
+
+The invariant: **`api/tools_core.py` and everything under `ours/` import no
+agent framework.** Each adapter wraps the *same* `run_compare` in its own tool
+decorator. The citation translation lives in `wire_response`, below both
+frameworks, so neither can weaken it. This is the property ADR-0009's amendment
+and ADR-0011 depend on: the agent never sees a path the user cannot verify, and
+that guarantee cannot be a framework's responsibility.
+
+### 4. Selection by env
+
+`settings.agent_runtime` (env `AGENT_RUNTIME`, default `openai_agents`) chooses
+the adapter. `api/runtime/get_runtime()` imports the chosen adapter **lazily
+inside the branch**, so a runtime whose dependency is not installed (e.g.
+`deepagents`) never breaks the default path, and flipping the experiment is one
+env var. The active runtime is recorded on the `agent.turn` span as
+`finops.agent.runtime`, so traces and the smoke can be attributed per framework.
+
+### 5. The cap is policy (ours); the hook is plumbing (adapter)
+
+`TurnTokenCapExceeded` and the "stop at `turn_token_cap`" rule are ours and
+neutral. *How* a framework counts tokens and interrupts differs: the Agents SDK
+gives a per-LLM-call `on_llm_end` hook; DeepAgents/LangChain gives an
+`@after_model` middleware. Each adapter enforces the same neutral exception with
+its own mechanism. A consequence: token-counting **granularity** differs across
+runtimes (per-call vs per-step), so the smoke's per-call deltas will not line up
+one-to-one between frameworks. The cumulative per-turn total, which is what the
+cap and `record_usage` care about, is the same.
+
+## Consequences
+
+**Good.** Adding a framework is one adapter file plus one `get_runtime` branch.
+Transport, budgets, and the citation layer are untouched by a framework swap.
+The DeepSeek `reasoning_content` fix (a custom chat model, or `ChatDeepSeek`
+direct) becomes an adapter-local concern: it ships inside whichever adapter
+needs it and cannot disturb the other.
+
+**Cost.** One more indirection between transport and the SDK, and a small
+duplication: each adapter re-implements the stream-event-to-`Emitter` mapping for
+its framework. That mapping is exactly the framework-specific work the port is
+meant to contain.
+
+**Known wart — observability still imports `agents.tracing`.** `api/observability.py`
+bridges the Agents SDK's internal spans into the OTel JSONL (ADR-0010). It lives
+in an "ours"-looking file but is a second framework coupling. It is additive and
+only fires under `openai_agents`; under `deepagents` it produces nothing, so it
+is not broken, but it is not neutral either. The neutral `agent.turn` span in
+transport is unaffected. Cleaning this (a tracing bridge per adapter; DeepAgents
+traces via LangSmith/LangGraph) is deferred to the DeepAgents adapter step, not
+done here, to keep this change a behavior-preserving refactor.
+
+**Granularity caveat (restated).** Cross-runtime token deltas are not
+comparable per-call. Document this wherever the smoke output is read so a
+per-call difference is not mistaken for a bug.
+
+## Alternatives considered
+
+- **Keep one framework, patch the SDK.** Subclass `OpenAIChatCompletionsModel`
+  to round-trip `reasoning_content`. Fixes DeepSeek but leaves us single-framework
+  and unable to compare. The port does not preclude this; it just makes it one
+  adapter's internal choice.
+- **Process-isolate each framework behind HTTP.** A separate service per runtime.
+  Heavier than the problem: ADR-0009 deliberately runs the loop in-process for
+  the in-repo data path. The port gives swappability without a network hop.
+- **Return usage instead of a passed-in accumulator.** Loses partial usage on
+  abort, violating ADR-0011's "a partial turn still pays." Rejected.
+
+## Status of the implementation
+
+The port, the OpenAI-agents adapter, the env router, and the boundary refactor
+of `api/transport.py` are done and shipped behind no behavior change (`just
+check` green). `api/runtime/deepagents.py` is a placeholder that raises if
+selected; the real DeepAgents adapter is the next change.
+
+## Amendment 2026-06-02: DeepAgents adapter shipped; default flipped
+
+The LangChain adapter (`api/runtime/deepagents.py`) is implemented: lean
+`langchain.agents.create_agent` with the single `compare` tool, the
+stream-to-`Emitter` mapping, a `CapMiddleware` enforcing the neutral per-turn
+cap, and `ReasoningRoundTripChatOpenAI` (gated by
+`langchain_reasoning_roundtrip`) for DeepSeek-style `reasoning_content`
+echo-back.
+
+Two decisions in this ADR are superseded:
+
+- **Default runtime is now `deepagents`, not `openai_agents`.** The LangChain
+  runtime drives DeepSeek-via-OpenRouter correctly where the OpenAI Agents SDK
+  Chat Completions path returns empty completions, so it is the better default
+  for this deployment's provider. Verified live: a single-turn pricing question
+  returns a full cited answer on the langchain runtime, with and without the
+  reasoning round-trip (round-trip matters only when thinking mode is explicitly
+  enabled, since `create_agent` + `ChatOpenAI` does not emit the reasoning items
+  that tripped the OpenAI Agents SDK).
+- **`langchain`/`langchain-openai` are now core dependencies, not an optional
+  extra.** A default runtime must work on a plain `uv sync`. Both framework
+  stacks are therefore always installed; `openai-agents` was already core
+  (imported at module load by `api/observability.py`'s tracing bridge). Making
+  `openai-agents` itself optional would require lazifying that bridge import and
+  is left for later.
+
+The observability wart noted above is resolved: the Agents-SDK tracing bridge
+registers only when `agent_runtime == "openai_agents"`, so it is inert (not just
+silent) under the default runtime. The neutral `agent.turn` span carries
+`finops.agent.runtime` for both.
