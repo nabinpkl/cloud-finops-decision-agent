@@ -10,6 +10,8 @@ import {
 } from "@assistant-ui/react";
 import type { ReactNode } from "react";
 
+import { publishSessionLimitReached } from "@/lib/session-limit";
+
 type JSONValue =
   | string
   | number
@@ -42,10 +44,10 @@ type NativeMessage = {
 
 type State = {
   messages: NativeMessage[];
-  // Set by the backend when the per-session token cap is hit (ADR-0011).
-  // The SessionLimitBanner reads it via useAssistantTransportState and
-  // renders the "Start new conversation" CTA. The frontend never writes
-  // this field directly: server-trusted enforcement is the point.
+  // Set by the backend when the per-session token cap is hit (ADR-0011). The
+  // converter mirrors it into the session-limit store, which the
+  // SessionLimitBanner reads to render the "Start new conversation" CTA. The
+  // frontend never writes this field: server-trusted enforcement is the point.
   sessionLimitReached?: boolean;
 };
 
@@ -74,6 +76,11 @@ const converter = (
   state: State,
   connectionMetadata: AssistantTransportConnectionMetadata,
 ) => {
+  // Mirror the server-trusted session-limit flag into the store the banner
+  // reads (see web/lib/session-limit.ts for why this path, not the transport
+  // extras hook).
+  publishSessionLimitReached(state.sessionLimitReached === true);
+
   // Commands still in flight are not in state yet; surface them optimistically.
   // An add-message command's `message` is already in native shape.
   const optimistic = connectionMetadata.pendingCommands

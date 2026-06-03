@@ -13,16 +13,14 @@
  * to restart after a legitimate stop.
  */
 
-import { useAssistantTransportState } from "@assistant-ui/react";
-
 import { Button } from "@/components/ui/button";
-
-type MaybeFlagged = { sessionLimitReached?: boolean };
+import { useSessionLimitReached } from "@/lib/session-limit";
 
 export function SessionLimitBanner() {
-  const reached = useAssistantTransportState(
-    (state) => (state as MaybeFlagged | null | undefined)?.sessionLimitReached === true,
-  );
+  // The flag is mirrored out of the transport converter into a small store
+  // (web/lib/session-limit.ts) because this assistant-ui version does not
+  // propagate the transport extras that `useAssistantTransportState` requires.
+  const reached = useSessionLimitReached();
   if (!reached) return null;
 
   const onReset = () => {
