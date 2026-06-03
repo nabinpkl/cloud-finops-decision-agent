@@ -6,13 +6,19 @@ from __future__ import annotations
 
 from typing import Any
 
-import agents.tracing as agents_tracing
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+import pytest
 
-from api.observability import AgentsSdkOtelProcessor
+pytest.importorskip("agents")
+
+import agents.tracing as agents_tracing  # noqa: E402
+from opentelemetry.sdk.resources import Resource  # noqa: E402
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider  # noqa: E402
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # noqa: E402
+    InMemorySpanExporter,
+)
+
+from api.observability_agents_bridge import AgentsSdkOtelProcessor  # noqa: E402
 
 
 def _attrs(span: ReadableSpan) -> dict[str, Any]:

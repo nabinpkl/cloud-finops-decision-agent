@@ -8,12 +8,12 @@ dependencies = [
     "fastapi[standard]>=0.115",
     "httpx>=0.28",
     "jsonpath-ng>=1.8.0",
-    # Both agent runtimes are core deps (ADR-0012). langchain backs the default
-    # runtime (AGENT_RUNTIME=deepagents); openai-agents backs the alternative and
-    # is imported at module load by api/observability.py's tracing bridge.
+    # langchain backs the default runtime (AGENT_RUNTIME=deepagents), so it is a
+    # core dependency. The OpenAI Agents SDK backs the alternative runtime and is
+    # imported only lazily (the runtime adapter and the tracing bridge in
+    # api/observability_agents_bridge.py), so it is an optional extra below.
     "langchain>=1.3",
     "langchain-openai>=0.3",
-    "openai-agents>=0.17.4",
     "opentelemetry-api>=1.42.1",
     "opentelemetry-instrumentation-fastapi>=0.63b1",
     "opentelemetry-sdk>=1.42.1",
@@ -24,8 +24,20 @@ dependencies = [
     "pydantic-settings>=2.14.1",
 ]
 
+[project.optional-dependencies]
+# The OpenAI Agents SDK runtime (ADR-0012, AGENT_RUNTIME=openai_agents). Optional
+# because the default runtime is langchain; install with
+# `uv sync --extra openai-agents` to run the agent on the Agents SDK.
+openai-agents = [
+    "openai-agents>=0.17.4",
+]
+
 [dependency-groups]
+# openai-agents is in the dev group so the local test suite exercises both
+# runtimes (the gated tests under tests/ import it) even though it is an
+# optional runtime dependency.
 dev = [
+    "openai-agents>=0.17.4",
     "pytest>=8.3",
     "ruff>=0.8",
     "ty>=0.0.1a1",

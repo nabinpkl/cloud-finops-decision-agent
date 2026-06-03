@@ -21,6 +21,7 @@ def test_deepagents_selector_returns_deepagents_runtime(monkeypatch: pytest.Monk
 
 
 def test_openai_agents_selector_returns_openai_runtime(monkeypatch: pytest.MonkeyPatch):
+    pytest.importorskip("agents")
     monkeypatch.setattr(settings, "agent_runtime", "openai_agents")
     rt = runtime_pkg.get_runtime()
     assert type(rt).__name__ == "OpenAIAgentsRuntime"

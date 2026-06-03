@@ -169,14 +169,18 @@ Two decisions in this ADR are superseded:
   reasoning round-trip (round-trip matters only when thinking mode is explicitly
   enabled, since `create_agent` + `ChatOpenAI` does not emit the reasoning items
   that tripped the OpenAI Agents SDK).
-- **`langchain`/`langchain-openai` are now core dependencies, not an optional
-  extra.** A default runtime must work on a plain `uv sync`. Both framework
-  stacks are therefore always installed; `openai-agents` was already core
-  (imported at module load by `api/observability.py`'s tracing bridge). Making
-  `openai-agents` itself optional would require lazifying that bridge import and
-  is left for later.
+- **`langchain`/`langchain-openai` are now core dependencies; `openai-agents`
+  is an optional extra.** A default runtime must work on a plain `uv sync`, so
+  the langchain stack is core. The Agents-SDK -> OTel tracing bridge was the last
+  module-load importer of `agents`; it is now extracted to
+  `api/observability_agents_bridge.py` and imported lazily by
+  `init_observability` only under `agent_runtime == "openai_agents"`. With that,
+  `agents` is imported on no default-path module load (verified:
+  `import api.main` pulls in no `agents`), so `openai-agents` moves to
+  `[project.optional-dependencies]` (`uv sync --extra openai-agents`). It stays
+  in the dev group so the local suite exercises both runtimes; the Agents-SDK
+  tests are `importorskip`-gated.
 
-The observability wart noted above is resolved: the Agents-SDK tracing bridge
-registers only when `agent_runtime == "openai_agents"`, so it is inert (not just
-silent) under the default runtime. The neutral `agent.turn` span carries
-`finops.agent.runtime` for both.
+The observability wart noted above is fully resolved: the bridge is neither
+imported nor registered under the default runtime. The neutral `agent.turn` span
+carries `finops.agent.runtime` for both.

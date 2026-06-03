@@ -9,10 +9,13 @@ from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
-from agents.items import ModelResponse
 
-from api.config import settings
-from api.hooks import BudgetHooks, TurnTokenCapExceeded
+pytest.importorskip("agents")
+
+from agents.items import ModelResponse  # noqa: E402
+
+from api.config import settings  # noqa: E402
+from api.hooks import BudgetHooks, TurnTokenCapExceeded  # noqa: E402
 
 
 def _fake_response(input_tokens: int, output_tokens: int) -> ModelResponse:
