@@ -1,14 +1,16 @@
-"""Mocked tests for the agent's `compare` tool (api/tools.py).
+"""Mocked tests for the agent's `compare` tool logic (api/tools_core.py).
 
-The agent shares its citation translation with the HTTP surface via
-`api/wire.py`: every tool result the model sees has its `store_path` stripped
-and replaced with a logical `snapshot` ref. These tests pin that contract using
-the same canned compare payloads as test_integration_api.py.
+The neutral tool body lives in `api/tools_core.py` (ADR-0012); the OpenAI-agents
+binding in `api/tools.py` and the future DeepAgents binding both wrap it. The
+agent shares its citation translation with the HTTP surface via `api/wire.py`:
+every tool result the model sees has its `store_path` stripped and replaced with
+a logical `snapshot` ref. These tests pin that contract using the same canned
+compare payloads as test_integration_api.py.
 """
 
 from __future__ import annotations
 
-import api.tools as agent_tools
+import api.tools_core as tools_core
 from tests.test_integration_api import CANNED_COMPARE
 
 
@@ -26,9 +28,9 @@ def _find_keys(obj, key):
 
 
 def test_compare_tool_strips_store_path_and_adds_snapshot(monkeypatch):
-    monkeypatch.setattr(agent_tools, "_normalize_compare", lambda **kw: CANNED_COMPARE)
+    monkeypatch.setattr(tools_core, "_normalize_compare", lambda **kw: CANNED_COMPARE)
 
-    out = agent_tools._run_compare(
+    out = tools_core.run_compare(
         vcpu=4, ram_gb=16, region="eu-central", family="general-purpose"
     )
 

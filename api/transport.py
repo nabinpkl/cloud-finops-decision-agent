@@ -34,30 +34,18 @@ Cross-turn input passed to the agent is text-only for v0.
 
 from __future__ import annotations
 
-import json
-import uuid
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal
 
-from agents import (
-    RawResponsesStreamEvent,
-    RunItemStreamEvent,
-    Runner,
-    ToolCallItem,
-    ToolCallOutputItem,
-)
-from agents.items import TResponseInputItem
 from assistant_stream import RunController, create_run
 from assistant_stream.serialization import DataStreamResponse
 from fastapi import APIRouter, Request
-from openai.types.responses import ResponseTextDeltaEvent
 from opentelemetry.trace import Status, StatusCode
 from pydantic import BaseModel, Field
 
 from api import budgets
-from api.agent import build_agent
 from api.config import settings
-from api.hooks import BudgetHooks, TurnTokenCapExceeded
 from api.observability import get_tracer
+from api.runtime import RunUsage, Turn, TurnTokenCapExceeded, get_runtime
 
 SESSION_LIMIT_MESSAGE = (
     "This conversation reached its token limit. "
@@ -111,13 +99,53 @@ def _message_text(message: dict[str, Any]) -> str:
     ).strip()
 
 
-def _raw_field(raw_item: Any, name: str) -> str:
-    """ToolCallItem.raw_item is either a pydantic model or a dict; read either."""
-    if isinstance(raw_item, dict):
-        value = raw_item.get(name)
-    else:
-        value = getattr(raw_item, name, None)
-    return value or ""
+class _StateEmitter:
+    """Maps a runtime's neutral output (`Emitter`) onto assistant-ui native
+    parts on the round-tripped state. The runtime calls `text_delta`,
+    `tool_call`, and `tool_result`; this class owns the part-building, so the
+    wire shape stays in transport regardless of which framework produced the
+    output. Mutation is in-place, matching what assistant_stream's
+    `RunController` streams to the client."""
+
+    def __init__(self, controller: RunController, msg_index: int) -> None:
+        self._controller = controller
+        self._msg = msg_index
+        self._tool_idx_by_call: dict[str, int] = {}
+
+    def _parts(self) -> list[dict[str, Any]]:
+        return self._controller.state["messages"][self._msg]["parts"]
+
+    def _append_part(self, part: dict[str, Any]) -> int:
+        self._parts().append(part)
+        return len(self._parts()) - 1
+
+    def _ensure_text_part(self) -> int:
+        parts = self._parts()
+        if parts and parts[-1].get("type") == "text":
+            return len(parts) - 1
+        return self._append_part({"type": "text", "text": ""})
+
+    def text_delta(self, text: str) -> None:
+        idx = self._ensure_text_part()
+        current = self._parts()[idx].get("text") or ""
+        self._parts()[idx]["text"] = current + text
+
+    def tool_call(self, call_id: str, name: str, args_text: str, args: dict) -> None:
+        idx = self._append_part({
+            "type":       "tool-call",
+            "toolCallId": call_id,
+            "toolName":   name,
+            "argsText":   args_text,
+            "args":       args,
+            "done":       False,
+        })
+        self._tool_idx_by_call[call_id] = idx
+
+    def tool_result(self, call_id: str, result: object) -> None:
+        idx = self._tool_idx_by_call.get(call_id)
+        if idx is not None:
+            self._parts()[idx]["result"] = result
+            self._parts()[idx]["done"]   = True
 
 
 @router.post("/assistant")
@@ -167,120 +195,71 @@ async def assistant_endpoint(
             controller.state["sessionLimitReached"] = True
             return
 
-        sdk_input: list[dict[str, str]] = []
+        turns: list[Turn] = []
         for m in controller.state["messages"]:
             text = _message_text(m)
             if text and m.get("role") in ("user", "assistant", "system"):
-                sdk_input.append({"role": m["role"], "content": text})
-        if not sdk_input:
+                turns.append(Turn(role=m["role"], content=text))
+        if not turns:
             return
 
         controller.state["messages"].append({"role": "assistant", "parts": []})
         msg = len(controller.state["messages"]) - 1
-        tool_part_by_call_id: dict[str, int] = {}
-
-        def _append_part(part: dict[str, Any]) -> int:
-            controller.state["messages"][msg]["parts"].append(part)
-            return len(controller.state["messages"][msg]["parts"]) - 1
-
-        def _ensure_text_part() -> int:
-            parts = controller.state["messages"][msg]["parts"]
-            if parts and parts[-1].get("type") == "text":
-                return len(parts) - 1
-            return _append_part({"type": "text", "text": ""})
+        emitter = _StateEmitter(controller, msg)
 
         usage_before = (
             budgets.read_session_usage(session_id)
             if settings.budget_enabled
             else budgets.SessionUsage(session_id=session_id, input_tokens=0, output_tokens=0)
         )
-        hooks = BudgetHooks()
+        run_usage = RunUsage()
 
         tracer = get_tracer()
-        history_text_length = sum(len(item["content"]) for item in sdk_input)
-        last_user_length    = len(sdk_input[-1]["content"]) if sdk_input else 0
+        history_text_length = sum(len(t.content) for t in turns)
+        last_user_length    = len(turns[-1].content) if turns else 0
         with tracer.start_as_current_span("agent.turn") as turn_span:
             turn_span.set_attribute("finops.user_message.length",             last_user_length)
-            turn_span.set_attribute("finops.cross_turn_history.message_count", len(sdk_input))
+            turn_span.set_attribute("finops.cross_turn_history.message_count", len(turns))
             turn_span.set_attribute("finops.cross_turn_history.text_length",   history_text_length)
             turn_span.set_attribute("finops.session.id_hash",                  budgets.session_id_fingerprint(session_id))
             turn_span.set_attribute("finops.session.tokens_before",            usage_before.total)
             turn_span.set_attribute("finops.session.budget_limit",             settings.session_token_cap)
+            turn_span.set_attribute("finops.agent.runtime",                    settings.agent_runtime)
 
-            agent = build_agent()
-            result = Runner.run_streamed(
-                agent,
-                input=cast(list[TResponseInputItem], sdk_input),
-                hooks=hooks,
-                max_turns=settings.max_turns_per_run,
-            )
+            # The runtime is chosen by AGENT_RUNTIME (ADR-0012). Transport
+            # speaks only the neutral port: it hands over the turns and an
+            # emitter, the runtime streams parts back and writes token usage
+            # into `run_usage`, which is readable here even if the run aborts.
+            runtime = get_runtime()
             try:
-                async for event in result.stream_events():
-                    if isinstance(event, RawResponsesStreamEvent):
-                        data = event.data
-                        if isinstance(data, ResponseTextDeltaEvent) and data.delta:
-                            idx = _ensure_text_part()
-                            current = (
-                                controller.state["messages"][msg]["parts"][idx].get("text") or ""
-                            )
-                            controller.state["messages"][msg]["parts"][idx]["text"] = (
-                                current + data.delta
-                            )
-                    elif isinstance(event, RunItemStreamEvent):
-                        item = event.item
-                        if event.name == "tool_called" and isinstance(item, ToolCallItem):
-                            call_id   = item.call_id or f"call_{uuid.uuid4().hex}"
-                            args_text = _raw_field(item.raw_item, "arguments")
-                            try:
-                                args_obj: dict[str, Any] = (
-                                    json.loads(args_text) if args_text else {}
-                                )
-                            except json.JSONDecodeError:
-                                args_obj = {}
-                            idx = _append_part({
-                                "type":       "tool-call",
-                                "toolCallId": call_id,
-                                "toolName":   _raw_field(item.raw_item, "name"),
-                                "argsText":   args_text,
-                                "args":       args_obj,
-                                "done":       False,
-                            })
-                            tool_part_by_call_id[call_id] = idx
-                        elif event.name == "tool_output" and isinstance(item, ToolCallOutputItem):
-                            call_id = item.call_id
-                            if call_id and call_id in tool_part_by_call_id:
-                                idx = tool_part_by_call_id[call_id]
-                                controller.state["messages"][msg]["parts"][idx]["result"] = item.output
-                                controller.state["messages"][msg]["parts"][idx]["done"]   = True
+                await runtime.run(turns, emitter, run_usage)
             except TurnTokenCapExceeded as exc:
                 turn_span.record_exception(exc)
                 turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
                 turn_span.set_attribute("finops.budget.exhausted", True)
                 turn_span.set_attribute("finops.budget.scope",     "turn")
-                _append_part(
-                    {"type": "text", "text": f"\n\n[turn stopped: {exc}]"}
-                )
+                emitter.text_delta(f"\n\n[turn stopped: {exc}]")
             except Exception as exc:
                 turn_span.record_exception(exc)
                 turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
-                _append_part(
-                    {"type": "text", "text": f"\n\n[agent error: {type(exc).__name__}: {exc}]"}
+                emitter.text_delta(
+                    f"\n\n[agent error: {type(exc).__name__}: {exc}]"
                 )
                 raise
             finally:
                 # Persist whatever the turn used, even on failure. Skipped
-                # if the run was blocked pre-agent (no hooks counts) or if
-                # the budget store is disabled.
-                if settings.budget_enabled and (hooks.turn_input_tokens or hooks.turn_output_tokens):
+                # if the run was blocked pre-agent (no usage) or if the
+                # budget store is disabled.
+                if settings.budget_enabled and (run_usage.input_tokens or run_usage.output_tokens):
                     budgets.record_usage(
                         session_id=session_id,
                         hashed_id=hashed_id,
-                        input_tokens=hooks.turn_input_tokens,
-                        output_tokens=hooks.turn_output_tokens,
+                        input_tokens=run_usage.input_tokens,
+                        output_tokens=run_usage.output_tokens,
                     )
                     turn_span.set_attribute(
                         "finops.session.tokens_after",
-                        usage_before.total + hooks.turn_total_tokens,
+                        usage_before.total + run_usage.total,
                     )
 
     incoming_state = body.state or {"messages": []}

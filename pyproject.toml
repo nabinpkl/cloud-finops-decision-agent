@@ -8,6 +8,11 @@ dependencies = [
     "fastapi[standard]>=0.115",
     "httpx>=0.28",
     "jsonpath-ng>=1.8.0",
+    # Both agent runtimes are core deps (ADR-0012). langchain backs the default
+    # runtime (AGENT_RUNTIME=deepagents); openai-agents backs the alternative and
+    # is imported at module load by api/observability.py's tracing bridge.
+    "langchain>=1.3",
+    "langchain-openai>=0.3",
     "openai-agents>=0.17.4",
     "opentelemetry-api>=1.42.1",
     "opentelemetry-instrumentation-fastapi>=0.63b1",

@@ -61,8 +61,16 @@ dev:
     just web &
     wait
 
-# Drive one live agent turn and print per-call context/token deltas. Expects creds in env (use `infisical run -- just smoke`).
+# Drive one live agent turn and print token deltas. Runtime from AGENT_RUNTIME. Expects creds in env (use `infisical run -- just smoke`).
 smoke:
+    #!/usr/bin/env bash
+    # `set dotenv-load` makes just pre-resolve PROVIDER_*/MODEL_NAME from .env,
+    # but just's dotenv parser does not honor the ${VAR:-default} POSIX form, so
+    # it exports PROVIDER_BASE_URL empty and that shadows pydantic-settings
+    # (env wins over the .env file). Unset them here so pydantic does its own
+    # python-dotenv interpolation, which resolves ${OPENROUTER_*} from the
+    # infisical-injected environment.
+    unset PROVIDER_BASE_URL PROVIDER_API_KEY MODEL_NAME
     uv run python -m scripts.agent_smoke
 
 # Lint with ruff.

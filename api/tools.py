@@ -1,14 +1,14 @@
-"""Agent tools registered with the OpenAI Agents SDK (ADR-0009).
+"""OpenAI Agents SDK tool bindings (ADR-0009, ADR-0012).
 
-The agent's pricing answers ride on the same deterministic functions the HTTP
-surface exposes. `compare` wraps `normalize.query.compare` and routes the result
-through `api.wire.wire_response`, so the citation translation that protects HTTP
-callers (drop the filesystem `store_path`, add a logical `snapshot` ref) also
-protects the agent and, transitively, the browser. The agent never sees a path
-the user cannot independently verify.
+This module is part of the OpenAI-agents *adapter*: it wraps the
+framework-neutral logic in `api/tools_core.py` with the Agents SDK's
+`function_tool` so the agent built in `api/runtime/openai_agents.py` can call
+it. The DeepAgents adapter binds the same `run_compare` with a LangChain
+`@tool` instead; the shared body, and the `wire_response` citation translation
+inside it, lives once in `tools_core`.
 
-`_run_compare` is the underlying callable so tests can exercise it without going
-through the SDK's `FunctionTool` invoke wrapper.
+`_run_compare` is re-exported for tests that exercise the callable without
+going through the SDK's `FunctionTool` invoke wrapper.
 """
 
 from __future__ import annotations
@@ -17,27 +17,9 @@ from typing import Any
 
 from agents import function_tool
 
-from api.wire import wire_response
-from normalize.query import compare as _normalize_compare
+from api.tools_core import run_compare as _run_compare
 
-
-def _run_compare(
-    vcpu: int,
-    ram_gb: float,
-    region: str,
-    family: str = "any",
-    providers: list[str] | None = None,
-    expand: str = "cheapest",
-) -> dict[str, Any]:
-    result = _normalize_compare(
-        vcpu=vcpu,
-        ram_gb=ram_gb,
-        region=region,
-        family=family,
-        providers=providers,
-        expand=expand,
-    )
-    return wire_response(result)
+__all__ = ["compare", "_run_compare"]
 
 
 @function_tool

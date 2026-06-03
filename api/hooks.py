@@ -1,13 +1,15 @@
-"""Agent-loop budget enforcement (ADR-0011, seam [5]).
+"""Agent-loop budget enforcement for the OpenAI Agents SDK (ADR-0011 seam [5],
+ADR-0012).
 
 `BudgetHooks` subclasses the Agents SDK's `RunHooksBase` and watches every
 LLM call inside a single `Runner.run_streamed(...)`. After each call it
 adds the response's token usage to a per-run counter; once the cumulative
-total crosses `settings.turn_token_cap` the hook raises
-`TurnTokenCapExceeded`, which propagates up through the SDK and is
-caught by the existing `try/except` in `api/transport.py` (where it is
-recorded on the OTel `agent.turn` span and surfaced to the visible
-thread).
+total crosses `settings.turn_token_cap` the hook raises the neutral
+`TurnTokenCapExceeded` (defined in `api/runtime/types.py`), which propagates up
+through the SDK and is caught by `api/transport.py` (where it is recorded on the
+OTel `agent.turn` span and surfaced to the visible thread). This file is part of
+the OpenAI-agents adapter; the DeepAgents adapter enforces the same neutral cap
+via its own middleware.
 
 Cumulative counters are kept on `self` because the SDK does not expose a
 "last-delta" hook; reading `context.usage` each time is equivalent for
@@ -16,6 +18,9 @@ single-agent runs but more fragile across SDK upgrades.
 This module does **not** persist usage. Persistence runs in
 `api/transport.py`'s `finally` block via `budgets.record_usage` so a
 partially-streamed turn still pays for what it consumed.
+
+`TurnTokenCapExceeded` is re-exported here for backward compatibility; its
+canonical home is `api.runtime.types`.
 """
 
 from __future__ import annotations
@@ -27,25 +32,9 @@ from agents.lifecycle import RunHooksBase
 from agents.run_context import RunContextWrapper
 
 from api.config import settings
+from api.runtime.types import TurnTokenCapExceeded
 
-
-class TurnTokenCapExceeded(Exception):
-    """Raised by `BudgetHooks.on_llm_end` when the per-turn cumulative
-    token total reaches or exceeds `settings.turn_token_cap`.
-
-    Caught in `api/transport.py`; sets `finops.budget.exhausted=true` and
-    `finops.budget.scope="turn"` on the `agent.turn` span and converts to
-    a visible `[agent error: ...]` part on the assistant message.
-    """
-
-    def __init__(self, input_tokens: int, output_tokens: int, cap: int) -> None:
-        super().__init__(
-            f"turn token cap reached: {input_tokens + output_tokens} > {cap} "
-            f"(input={input_tokens}, output={output_tokens})"
-        )
-        self.input_tokens  = input_tokens
-        self.output_tokens = output_tokens
-        self.cap           = cap
+__all__ = ["BudgetHooks", "TurnTokenCapExceeded"]
 
 
 class BudgetHooks(RunHooksBase[Any, Any]):

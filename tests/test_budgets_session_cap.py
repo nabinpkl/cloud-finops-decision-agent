@@ -1,6 +1,7 @@
 """Per-session cumulative token cap: pre-agent check fires when the cookie's
-session has already spent over the cap. Confirms `build_agent` is never
-called and `sessionLimitReached` lands in the streamed state."""
+session has already spent over the cap. Confirms the agent runtime is never
+obtained (`get_runtime` not called, so no model work) and `sessionLimitReached`
+lands in the streamed state."""
 
 from __future__ import annotations
 
@@ -43,8 +44,8 @@ def _user_msg(text: str) -> dict:
 def test_first_request_sets_session_cookie(caps_low):
     import api.main as apimain
 
-    with patch("api.transport.build_agent") as build:
-        # Agent isn't invoked because state will lack a user message;
+    with patch("api.transport.get_runtime") as get_rt:
+        # Runtime isn't obtained because state will lack a user message;
         # but the cookie is set on the response regardless.
         client = TestClient(apimain.app)
         r = client.post(
@@ -53,7 +54,7 @@ def test_first_request_sets_session_cookie(caps_low):
         )
     assert r.status_code == 200
     assert settings.session_cookie_name in r.cookies
-    assert not build.called
+    assert not get_rt.called
 
 
 def test_session_over_cap_returns_terminal_banner(caps_low):
@@ -65,15 +66,15 @@ def test_session_over_cap_returns_terminal_banner(caps_low):
 
     client = TestClient(apimain.app)
     client.cookies.set(settings.session_cookie_name, session_id)
-    with patch("api.transport.build_agent") as build:
+    with patch("api.transport.get_runtime") as get_rt:
         r = client.post(
             "/assistant",
             json={"commands": [_user_msg("hello")]},
         )
 
     assert r.status_code == 200
-    # The agent must NOT have been invoked.
-    assert not build.called
+    # The agent runtime must NOT have been obtained or run.
+    assert not get_rt.called
     # The streamed body should contain the session-limit text plus the flag
     # write.
     body = r.text

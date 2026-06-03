@@ -362,12 +362,19 @@ def init_observability(app: FastAPI) -> None:
 
     FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
 
-    add_trace_processor(
-        AgentsSdkOtelProcessor(
-            tracer=_Init.tracer,
-            provider_name=_infer_provider_name(settings.provider_base_url),
-            model_name=settings.model_name,
+    # The Agents-SDK -> OTel bridge only has spans to convert when the OpenAI
+    # Agents runtime is active (ADR-0012). Under the langchain runtime
+    # (AGENT_RUNTIME=deepagents) the SDK never runs, so registering the
+    # processor would be inert noise; the neutral `agent.turn` span in
+    # transport.py carries cross-runtime token/timing attributes regardless.
+    # A langchain-native trace bridge (LangSmith/LangGraph) is a later change.
+    if settings.agent_runtime == "openai_agents":
+        add_trace_processor(
+            AgentsSdkOtelProcessor(
+                tracer=_Init.tracer,
+                provider_name=_infer_provider_name(settings.provider_base_url),
+                model_name=settings.model_name,
+            )
         )
-    )
 
     _Init.done = True

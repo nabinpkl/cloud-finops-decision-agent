@@ -11,7 +11,7 @@ requires live credentials; `api.agent` validates them at agent-construction time
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -37,6 +37,19 @@ class Settings(BaseSettings):
     provider_base_url: str = ""
     provider_api_key: str = ""
     model_name: str = ""
+
+    # Agent runtime selection (ADR-0012). Chooses which framework adapter
+    # `api.runtime.get_runtime()` returns. "deepagents" (the default) routes to
+    # the lean LangChain create_agent adapter; "openai_agents" routes to the
+    # OpenAI Agents SDK adapter. Both stacks are core dependencies.
+    agent_runtime: Literal["openai_agents", "deepagents"] = "deepagents"
+
+    # Opt-in for the langchain runtime (AGENT_RUNTIME=deepagents): wrap the
+    # ChatOpenAI model in the subclass that round-trips `reasoning_content`
+    # (ADR-0012). Required for DeepSeek V4 thinking mode via OpenRouter, which
+    # returns empty completions when prior-turn reasoning is not echoed back.
+    # Off by default; non-thinking models do not need it.
+    langchain_reasoning_roundtrip: bool = False
 
     # Observability (ADR-0010): JSONL OTel traces on disk so any OTel-aware
     # backend can ingest them later without re-instrumenting. All optional.
