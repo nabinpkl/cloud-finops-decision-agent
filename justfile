@@ -37,6 +37,15 @@ lookup provider instance_type region:
 
 # Run the FastAPI app (compare/lookup/citation excerpt + agent). Port from API_PORT (.env), default 8000.
 api:
+    #!/usr/bin/env bash
+    # Same shadowing trap as `smoke`: `set dotenv-load` pre-resolves
+    # PROVIDER_*/MODEL_NAME from .env, but just's dotenv parser does not honor
+    # the ${VAR:-default} POSIX form, so it exports them empty and that shadows
+    # pydantic-settings (env wins over the .env file), leaving the agent model
+    # unconfigured under `just dev` / `just infcl-dev`. Unset them so pydantic
+    # does its own python-dotenv interpolation, resolving ${OPENROUTER_*} from
+    # the infisical-injected environment.
+    unset PROVIDER_BASE_URL PROVIDER_API_KEY MODEL_NAME
     uv run uvicorn api.main:app --reload --port ${API_PORT:-8000}
 
 # Run the frontend dev server (Next.js + assistant-ui) on localhost:3000.
