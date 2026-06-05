@@ -10,13 +10,15 @@ pitfall."""
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from gates._shared import PROJECT_ROOT
 from normalize.loader import latest_snapshot_dir
+from normalize.schema import DriftFlag
+from normalize.snapshot_time import snapshot_age_hours
 
 STALENESS_THRESHOLD_HOURS = 24.0
 
@@ -24,29 +26,25 @@ STALENESS_THRESHOLD_HOURS = 24.0
 _STATUS_ORDER = ["ok", "warn", "stale", "broken"]
 
 
-@dataclass
-class ProviderQuality:
-    status: str
+class ProviderQuality(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "warn", "stale", "broken"]
     snapshot_age_hours: float | None
-    flags: list[str]
+    flags: list[DriftFlag]
     human_summary: str
     report_path: str | None = None
     snapshot_iso: str | None = None
-    evidence: dict[str, Any] = field(default_factory=dict)
+    evidence: dict[str, Any] = Field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        out: dict[str, Any] = {
-            "status":             self.status,
-            "snapshot_age_hours": self.snapshot_age_hours,
-            "flags":              self.flags,
-            "human_summary":      self.human_summary,
-        }
-        if self.report_path:
-            out["report_path"] = self.report_path
-        if self.snapshot_iso:
-            out["snapshot_iso"] = self.snapshot_iso
-        if self.evidence:
-            out["evidence"] = self.evidence
+        out: dict[str, Any] = self.model_dump(mode="json")
+        if self.report_path is None:
+            out.pop("report_path", None)
+        if self.snapshot_iso is None:
+            out.pop("snapshot_iso", None)
+        if not self.evidence:
+            out.pop("evidence", None)
         return out
 
 
@@ -76,7 +74,7 @@ def _quality_for(provider: str) -> ProviderQuality:
         return ProviderQuality(
             status="broken",
             snapshot_age_hours=None,
-            flags=["provider_unavailable"],
+            flags=[DriftFlag.PROVIDER_UNAVAILABLE],
             human_summary=f"No usable {provider} snapshot found; the provider was excluded from this response.",
         )
 
@@ -85,18 +83,18 @@ def _quality_for(provider: str) -> ProviderQuality:
 
     age_hours = _age_hours_from_receipt(receipt_path)
     report = json.loads(report_path.read_text()) if report_path.exists() else {}
-    flags = list(report.get("flags", []))
+    flags = [DriftFlag(flag) for flag in report.get("flags", [])]
     human_summary = report.get("human_summary", f"{provider} index ready.")
 
     if age_hours is not None and age_hours > STALENESS_THRESHOLD_HOURS:
-        if "snapshot_stale" not in flags:
-            flags.append("snapshot_stale")
+        if DriftFlag.SNAPSHOT_STALE not in flags:
+            flags.append(DriftFlag.SNAPSHOT_STALE)
 
     status = _derive_status(flags=flags, age_hours=age_hours)
     if status == "stale":
         human_summary = (
             f"{provider} snapshot is {age_hours:.1f}h old, past the 24h freshness threshold. "
-            "Re-fetch with `just fetch-force {provider}` for live prices."
+            f"Re-fetch with `just fetch-force {provider}` for live prices."
         )
 
     return ProviderQuality(
@@ -128,16 +126,20 @@ def _age_hours_from_receipt(receipt_path: Path) -> float | None:
         fetched_at_raw = body.get("fetched_at", "")
         if not fetched_at_raw:
             return None
-        # Per AGENTS.md: parse as timezone-aware UTC. Trailing Z is the timezone
-        # marker; convert to +00:00 for fromisoformat.
-        parsed = datetime.fromisoformat(fetched_at_raw.replace("Z", "+00:00"))
-        return (datetime.now(timezone.utc) - parsed).total_seconds() / 3600
+        return snapshot_age_hours(fetched_at_raw)
     except (json.JSONDecodeError, ValueError, KeyError):
         return None
 
 
-def _derive_status(*, flags: list[str], age_hours: float | None) -> str:
-    if "provider_unavailable" in flags or "index_rebuild_failed_fell_back" in flags:
+def _derive_status(
+    *,
+    flags: list[DriftFlag],
+    age_hours: float | None,
+) -> Literal["ok", "warn", "stale", "broken"]:
+    if (
+        DriftFlag.PROVIDER_UNAVAILABLE in flags
+        or DriftFlag.INDEX_REBUILD_FAILED_FELL_BACK in flags
+    ):
         return "broken"
     if age_hours is not None and age_hours > STALENESS_THRESHOLD_HOURS:
         return "stale"

@@ -9,7 +9,7 @@ Cloud VM pricing is the chosen bench because it has **authoritative ground truth
 
 ## 2. What it is
 
-- An open, **agent-consumable** comparator that answers "cheapest VM across providers for spec X, right now, with citations." Three layers in one repo: deterministic **gates** that snapshot per-provider catalogs, a deterministic **normalization layer** (Python module + FastAPI + CLI) that maps a spec to ranked candidates with citations, and an **agent** that draws the comparison surface from the normalization layer's output. The agent runtime is server-side in FastAPI on the OpenAI Agents SDK (ADR-0009); a **frontend** (`web/`, Next.js + assistant-ui) renders its stream. SPEC.md owns the contracts.
+- An open, **agent-consumable** comparator that answers "cheapest VM across providers for spec X, right now, with citations." Three layers in one repo: deterministic **gates** that snapshot per-provider catalogs, a deterministic **normalization layer** (Python module + FastAPI + CLI) that maps a spec to ranked candidates with citations, and a server-hosted **agent runtime** that draws the comparison surface from the normalization layer's output. The agent runtime runs in FastAPI behind a framework-neutral port (ADR-0012): `deepagents` is the default adapter and the OpenAI Agents SDK is optional. A **frontend** (`web/`, Next.js + assistant-ui) renders the stream. SPEC.md owns the contracts.
 - A **test bench** for one falsifiable claim (§6), instrumented so that "where did the agent earn its cost" is *observable*, not asserted. The normalization layer is the deterministic baseline; the agent is the system under test; eval scores the divergence.
 - Scoped to the **greenfield moment** — choosing where to deploy a fresh project — for the audience that can actually act on the answer.
 
@@ -18,7 +18,7 @@ Cloud VM pricing is the chosen bench because it has **authoritative ground truth
 - Not a product. No growth target, no users to acquire, no revenue.
 - Not another comparison website. Not trying to beat or replace CloudPrice / getdeploying.
 - Not a spend-management / FinOps dashboard for resources already running.
-- Not an LLM wrapper — the server itself contains **no model** (§7).
+- Not a model-first wrapper. The model surface is server-hosted, budgeted, traced, and limited to the semantic-judgment layer; the gates and normalization layer remain deterministic.
 - Not a forever-research project — it has a defined v0 and a finding to produce (§8–9).
 
 ## 4. What already exists (prior art)
@@ -49,12 +49,13 @@ Test this claim, stated so it can be broken:
 
 ## 7. Design principles / invariants
 
-1. **No LLM in the server.** It is deterministic plumbing + memory: serve prices (lookup), hold equivalence mappings (frozen judgment), queue novel mappings for review (trust ledger).
-2. **The calling agent is the only judgment layer.** When a spec has no trusted equivalence, the server hands judgment back to the agent and records the agent's proposal.
+1. **No model in the data layer.** Gates, indexes, taxonomy loading, lookup, comparison, citations, freshness, and drift detection are deterministic plumbing.
+2. **The server-hosted agent is the only judgment layer.** The model sees the normalization output through tools and turns it into an answer; it does not fetch prices directly or bypass citations.
 3. **Memory freezes judgment.** An agent-derived equivalence, once human-approved, becomes a deterministic lookup. The probabilistic step happens once, not per query.
 4. **Trust the data and the human, not the agent.** Every price carries provenance + an `as_of` timestamp + freshness. A citation is a claim about a *past* state, not a guarantee about the present. The human verifies only *novel* mappings.
 5. **Review is demand-driven, not catalog-driven.** Only mappings a real query touches ever need eyes. Approved mappings stay trusted until a "surprise" re-opens them.
 6. **Drift detection is a diff + cron, never a model.**
+7. **The model surface is bounded.** `/assistant` is budgeted, rate-limited, traced, and selected through `AGENT_RUNTIME`; deterministic HTTP endpoints remain model-free.
 
 ## 8. Draft Scope
 
@@ -62,7 +63,7 @@ Test this claim, stated so it can be broken:
 - Per-provider deterministic gates writing timestamped snapshots to `store/<provider>/<ISO>/` for AWS, GCP, Azure, Oracle, Vultr, Linode, IBM. Done.
 - Normalization layer (`normalize/`): Python module + FastAPI wrapper + `python -m normalize` CLI. `compare(vcpu, ram_gb, region?, family?)` → cheapest-per-provider ranked, each result carrying provider, instance, monthly/hourly USD, citation block, and `considered_count`. `lookup(provider, instance_type, region)` for single-instance answers. Match policy is closest-larger (≥vCPU and ≥RAM).
 - Family taxonomy (`normalize/taxonomy/families.json`) and region taxonomy (`normalize/taxonomy/regions.json`) — JSON files that encode the cross-provider equivalence, hand-seeded, editable in PRs, citable by the agent when it makes equivalence claims. SPEC.md defines the file shape.
-- Agent runtime (in FastAPI, OpenAI Agents SDK): the loop that calls `compare`/`lookup` as in-process tools, model on an OpenAI-compatible base URL (provider is config, not a fixed vendor; ADR-0009). Frontend (`web/`): Next.js + assistant-ui, frontend-only, renders the agent stream. Two custom tool components in v0: `ComparisonTable` (multi-provider ranking) and `PriceCard` (single instance). Staleness handled inline in prose per AGENTS.md.
+- Agent runtime in FastAPI: the loop calls `compare` as an in-process tool through a framework-neutral runtime port (ADR-0012). The default adapter is `deepagents`; OpenAI Agents SDK is an optional adapter. The model uses an OpenAI-compatible base URL (provider is config, not a fixed vendor). Frontend (`web/`): Next.js + assistant-ui, frontend-only, renders the agent stream. The shipped v0 custom tool component is `ComparisonTable` for multi-provider ranking; `PriceCard` for single-instance lookup is captured for v1. Staleness handled inline in prose per AGENTS.md.
 - Eval (`eval/v0.jsonl`): 20–30 hand-written scenarios scored by an LLM judge on two lanes — citation correctness, staleness/refusal behavior. `python -m eval` runner.
 
 **v0 — Azure narrowing (empirical):** Azure Retail Prices normalizes per `(SKU × region × priceType × OS)` rows. An unfiltered VM fetch is 500+ pages of 1000 items each and trips an unpublished rate limit (~470 sequential requests then HTTP 429 with `Retry-After=60`). v0 narrows to `priceType eq 'Consumption'` and three regions (`eastus`, `westeurope`, `southeastasia`) matching AWS's geographic coverage. The narrowed fetch is 26 pages, ~24k items, ~25s wall time. Spot SKUs are filed under the Consumption taxonomy in Azure's data model so they end up in the snapshot; the agent post-filters by `meterName` when OnDemand-only is intended. Reservation and Savings rates are out of v0; revisit when the agent answers commitment-shape questions. Also `$top` is silently ignored (page size is hard-capped at 1000), so the only lever to shrink the dataset is the OData filter.

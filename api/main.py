@@ -22,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from api.budgets import init_budgets
+from api.budget_store import init_budgets
 from api.config import settings
 from api.middleware import BudgetMiddleware
 from api.observability import init_observability

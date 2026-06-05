@@ -16,7 +16,7 @@ Cumulative counters are kept on `self` because the SDK does not expose a
 single-agent runs but more fragile across SDK upgrades.
 
 This module does **not** persist usage. Persistence runs in
-`api/transport.py`'s `finally` block via `budgets.record_usage` so a
+`api/transport.py`'s `finally` block via `budget_store.record_usage` so a
 partially-streamed turn still pays for what it consumed.
 
 `TurnTokenCapExceeded` is re-exported here for backward compatibility; its

@@ -4,7 +4,7 @@ Technical contract for cloud-finops-decision-agent. Three layers, one repo. PRD.
 
 ## Architecture
 
-Three layers, each independently defensible. If the frontend fails, the normalization layer still answers questions over its API and CLI. If the agent's judgment diverges from the normalization layer's ranking, that divergence is what eval surfaces. Per ADR-0009 the agent runtime is server-side, inside the FastAPI process, not in the browser tier.
+Three layers, each independently defensible. If the frontend fails, the normalization layer still answers questions over its API and CLI. If the agent's judgment diverges from the normalization layer's ranking, that divergence is what eval surfaces. Per ADR-0009 and ADR-0012 the agent runtime is server-side, inside the FastAPI process, behind a framework-neutral port. It is not in the browser tier.
 
 ```
                     ┌──────────────────────────────────┐
@@ -12,19 +12,18 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     │  Next.js + assistant-ui.         │
                     │  Frontend-only: renders the      │
                     │  chat stream and the generative  │
-                    │  tool components (ComparisonTable│
-                    │  PriceCard). No agent logic,     │
-                    │  no model keys.                  │
+                    │  tool components. No agent       │
+                    │  logic, no model keys.           │
                     └────────────────┬─────────────────┘
                                      │ HTTP (chat stream)
                     ┌────────────────▼─────────────────┐
                     │  Backend (api/ + normalize/)     │
                     │  FastAPI hosts two concerns:     │
-                    │  (1) agent runtime on the Python │
-                    │      OpenAI Agents SDK, model via│
-                    │      an OpenAI-compatible base   │
-                    │      URL; tools call normalize   │
-                    │      in-process.                 │
+                    │  (1) agent runtime behind a      │
+                    │      neutral port: deepagents    │
+                    │      default, OpenAI Agents SDK  │
+                    │      optional; tools call        │
+                    │      normalize in-process.       │
                     │  (2) deterministic query API     │
                     │      (compare/lookup/excerpt) +  │
                     │      the normalize/ module + CLI.│
@@ -294,24 +293,27 @@ The normalization layer accepts either form on input. Output always carries the 
 
 ## Agent runtime and UI surface
 
-Per ADR-0009 the agent loop runs server-side in FastAPI on the Python OpenAI Agents SDK (`openai-agents`). The model is built against an OpenAI-compatible base URL (`OpenAIChatCompletionsModel` over `AsyncOpenAI(base_url, api_key)`, Chat Completions not Responses), so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tools call `normalize.compare` / `normalize.lookup` in-process; the wire translation (drop `store_path`, add a `snapshot` ref) is the same one `api/main.py` applies. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.
+Per ADR-0009 and ADR-0012 the agent loop runs server-side in FastAPI behind `api.runtime.AgentRuntime`. The default runtime is `deepagents`, implemented as a lean LangChain `create_agent` adapter; the OpenAI Agents SDK runtime remains available through `AGENT_RUNTIME=openai_agents`. The model is built against an OpenAI-compatible base URL, so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tool calls route through `api.tools_core.run_compare`, which calls `normalize.compare` in-process; the wire translation (drop `store_path`, add a `snapshot` ref) is shared with the HTTP endpoints. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.
 
 `web/` is a Next.js app using `assistant-ui` as the chat shell, and it is frontend-only: no `app/api/*` route handlers, no agent logic, no model keys. It uses `useAssistantTransportRuntime`, which POSTs to a same-origin `/assistant` path that `next.config.js` rewrites to the backend (`BACKEND_ORIGIN` env knob) — so the browser never holds a backend URL and there is no CORS round-trip. The agent decides which custom tool component to render based on the query shape; the frontend maps tool names to components.
 
 ### Custom tool components
 
-v0 ships two:
+v0 currently ships one:
 
 - **`ComparisonTable`** — ranked multi-provider table. Each row contains provider, instance type, region (canonical + native), monthly/hourly USD, and an inline `Source` primitive (from assistant-ui) carrying the citation block. Used when the agent calls `compare`.
+
+Captured for v1:
+
 - **`PriceCard`** — single instance with full citation visible. Used when the agent calls `lookup`.
 
 Staleness is surfaced inline in the agent's prose (`(snapshot 6h old)` per AGENTS.md), not as a separate component. Equivalence dimensions are surfaced in prose, not as a component. Both can become components post-v0 if the prose treatment isn't enough.
 
 ### Streaming and tool calls
 
-assistant-ui's `Tool` primitive wraps each custom component. The OpenAI Agents SDK runs the tool-calling loop server-side; `Runner.run(..., stream=True)` produces the event stream. FastAPI emits that stream in a shape assistant-ui consumes, and the response JSON for each tool call is passed to the matching component for rendering.
+assistant-ui's `Tool` primitive wraps each custom component. The selected runtime adapter runs the tool-calling loop server-side and translates framework-specific stream events into the neutral `Emitter` verbs (`text_delta`, `tool_call`, `tool_result`). FastAPI emits that state in the assistant-stream shape assistant-ui consumes, and the response JSON for each tool call is passed to the matching component for rendering.
 
-The stream bridge runs over assistant-ui's assistant-transport protocol: the frontend's `useAssistantTransportRuntime` POSTs commands to `/assistant`, and the backend streams state updates back. assistant-ui ships a first-party Python package (`assistant-stream`) and a reference `assistant-transport-backend` for the emit side, so the bounded R8 work is bridging the OpenAI Agents SDK's `Runner.run_streamed()` events into assistant-stream state. That round-trip must carry a real tool call before any component renders (TASKS R8). No bespoke RSC streaming for v0.
+The stream bridge runs over assistant-ui's assistant-transport protocol: the frontend's `useAssistantTransportRuntime` POSTs commands to `/assistant`, and the backend streams state updates back through `assistant-stream`. No bespoke RSC streaming for v0.
 
 ## Eval
 
@@ -355,8 +357,8 @@ Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs 
 1. `normalize/taxonomy/families.json` and `regions.json` — the load-bearing data shapes.
 2. `normalize/` Python module + CLI — operates against snapshots already on disk.
 3. FastAPI query wrapper (`compare`/`lookup`/`excerpt`/`health`) — thin layer over the module.
-4. Agent runtime in FastAPI on the OpenAI Agents SDK: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
-5. `web/` Next.js + assistant-ui frontend with the two custom tool components, consuming the `/assistant` stream.
+4. Agent runtime in FastAPI behind `api.runtime.AgentRuntime`: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
+5. `web/` Next.js + assistant-ui frontend consuming the `/assistant` stream and rendering the `ComparisonTable` tool component.
 6. `eval/v0.jsonl` + runner.
 
 Each step is independently runnable. Steps 2 and 3 ship a usable comparator before the agent or UI exists; the frontend is the last product layer, not the first.

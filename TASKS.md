@@ -4,14 +4,14 @@
 
 ## Position
 
-The normalize layer and its HTTP surface are done. What is left in v0 is the agent runtime, the frontend that renders it, and the eval that scores it. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. ADR-0009 fixes where the agent runs: the loop is server-side in FastAPI on the Python OpenAI Agents SDK, `web/` is a frontend-only client that renders the stream, and the model provider is an OpenAI-compatible base-URL knob (not a hardcoded vendor). Reasons:
+The normalize layer, HTTP surface, server-side agent runtime, assistant transport bridge, and first rendered tool component are done. What remains in v0 is browser smoke verification, citation depth, agent prose tuning, and eval. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. ADR-0012 is now the current runtime contract: the loop is server-side in FastAPI behind `api.runtime.AgentRuntime`; `deepagents` is the default adapter, OpenAI Agents SDK is optional, `web/` is a frontend-only client that renders the stream, and the model provider is an OpenAI-compatible base-URL knob (not a hardcoded vendor). Reasons:
 
 - A thin end-to-end slice surfaces integration bugs (tool-call wiring, citation shape) on the first real query, not after both halves are built.
 - The eval lane replays scenarios through the rendered slice, so it cannot start until the slice renders.
 
 Ordering edges:
 
-- Stream bridge (R8) before any rendering: the frontend (D7) uses assistant-ui's `useAssistantTransportRuntime`, which POSTs to `/assistant` (proxied to the backend). assistant-ui ships a first-party Python package (`assistant-stream`) and a reference `assistant-transport-backend`, so the backend has an emit helper; the bounded work is bridging the OpenAI Agents SDK's `Runner.run_streamed()` events into assistant-stream state updates. Still the first integration risk of the ADR-0009 architecture: prove a real tool call round-trips before R9 renders.
+- Stream bridge (D8) before rendering (D9): the frontend (D7) uses assistant-ui's `useAssistantTransportRuntime`, which POSTs to `/assistant` (proxied to the backend). The backend owns the assistant-stream state and maps runtime-neutral `Emitter` events into assistant-ui-native parts.
 - Slice (Phase 2) before citation depth (Phase 3): a rendered table with one citation widget proves the chain; composite and excerpt rendering are depth on a working spine.
 - Agent prose tuning (Phase 4) after the components render, because tuning needs real rendered output to judge against.
 - Eval (Phase 5) last: it scores the finished slice.
@@ -32,9 +32,9 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 
 ## Phase 2: the vertical slice (compare end-to-end in a browser)
 
-- D7. Two parts, both landed. (a) Backend: `openai-agents` dependency added; `api/config.py` central settings (`API_PORT`, `CORS_ALLOWED_ORIGINS`, `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`); `api/agent.py` `build_agent()` builds an `Agent` on `OpenAIChatCompletionsModel(AsyncOpenAI(base_url, api_key))` (Chat Completions, not Responses, so non-OpenAI compat endpoints do not 404) and guards on missing creds; CORS/port lifted out of `api/main.py`. (b) Frontend: `web/` scaffolded from the assistant-ui `with-assistant-transport` example, frontend-only (no `app/api/*`). `useAssistantTransportRuntime` POSTs to same-origin `/assistant`, which `next.config.js` rewrites to `BACKEND_ORIGIN` (env knob, no CORS round-trip, no backend URL in client). Demo cruft stripped; an unreachable `"indicator"` part case removed from the generated `thread.tsx` to clear a `latest`-version type drift. Renders on :3000 (verified). `just web` recipe added. [ADR-0009]
-- R8. The `compare` tool + the stream bridge (backend-only; the frontend is wired). Define a Python `compare` tool whose body calls `normalize.compare()` in-process (no HTTP self-hop) and returns the result dict (wire-translated: `store_path` dropped for a `snapshot` ref, as `api/main.py` already does). Add `POST /assistant` implementing the assistant-transport protocol with assistant-ui's Python `assistant-stream` package, running the agent via `Runner.run_streamed()` and bridging its events into assistant-stream state. Reference: assistant-ui's `python/assistant-transport-backend`. Verify end-to-end: a real tool call round-trips and the raw result reaches the browser. Prove the bridge before R9. The frontend's scaffold-derived LangChain message converter (`@assistant-ui/react-langgraph` in `web/`) is replaced here once the emitted state shape is fixed.
-- R9. `web/components/ComparisonTable.tsx`: assistant-ui Tool component rendering the ranked results streamed from FastAPI. Discriminated union on `synthesized` for atomic vs composite rows. One `AtomicCitation` widget per row (age badge, `json_path`, `source_url` link).
+- D7. Frontend scaffold and backend config landed. `api/config.py` central settings (`API_PORT`, `CORS_ALLOWED_ORIGINS`, `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`); CORS/port lifted out of `api/main.py`. `web/` scaffolded from the assistant-ui `with-assistant-transport` example, frontend-only (no `app/api/*`). `useAssistantTransportRuntime` POSTs to same-origin `/assistant`, which `next.config.js` rewrites to `BACKEND_ORIGIN` (env knob, no CORS round-trip, no backend URL in client). `just web` recipe added. [ADR-0009]
+- D8. `api/tools_core.py`, `api/transport.py`, and `api/runtime/*`: compare tool body calls `normalize.compare()` in-process (no HTTP self-hop), drops `store_path` for `snapshot` refs through `wire_response`, implements `POST /assistant` over assistant-stream, and routes model execution through `api.runtime.AgentRuntime`. `deepagents` is the default adapter; OpenAI Agents SDK is optional. [ADR-0012]
+- D9. `web/components/tools/comparison-table.tsx`: assistant-ui Tool component renders ranked `compare` results streamed from FastAPI, including snapshot age and source link per row. Session-limit banner wiring also landed.
 - R10. Slice smoke test: in a browser, "cheapest 4 vCPU 8 GB general-purpose in EU" renders the ranked table with citations. State explicitly if the UI cannot be exercised; do not claim success otherwise.
 
 ## Phase 3: citation depth
@@ -77,9 +77,9 @@ D3   2026-05-28  committed   citation_excerpt serve-time hunk builder
 D4   2026-05-28  committed   mocked + real-file test lanes
 D5   2026-05-28  committed   just check = ruff+ty+pytest, debt cleared
 D6   2026-05-28  committed   /health carries data_quality envelope
-D7   2026-05-29  uncommitted agent runtime (OpenAI Agents SDK) + config knobs + frontend-only web/ scaffold
-R8   pending     pending     in-process compare tool + POST /assistant (assistant-stream bridge)
-R9   pending     pending     ComparisonTable component
+D7   2026-05-29  committed   config knobs + frontend-only web/ scaffold
+D8   2026-06-03  committed   in-process compare tool + POST /assistant + runtime port
+D9   2026-06-03  committed   ComparisonTable component + session-limit banner wiring
 R10  pending     pending     slice smoke test
 R11  pending     pending     CompositeCitation component
 R12  pending     pending     excerpt-on-click hunk UI

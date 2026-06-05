@@ -14,6 +14,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Literal
 
 # Budget enforcement (ADR-0011) is off by default in tests; tests that need
 # it on flip settings.budget_enabled at the instance level via monkeypatch.
@@ -105,7 +106,7 @@ def rate_row(
     resource: str,  # "cpu" | "ram"
     family: str,
     region_canonical: str | None,
-    rate_unit: str,
+    rate_unit: Literal["per_vcpu_hour", "per_ocpu_hour", "per_gb_ram_hour"],
     hourly_usd: float,
     region_native: str | None = None,
 ) -> IndexRow:

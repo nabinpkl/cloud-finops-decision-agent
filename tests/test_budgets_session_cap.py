@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api import budgets
+import api.budget_store as budget_store
 from api.config import settings
 
 
@@ -24,14 +24,14 @@ def caps_low(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "global_daily_token_cap", 10_000_000)
     monkeypatch.setattr(settings, "client_rate_requests_per_minute", 1000)
     monkeypatch.setattr(settings, "client_rate_tokens_per_hour", 10_000_000)
-    monkeypatch.setattr(budgets._Init, "done", False)
-    monkeypatch.setattr(budgets._Init, "conn", None)
-    budgets.init_budgets()
+    monkeypatch.setattr(budget_store._Init, "done", False)
+    monkeypatch.setattr(budget_store._Init, "conn", None)
+    budget_store.init_budgets()
     yield
-    if budgets._Init.conn is not None:
-        budgets._Init.conn.close()
-        budgets._Init.conn = None
-        budgets._Init.done = False
+    if budget_store._Init.conn is not None:
+        budget_store._Init.conn.close()
+        budget_store._Init.conn = None
+        budget_store._Init.done = False
 
 
 def _user_msg(text: str) -> dict:
@@ -62,7 +62,7 @@ def test_session_over_cap_returns_terminal_banner(caps_low):
 
     session_id = "exhausted-sess"
     # Push session usage past the 100-token cap.
-    budgets.record_usage(session_id, "client-A", input_tokens=80, output_tokens=80)
+    budget_store.record_usage(session_id, "client-A", input_tokens=80, output_tokens=80)
 
     client = TestClient(apimain.app)
     client.cookies.set(settings.session_cookie_name, session_id)

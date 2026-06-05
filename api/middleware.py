@@ -10,8 +10,8 @@ they pass through. The session-cap check (seam [3]) lives in
 the route handler can read more naturally than a generic middleware.
 
 The client id used for rate limiting is the salted-hash from
-`api/budgets.py`; this middleware never sees a raw IP after the one-line
-HMAC, and never persists one.
+`api/budget_identity.py`; this middleware never sees a raw IP after the
+one-line HMAC, and never persists one.
 """
 
 from __future__ import annotations
@@ -23,7 +23,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from api import budgets
+from api.budget_identity import hashed_client_id
+from api.budget_models import BudgetBlock
+from api.budget_policy import check_client_rate, check_global_daily
 from api.config import settings
 
 
@@ -47,7 +49,7 @@ def _client_ip(request: Request) -> str:
     return client.host if client else "0.0.0.0"
 
 
-def _block_response(block: budgets.BudgetBlock) -> JSONResponse:
+def _block_response(block: BudgetBlock) -> JSONResponse:
     return JSONResponse(
         status_code=block.http_status,
         content={"error": block.reason, "retry_after": block.retry_after_seconds},
@@ -65,13 +67,13 @@ class BudgetMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         ip = _client_ip(request)
-        hashed_id = budgets.hashed_client_id(ip)
+        hashed_id = hashed_client_id(ip)
 
-        block = budgets.check_global_daily()
+        block = check_global_daily()
         if block is not None:
             return _block_response(block)
 
-        block = budgets.check_client_rate(hashed_id)
+        block = check_client_rate(hashed_id)
         if block is not None:
             return _block_response(block)
 

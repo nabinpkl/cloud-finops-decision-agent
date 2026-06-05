@@ -1,58 +1,14 @@
 "use client";
 
 import { makeAssistantToolUI } from "@assistant-ui/react";
-import { ExternalLinkIcon, LoaderIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { LoaderIcon } from "lucide-react";
 
-// Mirrors the backend `compare` tool result (api/tools_core.run_compare ->
-// api/wire.wire_response). A citation is either atomic (age_hours/source_url at
-// the top) or synthesized (Oracle-style: a formula plus a `composite` list,
-// each constituent carrying its own age/source). The frontend reads whichever
-// is present; the snapshot age and source link per row are the citation
-// contract surfaced visually (AGENTS.md).
-type Constituent = {
-  source_url?: string;
-  age_hours?: number;
-  rate_unit?: string;
-};
-type Citation = {
-  age_hours?: number;
-  source_url?: string;
-  json_path?: string;
-  fetched_at?: string;
-  snapshot?: { provider: string; snapshot_iso: string; filename: string };
-  synthesis?: { rule: string; formula: string };
-  composite?: Constituent[];
-};
-type CompareRow = {
-  provider: string;
-  instance_type: string;
-  region_native?: string;
-  vcpu_actual?: number;
-  ram_gb_actual?: number;
-  hourly_usd?: number;
-  monthly_usd?: number;
-  synthesized?: boolean;
-  citation?: Citation;
-};
-type CompareResult = {
-  request?: { vcpu?: number; ram_gb?: number; region?: string; family?: string };
-  results?: CompareRow[];
-  ranked_by?: string;
-  unmet_requirements?: Array<{ provider: string; reason: string }>;
-  data_quality?: { overall_status?: string };
-};
-type CompareArgs = {
-  vcpu?: number;
-  ram_gb?: number;
-  region?: string;
-  family?: string;
-  providers?: string[];
-  expand?: string;
-};
+import { CitationAge, CitationSource } from "@/components/tools/citation-cells";
+import type {
+  CompareArgs,
+  CompareResult,
+} from "@/components/tools/compare-result-types";
 
-const STALE_HOURS = 24;
-const MEDALS = ["🥇", "🥈", "🥉"];
 const ACRONYMS = new Set(["aws", "gcp", "ibm"]);
 
 // Provider ids are lowercase (aws, gcp, vultr). Render acronyms uppercase and
@@ -78,42 +34,20 @@ function asResult(result: unknown): CompareResult | null {
   return null;
 }
 
-function rowAgeHours(citation?: Citation): number | undefined {
-  if (!citation) return undefined;
-  if (typeof citation.age_hours === "number") return citation.age_hours;
-  const ages = (citation.composite ?? [])
-    .map((c) => c.age_hours)
-    .filter((a): a is number => typeof a === "number");
-  return ages.length ? Math.max(...ages) : undefined;
-}
-
-function rowSource(citation?: Citation): string | undefined {
-  return citation?.source_url ?? citation?.composite?.[0]?.source_url;
-}
-
 function usd(n?: number): string {
-  return typeof n === "number" ? `$${n.toFixed(2)}` : "—";
+  return typeof n === "number" ? `$${n.toFixed(2)}` : "-";
 }
 
 function gb(n?: number): string {
-  return typeof n === "number" ? `${Number.isInteger(n) ? n : n.toFixed(1)} GB` : "—";
+  return typeof n === "number"
+    ? `${Number.isInteger(n) ? n : n.toFixed(1)} GB`
+    : "-";
 }
 
-function AgeChip({ ageHours }: { ageHours?: number }) {
-  if (typeof ageHours !== "number") return null;
-  const stale = ageHours >= STALE_HOURS;
-  const label = ageHours < 1 ? "just fetched" : `${Math.round(ageHours)}h old`;
+function RankCell({ rank }: { rank: number }) {
   return (
-    <span
-      className={cn(
-        "aui-compare-age inline-block rounded px-1.5 py-0.5 text-xs whitespace-nowrap",
-        stale
-          ? "bg-destructive/10 text-destructive"
-          : "bg-muted text-muted-foreground",
-      )}
-      title={`snapshot ${label}${stale ? " — past the 24h freshness threshold" : ""}`}
-    >
-      {label}
+    <span className="bg-muted text-muted-foreground inline-flex size-6 items-center justify-center rounded text-xs font-medium">
+      {rank}
     </span>
   );
 }
@@ -129,7 +63,7 @@ function Skeleton({ args }: { args: CompareArgs }) {
   return (
     <div className="aui-compare-skeleton text-muted-foreground flex items-center gap-2 rounded-lg border px-4 py-3 text-sm">
       <LoaderIcon className="size-4 shrink-0 animate-spin" />
-      <span>Comparing providers{spec ? ` for ${spec}` : ""}…</span>
+      <span>Comparing providers{spec ? ` for ${spec}` : ""}...</span>
     </div>
   );
 }
@@ -194,13 +128,14 @@ const ComparisonTableImpl = ({
             </thead>
             <tbody>
               {rows.map((row, i) => {
-                const source = rowSource(row.citation);
                 return (
                   <tr
                     key={`${row.provider}-${row.instance_type}-${i}`}
                     className="border-t align-top"
                   >
-                    <td className="px-3 py-2">{MEDALS[i] ?? i + 1}</td>
+                    <td className="px-3 py-2">
+                      <RankCell rank={i + 1} />
+                    </td>
                     <td className="px-3 py-2 font-medium">
                       {providerLabel(row.provider)}
                     </td>
@@ -215,29 +150,17 @@ const ComparisonTableImpl = ({
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">{row.vcpu_actual ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">{row.vcpu_actual ?? "-"}</td>
                     <td className="px-3 py-2 text-right">{gb(row.ram_gb_actual)}</td>
                     <td className="px-3 py-2 text-right">{usd(row.hourly_usd)}</td>
                     <td className="px-3 py-2 text-right font-semibold">
                       {usd(row.monthly_usd)}
                     </td>
                     <td className="px-3 py-2">
-                      <AgeChip ageHours={rowAgeHours(row.citation)} />
+                      <CitationAge citation={row.citation} />
                     </td>
                     <td className="px-3 py-2">
-                      {source ? (
-                        <a
-                          href={source}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-                          title={source}
-                        >
-                          <ExternalLinkIcon className="size-3.5" />
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                      <CitationSource citation={row.citation} />
                     </td>
                   </tr>
                 );

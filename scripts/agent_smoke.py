@@ -32,7 +32,7 @@ import time
 from typing import Any
 from urllib.parse import urlparse
 
-from api import budgets
+from api.budget_store import init_budgets, record_usage
 from api.config import settings
 from api.observability import compute_cost_usd
 from api.runtime import RunUsage, Turn, TurnTokenCapExceeded, get_runtime
@@ -116,8 +116,8 @@ async def _drive() -> int:
     # Persist to the budget store the same way transport.py does, so the smoke
     # also writes a session/global row a human can inspect.
     if settings.budget_enabled:
-        budgets.init_budgets()
-        budgets.record_usage(
+        init_budgets()
+        record_usage(
             session_id="smoke-session",
             hashed_id="smoke-client",
             input_tokens=usage.input_tokens,

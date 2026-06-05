@@ -11,5 +11,7 @@ store/
 # Runtime-mutable output (OTel JSONL traces and anything else the running app writes).
 var/
 
+.DS_Store
+
 .env
 .env.local

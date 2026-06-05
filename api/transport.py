@@ -5,7 +5,7 @@ plus the prior conversation state; the backend streams state updates back in
 assistant-stream format. Per ADR-0009's amendment the round-tripped state is
 **UI scaffolding only**; all enforcement state (per-session token totals,
 cumulative spend, the cookie-keyed identity) lives server-side in
-`api/budgets.py` and is read from a backend-set cookie, never from the body.
+`api/budget_store.py` and is read from a backend-set cookie, never from the body.
 
 Per-turn flow:
 
@@ -19,7 +19,7 @@ Per-turn flow:
    can render the "Start new conversation" banner; the agent is not invoked.
 4. We run the agent under `BudgetHooks` (per-turn token cap) with
    `max_turns=settings.max_turns_per_run`.
-5. In the `finally`, we persist the turn's usage via `budgets.record_usage`
+5. In the `finally`, we persist the turn's usage via `budget_store.record_usage`
    regardless of success or failure, so a partial run still pays for what it
    used.
 
@@ -42,7 +42,10 @@ from fastapi import APIRouter, Request
 from opentelemetry.trace import Status, StatusCode
 from pydantic import BaseModel, Field
 
-from api import budgets
+from api.budget_identity import new_session_id, session_id_fingerprint
+from api.budget_models import SessionUsage
+from api.budget_policy import check_session_cap
+from api.budget_store import read_session_usage, record_usage
 from api.config import settings
 from api.observability import get_tracer
 from api.runtime import RunUsage, Turn, TurnTokenCapExceeded, get_runtime
@@ -157,7 +160,7 @@ async def assistant_endpoint(
     # id was computed by BudgetMiddleware. If the middleware was disabled
     # (settings.budget_enabled=False), the hashed id is absent and
     # record_usage is skipped for the client_window write.
-    session_id = request.cookies.get(settings.session_cookie_name) or budgets.new_session_id()
+    session_id = request.cookies.get(settings.session_cookie_name) or new_session_id()
     hashed_id  = getattr(request.state, "hashed_client_id", "") or ""
 
     async def run_callback(controller: RunController) -> None:
@@ -186,7 +189,7 @@ async def assistant_endpoint(
         # nothing in `body` can lower it. If hit, push the terminal message
         # and the state flag and return — the agent is not invoked, so no
         # tokens are consumed.
-        block = budgets.check_session_cap(session_id) if settings.budget_enabled else None
+        block = check_session_cap(session_id) if settings.budget_enabled else None
         if block is not None:
             controller.state["messages"].append({
                 "role": "assistant",
@@ -208,9 +211,9 @@ async def assistant_endpoint(
         emitter = _StateEmitter(controller, msg)
 
         usage_before = (
-            budgets.read_session_usage(session_id)
+            read_session_usage(session_id)
             if settings.budget_enabled
-            else budgets.SessionUsage(session_id=session_id, input_tokens=0, output_tokens=0)
+            else SessionUsage(session_id=session_id, input_tokens=0, output_tokens=0)
         )
         run_usage = RunUsage()
 
@@ -221,7 +224,7 @@ async def assistant_endpoint(
             turn_span.set_attribute("finops.user_message.length",             last_user_length)
             turn_span.set_attribute("finops.cross_turn_history.message_count", len(turns))
             turn_span.set_attribute("finops.cross_turn_history.text_length",   history_text_length)
-            turn_span.set_attribute("finops.session.id_hash",                  budgets.session_id_fingerprint(session_id))
+            turn_span.set_attribute("finops.session.id_hash",                  session_id_fingerprint(session_id))
             turn_span.set_attribute("finops.session.tokens_before",            usage_before.total)
             turn_span.set_attribute("finops.session.budget_limit",             settings.session_token_cap)
             turn_span.set_attribute("finops.agent.runtime",                    settings.agent_runtime)
@@ -251,7 +254,7 @@ async def assistant_endpoint(
                 # if the run was blocked pre-agent (no usage) or if the
                 # budget store is disabled.
                 if settings.budget_enabled and (run_usage.input_tokens or run_usage.output_tokens):
-                    budgets.record_usage(
+                    record_usage(
                         session_id=session_id,
                         hashed_id=hashed_id,
                         input_tokens=run_usage.input_tokens,

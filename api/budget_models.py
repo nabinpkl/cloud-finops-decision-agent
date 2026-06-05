@@ -1,0 +1,34 @@
+"""Budget enforcement data models."""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
+
+
+class BudgetModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class SessionUsage(BudgetModel):
+    session_id: str
+    input_tokens: int
+    output_tokens: int
+
+    @property
+    def total(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+
+class BudgetBlock(BudgetModel):
+    """A cap-hit decision surfaced by middleware or transport."""
+
+    reason: Literal[
+        "global_daily",
+        "client_request_rate",
+        "client_token_rate",
+        "session",
+    ]
+    http_status: int
+    retry_after_seconds: int

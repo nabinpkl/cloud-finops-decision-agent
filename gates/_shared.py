@@ -15,6 +15,8 @@ from typing import NoReturn
 
 import httpx
 
+from normalize.snapshot_time import parse_fetched_at
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -56,7 +58,7 @@ def latest_receipt_path(provider: str) -> Path | None:
 
 def is_fresh(receipt_path: Path, freshness: timedelta) -> bool:
     receipt = json.loads(receipt_path.read_text())
-    fetched_at = datetime.fromisoformat(receipt["fetched_at"].replace("Z", "+00:00"))
+    fetched_at = parse_fetched_at(receipt["fetched_at"])
     return now_utc() - fetched_at < freshness
 
 

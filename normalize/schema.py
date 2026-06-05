@@ -7,12 +7,16 @@ is small and stable so eval can assert on it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 import polars as pl
+from pydantic import BaseModel, ConfigDict, Field
 from polars.datatypes import DataTypeClass
+
+
+class SchemaModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 # One row per priced SKU. The columns are the citation contract plus the
@@ -44,8 +48,7 @@ INDEX_SCHEMA: dict[str, DataTypeClass] = {
 }
 
 
-@dataclass
-class IndexRow:
+class IndexRow(SchemaModel):
     """A single parquet row. Builders return lists of these.
 
     `row_kind` defaults to "instance" so the 5 v0 atomic-pricing builders do not
@@ -63,31 +66,14 @@ class IndexRow:
     source_url: str
     store_path: str
     json_path: str
-    cited_price_kind: str  # "hourly" | "monthly" | "rate_hourly"
+    cited_price_kind: Literal["hourly", "monthly", "rate_hourly"]
     vcpu: int | None = None
     ram_gb: float | None = None
-    row_kind: str = "instance"
-    rate_unit: str | None = None
+    row_kind: Literal["instance", "rate"] = "instance"
+    rate_unit: Literal["per_vcpu_hour", "per_ocpu_hour", "per_gb_ram_hour"] | None = None
 
     def as_record(self) -> dict[str, Any]:
-        return {
-            "provider":         self.provider,
-            "snapshot_iso":     self.snapshot_iso,
-            "instance_type":    self.instance_type,
-            "family":           self.family,
-            "region_native":    self.region_native,
-            "region_canonical": self.region_canonical,
-            "row_kind":         self.row_kind,
-            "rate_unit":        self.rate_unit,
-            "vcpu":             self.vcpu,
-            "ram_gb":           self.ram_gb,
-            "hourly_usd":       self.hourly_usd,
-            "monthly_usd":      self.monthly_usd,
-            "source_url":       self.source_url,
-            "store_path":       self.store_path,
-            "json_path":        self.json_path,
-            "cited_price_kind": self.cited_price_kind,
-        }
+        return self.model_dump(mode="json")
 
 
 class DriftFlag(StrEnum):
@@ -104,16 +90,14 @@ class DriftFlag(StrEnum):
     PROVIDER_UNAVAILABLE           = "provider_unavailable"
 
 
-@dataclass
-class CitationVerification:
+class CitationVerification(SchemaModel):
     sampled: int = 0
     passed: int = 0
     failed: int = 0
-    failures: list[dict[str, Any]] = field(default_factory=list)
+    failures: list[dict[str, Any]] = Field(default_factory=list)
 
 
-@dataclass
-class IndexReport:
+class IndexReport(SchemaModel):
     """One per (provider, snapshot). Written as index_report.json next to the parquet."""
 
     provider: str
@@ -130,22 +114,4 @@ class IndexReport:
     human_summary: str
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "provider":                    self.provider,
-            "snapshot_iso":                self.snapshot_iso,
-            "rows_written":                self.rows_written,
-            "rows_by_family":              self.rows_by_family,
-            "unclassified_count":          self.unclassified_count,
-            "unclassified_samples":        self.unclassified_samples,
-            "families_with_zero_coverage": self.families_with_zero_coverage,
-            "row_count_delta_pct":         self.row_count_delta_pct,
-            "rows_in_previous_index":      self.rows_in_previous_index,
-            "citation_verification": {
-                "sampled":  self.citation_verification.sampled,
-                "passed":   self.citation_verification.passed,
-                "failed":   self.citation_verification.failed,
-                "failures": self.citation_verification.failures,
-            },
-            "flags":                       self.flags,
-            "human_summary":               self.human_summary,
-        }
+        return self.model_dump(mode="json")
