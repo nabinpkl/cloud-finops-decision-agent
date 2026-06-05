@@ -61,7 +61,8 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 - `src/normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
 - `src/api/`: FastAPI. `main.py` is the ASGI entry point, `app.py` assembles middleware and routers, `routes/` holds deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`), and `assistant_transport/` holds the streaming chat endpoint. The server-side agent runtime port (`deepagents` default, OpenAI Agents SDK optional) lives under `runtime/`.
 - `web/`: frontend-only Next.js + assistant-ui app that renders the agent's stream
-- `eval/v0.jsonl`: hand-written scenarios scored by an LLM judge on citation correctness + staleness/refusal
+- `prompts/`: production prompts shared by all agent runtime adapters
+- `EVALS.md`: planned offline and live eval suite for prompt/tool/citation behavior
 - `cloud-providers.json`: provider registry
 - `AGENTS.md`: agent behavior contract (citation contract, mode switching)
 - `SPEC.md`: technical contract (normalization API, taxonomy formats, citation schema, UI surface, eval rubric)
@@ -71,7 +72,7 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 Ingest modules ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `just compare 4 8 eu-central general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
 
-The FastAPI query wrapper over `compare()`/`lookup()` (plus `/citation/excerpt` and `/health`) is built and tested. The server-side `/assistant` endpoint is implemented, the runtime port supports both `deepagents` and OpenAI Agents SDK adapters, budget controls protect the model surface, and the frontend renders a `ComparisonTable` tool result. Remaining v0 work is citation depth, prose tuning, browser smoke verification, and the LLM-judge eval over `eval/v0.jsonl`.
+The FastAPI query wrapper over `compare()`/`lookup()` (plus `/citation/excerpt` and `/health`) is built and tested. The server-side `/assistant` endpoint is implemented, the runtime port supports both `deepagents` and OpenAI Agents SDK adapters, budget controls protect the model surface, and the frontend renders a `ComparisonTable` tool result. Remaining v0 work is citation depth, prose tuning, browser smoke verification, and the eval suite planned in `EVALS.md`.
 
 ## Security and Local Data
 
