@@ -1,8 +1,8 @@
-"""Mocked integration tests for normalize.query.
+"""Mocked integration tests for normalize.query.service.
 
 The two disk seams compare()/lookup() touch are patched:
-  - normalize.query.load_latest  -> returns an in-memory (df, snapshot_dir)
-  - normalize.query.compute_envelope -> stubbed (its own logic is tested in
+  - normalize.query.service.load_latest  -> returns an in-memory (df, snapshot_dir)
+  - normalize.query.service.compute_envelope -> stubbed (its own logic is tested in
     test_integration_data_quality.py)
 
 _load_flex_rules() is left real: the synthesis test deliberately uses the real
@@ -11,8 +11,8 @@ gcp.n2 rule so a change to those bounds is caught here.
 
 from __future__ import annotations
 
-import normalize.query as q
-from tests.conftest import instance_row, make_df, rate_row, write_receipt
+import normalize.query.service as q
+from helpers import instance_row, make_df, rate_row, write_receipt
 
 HOURS_PER_MONTH = 730.0
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-import api.budget_identity as budget_identity
+import api.budget.identity as budget_identity
 from api.config import settings
 
 

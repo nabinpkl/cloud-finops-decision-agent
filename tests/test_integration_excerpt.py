@@ -1,4 +1,4 @@
-"""Mocked integration tests for normalize.citation_excerpt.
+"""Mocked integration tests for normalize.citations.excerpt.
 
 Tiny JSON files written to tmp_path drive each branch: a normal match inside a
 small parent, the minimal fallback for an oversized parent, an object-valued
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from normalize.citation_excerpt import PARENT_ENTRY_CAP, build_excerpt
+from normalize.citations.excerpt import PARENT_ENTRY_CAP, build_excerpt
 
 
 def _write(tmp_path: Path, name: str, obj) -> Path:

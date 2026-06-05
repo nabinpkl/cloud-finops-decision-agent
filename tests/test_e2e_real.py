@@ -20,8 +20,8 @@ from fastapi.testclient import TestClient
 
 import api.main as apimain
 from normalize.index import SUPPORTED_PROVIDERS
-from normalize.loader import latest_snapshot_dir
-from normalize.verifier import _extract_price
+from normalize.query.loader import latest_snapshot_dir
+from normalize.indexing.verifier import _extract_price
 
 INDEXED = [p for p in SUPPORTED_PROVIDERS if latest_snapshot_dir(p) is not None]
 

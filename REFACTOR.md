@@ -2,6 +2,18 @@
 
 Review date: 2026-06-04.
 
+Update 2026-06-05: the Python backend has been moved to a `src/` layout.
+Historical path references below that start with `api/`, `gates/`, `normalize/`,
+or `scripts/` now resolve under `src/`. The current FastAPI shape is
+`src/api/main.py` as the ASGI entry point, `src/api/app.py` for app assembly,
+and `src/api/routes/` for deterministic HTTP routes.
+
+Implementation update 2026-06-05: the follow-up clustering pass split the
+assistant transport into `src/api/assistant_transport/`, observability into
+`src/api/observability/`, IBM's gate into `src/gates/ibm/`, index-build support
+into `src/normalize/index_*`, and larger provider row parsing into
+`src/normalize/builders/{azure_rows,gcp_rows}.py`.
+
 Scope: review the current codebase against the combined standard from the repo
 rules, idiomatic Python, and the reference expectations from
 `agent-workspace-ide`: read actual files, use literal concepts, fail loud, keep

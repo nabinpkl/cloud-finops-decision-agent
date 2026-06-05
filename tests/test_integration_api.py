@@ -11,6 +11,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import api.main as apimain
+import api.routes.pricing as pricing_routes
 
 ATOMIC_RESULT = {
     "provider": "aws",
@@ -91,7 +92,7 @@ def _client():
 
 
 def test_compare_strips_store_path_and_adds_ref(monkeypatch):
-    monkeypatch.setattr(apimain, "compare", lambda **kw: CANNED_COMPARE)
+    monkeypatch.setattr(pricing_routes, "compare", lambda **kw: CANNED_COMPARE)
     body = {"vcpu": 4, "ram_gb": 16, "region": "eu-central", "family": "general-purpose"}
 
     resp = _client().post("/compare", json=body)
@@ -121,7 +122,7 @@ def test_lookup_strips_store_path(monkeypatch):
         "data_quality": {"overall_status": "ok", "per_provider": {}},
         "unmet_requirements": [],
     }
-    monkeypatch.setattr(apimain, "lookup", lambda **kw: canned)
+    monkeypatch.setattr(pricing_routes, "lookup", lambda **kw: canned)
 
     resp = _client().get("/lookup", params={"provider": "aws", "instance_type": "a1.xlarge", "region": "eu-central-1"})
     assert resp.status_code == 200

@@ -33,7 +33,7 @@ Direct snapshot walking is still allowed when (a) the normalization layer does n
 
 ### Fetching prices
 
-Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has a gate at `gates/<provider>.py` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout.
+Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has a gate under `src/gates/` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout. Most gates are single modules; IBM is a package because its catalog walk has multiple steps.
 
 Before answering any pricing question:
 
@@ -82,7 +82,7 @@ Do not use `datetime.now()` without a `tz=` argument: it returns naive local tim
 
 ### Equivalence claims
 
-Equivalence between provider instance types (claiming AWS `m5.xlarge` and GCP `n2-standard-4` are interchangeable for a "4 vCPU general purpose" spec) is captured in `normalize/taxonomy/families.json` for the cases v0 has hand-seeded. When quoting from the taxonomy, surface the `dimensions_matched` and `dimensions_not_normalized` fields in prose so the equivalence basis is visible.
+Equivalence between provider instance types (claiming AWS `m5.xlarge` and GCP `n2-standard-4` are interchangeable for a "4 vCPU general purpose" spec) is captured in `src/normalize/taxonomy/families.json` for the cases v0 has hand-seeded. When quoting from the taxonomy, surface the `dimensions_matched` and `dimensions_not_normalized` fields in prose so the equivalence basis is visible.
 
 When the user's question reaches a spec not covered by the taxonomy, the equivalence is judgment, not lookup. Cite the snapshot fields used to justify it, name the dimensions the equivalence holds on (vCPU count, RAM, CPU class) and the dimensions it does not (CPU generation, baseline performance, network bandwidth, included storage), and flag that the equivalence is agent-derived rather than from the taxonomy. v1 will queue agent-derived equivalences for PR review (`propose_equivalence`); for v0, surfacing them transparently in prose is sufficient.
 

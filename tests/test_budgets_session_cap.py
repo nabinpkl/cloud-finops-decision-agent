@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-import api.budget_store as budget_store
+import api.budget.store as budget_store
 from api.config import settings
 
 
@@ -44,7 +44,7 @@ def _user_msg(text: str) -> dict:
 def test_first_request_sets_session_cookie(caps_low):
     import api.main as apimain
 
-    with patch("api.transport.get_runtime") as get_rt:
+    with patch("api.assistant_transport.turn.get_runtime") as get_rt:
         # Runtime isn't obtained because state will lack a user message;
         # but the cookie is set on the response regardless.
         client = TestClient(apimain.app)
@@ -66,7 +66,7 @@ def test_session_over_cap_returns_terminal_banner(caps_low):
 
     client = TestClient(apimain.app)
     client.cookies.set(settings.session_cookie_name, session_id)
-    with patch("api.transport.get_runtime") as get_rt:
+    with patch("api.assistant_transport.turn.get_runtime") as get_rt:
         r = client.post(
             "/assistant",
             json={"commands": [_user_msg("hello")]},

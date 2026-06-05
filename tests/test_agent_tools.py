@@ -10,8 +10,8 @@ compare payloads as test_integration_api.py.
 
 from __future__ import annotations
 
-import api.tools_core as tools_core
-from tests.test_integration_api import CANNED_COMPARE
+import api.agent_tools.core as tools_core
+from test_integration_api import CANNED_COMPARE
 
 
 def _find_keys(obj, key):

@@ -17,7 +17,8 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     └────────────────┬─────────────────┘
                                      │ HTTP (chat stream)
                     ┌────────────────▼─────────────────┐
-                    │  Backend (api/ + normalize/)     │
+                    │  Backend (src/api +              │
+                    │  src/normalize)                  │
                     │  FastAPI hosts two concerns:     │
                     │  (1) agent runtime behind a      │
                     │      neutral port: deepagents    │
@@ -26,7 +27,7 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     │      normalize in-process.       │
                     │  (2) deterministic query API     │
                     │      (compare/lookup/excerpt) +  │
-                    │      the normalize/ module + CLI.│
+                    │      the normalize module + CLI. │
                     │  Reads store/<provider>/<ISO>/   │
                     │  snapshots and taxonomy JSON,    │
                     │  returns ranked candidates with  │
@@ -34,7 +35,7 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     └────────────────┬─────────────────┘
                                      │ filesystem
                     ┌────────────────▼─────────────────┐
-                    │  Gates (gates/)                  │
+                    │  Gates (src/gates/)              │
                     │  Per-provider fetchers writing   │
                     │  timestamped snapshots.          │
                     │  Already in place.               │
@@ -47,7 +48,7 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
 
 ## Normalization layer
 
-Single implementation in Python under `normalize/`, callable three ways: imported as a module, hit over HTTP via FastAPI, or run as `python -m normalize` from the shell. Same input schema, same output schema, same citation block.
+Single implementation in Python under `src/normalize/`, callable three ways: imported as a module, hit over HTTP via FastAPI, or run as `python -m normalize` from the shell through the project environment. Same input schema, same output schema, same citation block.
 
 ### Python module
 
@@ -89,8 +90,8 @@ GET /lookup?provider=aws&instance_type=m5.xlarge&region=eu-central-1
 ### CLI
 
 ```
-python -m normalize compare --vcpu 4 --ram 8 --region eu-central --family general-purpose
-python -m normalize lookup --provider aws --instance-type m5.xlarge --region eu-central-1
+uv run python -m normalize compare --vcpu 4 --ram 8 --region eu-central --family general-purpose
+uv run python -m normalize lookup --provider aws --instance-type m5.xlarge --region eu-central-1
 ```
 
 ### Match policy
@@ -240,7 +241,7 @@ Every response carries a `data_quality` block per ADR 0005. The shape:
 
 ## Taxonomies
 
-Two JSON files in `normalize/taxonomy/`, editable in PRs, readable by the agent at runtime so it can cite the file when it explains an equivalence.
+Two JSON files in `src/normalize/taxonomy/`, editable in PRs, readable by the agent at runtime so it can cite the file when it explains an equivalence.
 
 ### `families.json`
 
@@ -354,8 +355,8 @@ Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs 
 
 ## Build sequence
 
-1. `normalize/taxonomy/families.json` and `regions.json` — the load-bearing data shapes.
-2. `normalize/` Python module + CLI — operates against snapshots already on disk.
+1. `src/normalize/taxonomy/families.json` and `regions.json` — the load-bearing data shapes.
+2. `src/normalize/` Python module + CLI — operates against snapshots already on disk.
 3. FastAPI query wrapper (`compare`/`lookup`/`excerpt`/`health`) — thin layer over the module.
 4. Agent runtime in FastAPI behind `api.runtime.AgentRuntime`: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
 5. `web/` Next.js + assistant-ui frontend consuming the `/assistant` stream and rendering the `ComparisonTable` tool component.

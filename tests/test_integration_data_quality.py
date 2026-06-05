@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import gates._shared as shared
 import normalize.data_quality as dq
-from tests.conftest import iso_hours_ago, make_snapshot
+from helpers import iso_hours_ago, make_snapshot
 
 REPORT = {
     "flags": [],

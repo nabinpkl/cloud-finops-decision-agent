@@ -14,9 +14,9 @@ A second, larger experiment rides on top, and we do not have answers yet. The de
 
 Three layers in one repo. SPEC.md owns the contracts between them.
 
-**Gates** (`gates/`) are deterministic Python scripts that fetch a provider's compute pricing catalog and save a timestamped snapshot under `store/<provider>/<ISO>/`. One gate per provider, with a polite 429-aware HTTP layer in `gates/_shared.py`. They print a JSON receipt to stdout.
+**Gates** (`src/gates/`) are deterministic Python modules that fetch a provider's compute pricing catalog and save a timestamped snapshot under `store/<provider>/<ISO>/`. One gate per provider, with a polite 429-aware HTTP layer in `src/gates/_shared.py`. They print a JSON receipt to stdout.
 
-**Normalization layer** (`normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
+**Normalization layer** (`src/normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
 
 **Agent runtime** runs server-side in FastAPI behind a framework-neutral port (ADR-0012). The default adapter is the LangChain-backed `deepagents` selector; the OpenAI Agents SDK remains an optional runtime. Both call the normalization layer in-process through the same tool body, on a model wired to an OpenAI-compatible base URL (the provider is a `.env` knob, not a fixed vendor). The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure. **Frontend** (`web/`) is a frontend-only Next.js app using `assistant-ui` as the chat shell; it renders the agent's stream and holds no agent logic or model keys. The shipped custom component is `ComparisonTable`; single-instance `PriceCard` stays captured for v1.
 
@@ -54,12 +54,12 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 ## Layout
 
-- `gates/<provider>.py`: per-provider fetchers (aws, gcp, azure, oracle, vultr, linode, ibm in v0)
-- `gates/_shared.py`: timestamps, freshness check, `.env` loader, 429-aware HTTP helper
+- `src/gates/`: per-provider fetchers (aws, gcp, azure, oracle, vultr, linode, ibm in v0; IBM is a package because its catalog walk has multiple steps)
+- `src/gates/_shared.py`: timestamps, freshness check, `.env` loader, 429-aware HTTP helper
 - `store/<provider>/<ISO>/`: timestamped snapshot directories holding raw data files plus `receipt.json`
-- `normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
-- `normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
-- `api/`: FastAPI. Deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`) plus the server-side agent runtime port (`deepagents` default, OpenAI Agents SDK optional) and its streaming chat endpoint
+- `src/normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
+- `src/normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
+- `src/api/`: FastAPI. `main.py` is the ASGI entry point, `app.py` assembles middleware and routers, `routes/` holds deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`), and `assistant_transport/` holds the streaming chat endpoint. The server-side agent runtime port (`deepagents` default, OpenAI Agents SDK optional) lives under `runtime/`.
 - `web/`: frontend-only Next.js + assistant-ui app that renders the agent's stream
 - `eval/v0.jsonl`: hand-written scenarios scored by an LLM judge on citation correctness + staleness/refusal
 - `cloud-providers.json`: provider registry
@@ -69,6 +69,6 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 ## Status
 
-Gates ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `python -m normalize compare --vcpu 4 --ram 8 --region eu-central --family general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
+Gates ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `just compare 4 8 eu-central general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
 
 The FastAPI query wrapper over `compare()`/`lookup()` (plus `/citation/excerpt` and `/health`) is built and tested. The server-side `/assistant` endpoint is implemented, the runtime port supports both `deepagents` and OpenAI Agents SDK adapters, budget controls protect the model surface, and the frontend renders a `ComparisonTable` tool result. Remaining v0 work is citation depth, prose tuning, browser smoke verification, and the LLM-judge eval over `eval/v0.jsonl`.

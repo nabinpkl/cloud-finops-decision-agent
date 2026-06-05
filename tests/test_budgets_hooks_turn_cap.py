@@ -15,7 +15,10 @@ pytest.importorskip("agents")
 from agents.items import ModelResponse  # noqa: E402
 
 from api.config import settings  # noqa: E402
-from api.hooks import BudgetHooks, TurnTokenCapExceeded  # noqa: E402
+from api.runtime.openai_agents.hooks import (  # noqa: E402
+    BudgetHooks,
+    TurnTokenCapExceeded,
+)
 
 
 def _fake_response(input_tokens: int, output_tokens: int) -> ModelResponse:

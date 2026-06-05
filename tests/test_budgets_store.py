@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-import api.budget_store as budget_store
+import api.budget.store as budget_store
 from api.config import settings
 
 

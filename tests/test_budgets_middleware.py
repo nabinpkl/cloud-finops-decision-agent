@@ -9,9 +9,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import api.budget_store as budget_store
+import api.budget.store as budget_store
 from api.config import settings
-from api.middleware import BudgetMiddleware
+from api.budget.middleware import BudgetMiddleware
 
 
 def _build_app() -> FastAPI:
