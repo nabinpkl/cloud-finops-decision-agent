@@ -77,7 +77,7 @@ const converter = (
   connectionMetadata: AssistantTransportConnectionMetadata,
 ) => {
   // Mirror the server-trusted session-limit flag into the store the banner
-  // reads (see web/lib/session-limit.ts for why this path, not the transport
+  // reads (see frontend/lib/session-limit.ts for why this path, not the transport
   // extras hook).
   publishSessionLimitReached(state.sessionLimitReached === true);
 

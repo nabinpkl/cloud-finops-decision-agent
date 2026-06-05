@@ -18,7 +18,7 @@ import { useSessionLimitReached } from "@/lib/session-limit";
 
 export function SessionLimitBanner() {
   // The flag is mirrored out of the transport converter into a small store
-  // (web/lib/session-limit.ts) because this assistant-ui version does not
+  // (frontend/lib/session-limit.ts) because this assistant-ui version does not
   // propagate the transport extras that `useAssistantTransportState` requires.
   const reached = useSessionLimitReached();
   if (!reached) return null;

@@ -5,7 +5,7 @@ Thanks for taking the time to improve `cloud-finops-decision-agent`. This repo i
 - `backend/src/ingest/`: provider fetchers that write raw timestamped snapshots.
 - `backend/src/normalize/`: deterministic index building, taxonomy loading, queries, and citations.
 - `backend/src/api/`: FastAPI app and server-side agent runtime.
-- `web/`: frontend-only Next.js UI.
+- `frontend/`: frontend-only Next.js UI.
 
 Read `README.md`, `SPEC.md`, and `AGENTS.md` before larger changes. `SPEC.md` owns data/API contracts. `AGENTS.md` owns agent behavior and citation rules.
 

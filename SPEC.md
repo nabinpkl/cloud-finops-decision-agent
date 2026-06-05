@@ -8,7 +8,7 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
 
 ```
                     ┌──────────────────────────────────┐
-                    │  Frontend (web/)                 │
+                    │  Frontend (frontend/)                 │
                     │  Next.js + assistant-ui.         │
                     │  Frontend-only: renders the      │
                     │  chat stream and the generative  │
@@ -296,7 +296,7 @@ The normalization layer accepts either form on input. Output always carries the 
 
 Per ADR-0009 and ADR-0012 the agent loop runs server-side in FastAPI behind `api.runtime.AgentRuntime`. The default runtime is `deepagents`, implemented as a lean LangChain `create_agent` adapter; the OpenAI Agents SDK runtime remains available through `AGENT_RUNTIME=openai_agents`. The model is built against an OpenAI-compatible base URL, so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tool calls route through `api.tools_core.run_compare`, which calls `normalize.compare` in-process; the wire translation (drop `store_path`, add a `snapshot` ref) is shared with the HTTP endpoints. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.
 
-`web/` is a Next.js app using `assistant-ui` as the chat shell, and it is frontend-only: no `app/api/*` route handlers, no agent logic, no model keys. It uses `useAssistantTransportRuntime`, which POSTs to a same-origin `/assistant` path that `next.config.js` rewrites to the backend (`BACKEND_ORIGIN` env knob) — so the browser never holds a backend URL and there is no CORS round-trip. The agent decides which custom tool component to render based on the query shape; the frontend maps tool names to components.
+`frontend/` is a Next.js app using `assistant-ui` as the chat shell, and it is frontend-only: no `app/api/*` route handlers, no agent logic, no model keys. It uses `useAssistantTransportRuntime`, which POSTs to a same-origin `/assistant` path that `next.config.js` rewrites to the backend (`BACKEND_ORIGIN` env knob) — so the browser never holds a backend URL and there is no CORS round-trip. The agent decides which custom tool component to render based on the query shape; the frontend maps tool names to components.
 
 ### Custom tool components
 
@@ -359,7 +359,7 @@ Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs 
 2. `backend/src/normalize/` Python module + CLI — operates against snapshots already on disk.
 3. FastAPI query wrapper (`compare`/`lookup`/`excerpt`/`health`) — thin layer over the module.
 4. Agent runtime in FastAPI behind `api.runtime.AgentRuntime`: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
-5. `web/` Next.js + assistant-ui frontend consuming the `/assistant` stream and rendering the `ComparisonTable` tool component.
+5. `frontend/` Next.js + assistant-ui frontend consuming the `/assistant` stream and rendering the `ComparisonTable` tool component.
 6. `backend/evals/cases/v0.jsonl` + runner.
 
 Each step is independently runnable. Steps 2 and 3 ship a usable comparator before the agent or UI exists; the frontend is the last product layer, not the first.

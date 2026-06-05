@@ -40,7 +40,7 @@ Slice scope:
 - LLM provider: superseded by [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md).
   The provider is no longer fixed to Anthropic; it is an OpenAI-compatible
   base-URL knob, and the agent loop runs in FastAPI, not the Next.js layer.
-- API and web run on `localhost` (`uvicorn` on 8000, `next dev` on 3000). The
+- API and frontend run on `localhost` (`uvicorn` on 8000, `next dev` on 3000). The
   production deploy story is a v1 conversation.
 - No auth, no rate limiting. The citation contract is the trust layer: every
   number is verifiable, every refusal is honest.

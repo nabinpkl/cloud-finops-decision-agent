@@ -18,7 +18,7 @@ Three layers in one repo. SPEC.md owns the contracts between them.
 
 **Normalization layer** (`backend/src/normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
 
-**Agent runtime** runs server-side in FastAPI behind a framework-neutral port (ADR-0012). The default adapter is the LangChain-backed `deepagents` selector; the OpenAI Agents SDK remains an optional runtime. Both call the normalization layer in-process through the same tool body, on a model wired to an OpenAI-compatible base URL (the provider is a `.env` knob, not a fixed vendor). The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure. **Frontend** (`web/`) is a frontend-only Next.js app using `assistant-ui` as the chat shell; it renders the agent's stream and holds no agent logic or model keys. The shipped custom component is `ComparisonTable`; single-instance `PriceCard` stays captured for v1.
+**Agent runtime** runs server-side in FastAPI behind a framework-neutral port (ADR-0012). The default adapter is the LangChain-backed `deepagents` selector; the OpenAI Agents SDK remains an optional runtime. Both call the normalization layer in-process through the same tool body, on a model wired to an OpenAI-compatible base URL (the provider is a `.env` knob, not a fixed vendor). The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure. **Frontend** (`frontend/`) is a frontend-only Next.js app using `assistant-ui` as the chat shell; it renders the agent's stream and holds no agent logic or model keys. The shipped custom component is `ComparisonTable`; single-instance `PriceCard` stays captured for v1.
 
 The citation contract is the only enforcement layer. Every price the agent quotes carries `source_url`, `store_path`, `json_path`, `fetched_at`, and `age_hours`. If the cited snapshot is over 24 hours old, the agent marks the answer stale and offers a refetch. AGENTS.md is the agent behavior contract; SPEC.md is the data shape contract.
 
@@ -60,7 +60,7 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 - `backend/src/normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
 - `backend/src/normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
 - `backend/src/api/`: FastAPI. `main.py` is the ASGI entry point, `app.py` assembles middleware and routers, `routes/` holds deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`), and `assistant_transport/` holds the streaming chat endpoint. The server-side agent runtime port (`deepagents` default, OpenAI Agents SDK optional) lives under `runtime/`.
-- `web/`: frontend-only Next.js + assistant-ui app that renders the agent's stream
+- `frontend/`: frontend-only Next.js + assistant-ui app that renders the agent's stream
 - `prompts/`: production prompts shared by all agent runtime adapters
 - `EVALS.md`: planned offline and live eval suite for prompt/tool/citation behavior
 - `cloud-providers.json`: provider registry

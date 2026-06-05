@@ -1,4 +1,4 @@
-# ADR 0009: Agent runtime in FastAPI on the OpenAI Agents SDK; web/ is frontend-only; provider is a base-URL knob
+# ADR 0009: Agent runtime in FastAPI on the OpenAI Agents SDK; frontend/ is frontend-only; provider is a base-URL knob
 
 - **Status:** Accepted
 - **Date:** 2026-05-28
@@ -9,7 +9,7 @@
 
 ADR 0008 locked the vertical slice but assumed a shape that, on closer look, fights the codebase we already have:
 
-- the agent loop ran in the Next.js layer (`web/app/api/chat/route.ts`) on the Vercel AI SDK,
+- the agent loop ran in the Next.js layer (`frontend/app/api/chat/route.ts`) on the Vercel AI SDK,
 - the LLM provider was fixed to Anthropic,
 - the `compare` tool reached the normalization layer over HTTP.
 
@@ -23,7 +23,7 @@ Separately, fixing the provider to one vendor is a hardcoded config value by the
 
 `openai-agents` (Python) hosts the loop. An `Agent` is built with `instructions`, the `compare` tool, and a model (see 3). FastAPI exposes `POST /assistant` implementing assistant-ui's assistant-transport protocol, which the frontend consumes.
 
-`web/` is a **pure frontend**: Next.js + assistant-ui that renders the stream. It holds no agent logic, no tool definitions, no model keys, and no route handler running the loop. The browser talks to one backend.
+`frontend/` is a **pure frontend**: Next.js + assistant-ui that renders the stream. It holds no agent logic, no tool definitions, no model keys, and no route handler running the loop. The browser talks to one backend.
 
 ### 2. Agent tools call the normalization layer in-process, not over HTTP
 
@@ -55,7 +55,7 @@ The snapshot-ref citation (no leaked `store_path`), the serve-time lazy excerpt 
 
 - One backend, one language for both the deterministic query layer and the agent that orchestrates it. No HTTP self-hop on the tool path.
 - Provider swap is a `.env` edit. No vendor lock in code; satisfies the no-hardcoded-config rule.
-- Model keys never reach the browser. `web/` ships nothing secret.
+- Model keys never reach the browser. `frontend/` ships nothing secret.
 - The slice still proves the chain end-to-end on the first real query, as 0008 intended.
 
 ### Negative

@@ -47,8 +47,8 @@ api:
     just -f {{backend_just}} -d {{backend}} api
 
 # Run the frontend dev server (Next.js + assistant-ui) on localhost:3000.
-web:
-    pnpm --dir web dev
+frontend:
+    pnpm --dir frontend dev
 
 # Wrap `just dev` with Infisical. INFISICAL_ENV picks the slug, default dev.
 infcl-dev:
@@ -65,7 +65,7 @@ dev:
     sleep 1
     trap 'kill $(jobs -p) 2>/dev/null' INT TERM EXIT
     just api &
-    just web &
+    just frontend &
     wait
 
 # Drive one live backend agent turn and print token deltas.

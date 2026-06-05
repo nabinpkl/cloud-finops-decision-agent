@@ -1,5 +1,5 @@
 {
-  "name": "web",
+  "name": "frontend",
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@11.1.0",
@@ -8,6 +8,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp"
+    ]
   },
   "dependencies": {
     "@assistant-ui/react": "0.14.11",
