@@ -1,4 +1,4 @@
-"""GCP Compute Engine pricing gate: fetch all SKUs via the Cloud Billing Catalog API."""
+"""GCP Compute Engine pricing ingest via the Cloud Billing Catalog API."""
 
 from __future__ import annotations
 
@@ -7,11 +7,10 @@ import asyncio
 import json
 import os
 from dataclasses import asdict, dataclass
-from datetime import timedelta
 
 import httpx
 
-from gates._shared import (
+from ingest._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
@@ -25,13 +24,14 @@ from gates._shared import (
     sha256_bytes,
     store_root,
 )
+from ingest.config import ingest_settings
 
 PROVIDER = "gcp"
 SERVICE = "compute"
 COMPUTE_SERVICE_ID = "6F81-5844-456A"
 CATALOG_BASE = f"https://cloudbilling.googleapis.com/v1/services/{COMPUTE_SERVICE_ID}/skus"
 PAGE_SIZE = 5000  # API hard maximum; values above this return HTTP 400.
-FRESHNESS = timedelta(hours=24)
+FRESHNESS = ingest_settings.snapshot_freshness
 
 STORE_ROOT = store_root(PROVIDER)
 
@@ -62,7 +62,12 @@ async def fetch_all_skus(api_key: str) -> tuple[list[dict], int]:
             params: dict[str, str | int] = {"pageSize": PAGE_SIZE}
             if token:
                 params["pageToken"] = token
-            resp = await fetch_polite(client, CATALOG_BASE, params=params, timeout=120.0)
+            resp = await fetch_polite(
+                client,
+                CATALOG_BASE,
+                params=params,
+                timeout=ingest_settings.http_timeout_seconds,
+            )
             page = resp.json()
             page_count += 1
             skus.extend(page.get("skus", []))

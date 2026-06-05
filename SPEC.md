@@ -35,7 +35,7 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     └────────────────┬─────────────────┘
                                      │ filesystem
                     ┌────────────────▼─────────────────┐
-                    │  Gates (src/gates/)              │
+                    │  Ingest (src/ingest/)             │
                     │  Per-provider fetchers writing   │
                     │  timestamped snapshots.          │
                     │  Already in place.               │

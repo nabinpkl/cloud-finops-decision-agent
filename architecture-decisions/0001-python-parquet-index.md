@@ -30,7 +30,7 @@ The bottleneck is JSON parsing at cold start, not query-time compute. Once parse
 - Cold start (first query after a fresh fetch) pays one-time parquet build: roughly 5 to 10 seconds for AWS, sub-second for the rest. Warm queries are sub-100ms.
 - The parquet schema is the natural integrity point. Schema drift surfaces at build time (see ADR 0004), not at query time.
 - Memory footprint stays low: parquet on disk is roughly 20 to 50 MB total across all providers, loaded into Polars at need.
-- One language across gates, normalize, and eval. Smaller stack, faster iteration, no FFI.
+- One language across ingest, normalize, and eval. Smaller stack, faster iteration, no FFI.
 - Aligns with the existing Python conventions doc (`python.md`).
 
 ### Negative
@@ -41,7 +41,7 @@ The bottleneck is JSON parsing at cold start, not query-time compute. Once parse
 
 ### Neutral
 
-- Future move to Rust or to DuckDB is not foreclosed. The parquet artifact is portable and either could read it without touching the gates.
+- Future move to Rust or to DuckDB is not foreclosed. The parquet artifact is portable and either could read it without touching the ingest.
 
 ## Alternatives considered
 

@@ -1,4 +1,4 @@
-"""Azure Virtual Machines pricing gate: per-region narrow filter via the Retail Prices API."""
+"""Azure Virtual Machines pricing ingest via the Retail Prices API."""
 
 from __future__ import annotations
 
@@ -7,11 +7,10 @@ import asyncio
 import json
 import sys
 from dataclasses import asdict, dataclass
-from datetime import timedelta
 
 import httpx
 
-from gates._shared import (
+from ingest._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
@@ -24,11 +23,12 @@ from gates._shared import (
     sha256_bytes,
     store_root,
 )
+from ingest.config import ingest_settings
 
 PROVIDER = "azure"
 SERVICE = "virtual-machines"
 RETAIL_PRICES_BASE = "https://prices.azure.com/api/retail/prices"
-FRESHNESS = timedelta(hours=24)
+FRESHNESS = ingest_settings.snapshot_freshness
 REGIONS: list[str] = ["eastus", "westeurope", "southeastasia"]
 
 # Azure pricing data is normalized as (SKU x region x priceType x OS) rows. An
@@ -86,7 +86,12 @@ async def fetch_region(client: httpx.AsyncClient, region: str) -> tuple[list[dic
     while next_url:
         pages += 1
         t0 = now_utc()
-        resp = await fetch_polite(client, next_url, timeout=120.0, on_retry=on_retry)
+        resp = await fetch_polite(
+            client,
+            next_url,
+            timeout=ingest_settings.http_timeout_seconds,
+            on_retry=on_retry,
+        )
         elapsed = (now_utc() - t0).total_seconds()
         log(f"{region} page {pages}: 200 in {elapsed:.2f}s")
         page = resp.json()

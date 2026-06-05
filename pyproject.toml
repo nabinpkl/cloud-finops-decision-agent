@@ -49,7 +49,7 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = "src"
-module-name = ["api", "gates", "normalize", "scripts"]
+module-name = ["api", "ingest", "normalize", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

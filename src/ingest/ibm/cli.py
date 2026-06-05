@@ -1,4 +1,4 @@
-"""IBM gate CLI."""
+"""IBM ingest CLI."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from dataclasses import asdict
 
 import httpx
 
-from gates._shared import emit, is_fresh, iso_compact, latest_receipt_path, now_utc
-from gates.ibm.catalog import fetch_all
-from gates.ibm.constants import FRESHNESS, PROVIDER, STORE_ROOT
-from gates.ibm.snapshot import build_receipt, write_snapshot
+from ingest._shared import emit, is_fresh, iso_compact, latest_receipt_path, now_utc
+from ingest.ibm.catalog import fetch_all
+from ingest.ibm.constants import FRESHNESS, PROVIDER, STORE_ROOT
+from ingest.ibm.snapshot import build_receipt, write_snapshot
 
 
 def main() -> None:
@@ -61,4 +61,3 @@ def main() -> None:
 
     (snapshot_dir / "receipt.json").write_text(json.dumps(asdict(receipt), indent=2))
     emit(asdict(receipt))
-

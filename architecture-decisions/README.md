@@ -11,7 +11,7 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | Number | Title | Status |
 |---|---|---|
 | [0001](0001-python-parquet-index.md) | Python plus cached parquet index, not Rust, not raw-JSON-per-query | Accepted |
-| [0002](0002-index-lives-in-normalize.md) | Index builder lives in `normalize/`, not in gates | Accepted |
+| [0002](0002-index-lives-in-normalize.md) | Index builder lives in `normalize/`, not in ingest | Accepted |
 | [0003](0003-citation-stable-id-jsonpath.md) | Citations use stable-ID JSONPath, verified at index build | Accepted |
 | [0004](0004-schema-drift-detection.md) | Schema drift detection via fingerprint plus coverage report | Accepted |
 | [0005](0005-data-quality-envelope.md) | `data_quality` envelope on normalize responses | Accepted |

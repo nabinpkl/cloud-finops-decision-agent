@@ -106,7 +106,7 @@ shapes. v0 explicitly does NOT answer "lookup `n2-standard-4` by name." The
 agent's prose surfaces this gap when a user asks by name: "v0 does not enumerate
 named GCP shapes; ask by spec instead."
 
-v1 escape: add `gates/gcp_shapes.py` and `gates/oracle_shapes.py` that fetch
+v1 escape: add `ingest/gcp_shapes.py` and `ingest/oracle_shapes.py` that fetch
 the machineTypes / Shapes APIs with proper auth, write
 `store/gcp_shapes/<ISO>/` and `store/oracle_shapes/<ISO>/`, and the builders
 join shapes x rates to emit one parquet row per named shape. `flex_rules.json`
@@ -128,7 +128,7 @@ needed to check whether a user's (vCPU, RAM) ask is even a legal configuration.
 - Citations stay honest. A composite result has two real `json_path` entries
   pointing at the actual vCPU and RAM SKUs in the pricing snapshot. The user can
   verify each component independently.
-- v1 upgrade path is clean. Adding fetched shape gates is additive; the
+- v1 upgrade path is clean. Adding fetched shape ingest is additive; the
   rules file does not disappear.
 
 ### Negative
@@ -155,7 +155,7 @@ needed to check whether a user's (vCPU, RAM) ask is even a legal configuration.
 
 ## Alternatives considered
 
-- **(A) Fetch shape catalogs as second gates per provider.** Structurally pure,
+- **(A) Fetch shape catalogs as second ingest per provider.** Structurally pure,
   symmetric with the rest of the project. Rejected for v0 because the auth lift
   (GCP OAuth/scoped key, Oracle full OCI signing) is materially larger than
   anything else in the v0 fetch stack. Holds for v1 as the natural upgrade.

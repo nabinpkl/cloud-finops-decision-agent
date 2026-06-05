@@ -7,7 +7,7 @@ import re
 from functools import lru_cache
 from typing import Any
 
-from gates._shared import TAXONOMY_DIR
+from ingest._shared import TAXONOMY_DIR
 from normalize.schema import IndexRow
 from normalize.taxonomy.loader import canonical_region
 

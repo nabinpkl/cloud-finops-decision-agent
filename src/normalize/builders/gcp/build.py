@@ -26,7 +26,7 @@ from pathlib import Path
 
 import orjson
 
-from gates._shared import PROJECT_ROOT
+from ingest._shared import PROJECT_ROOT
 from normalize.builders import BuilderOutput
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow

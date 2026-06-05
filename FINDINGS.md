@@ -42,4 +42,4 @@ Together with the AWS-schema-from-training entry above, this brackets the real p
 
 **What changed.** AGENTS.md now contains explicit instructions on parsing `fetched_at` as UTC-aware and computing the delta in UTC. This is a freeze-the-judgment fix at the documentation layer. A code-level fix (compute `age_hours` inside the receipt or a shared helper) is more robust but not done yet.
 
-**Open question.** Whether to keep the instruction-only fix and see if it holds across sessions, or to move the computation into the gates so the agent cannot get it wrong. The first preserves the bench's "agent does the work, receipt is the evidence" framing; the second admits that some things are too cheap to be worth letting the agent re-derive.
+**Open question.** Whether to keep the instruction-only fix and see if it holds across sessions, or to move the computation into the ingest so the agent cannot get it wrong. The first preserves the bench's "agent does the work, receipt is the evidence" framing; the second admits that some things are too cheap to be worth letting the agent re-derive.

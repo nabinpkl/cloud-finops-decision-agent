@@ -3,7 +3,7 @@
 
 This project has two modes the agent operates in:
 
-1. **Coding agent mode**: building the project itself (gates, scripts, exploration code). Rules: universal-AGENTS.md and python.md. Nothing project-specific beyond those.
+1. **Coding agent mode**: building the project itself (ingest, scripts, exploration code). Rules: universal-AGENTS.md and python.md. Nothing project-specific beyond those.
 2. **Price / cloud agent mode**: answering pricing queries the user puts to the agent inside this project. Rules: the citation contract below.
 
 The two modes coexist in this file in v0. Post-v0, the price / cloud rules move into their own space (likely `price-agent/AGENTS.md` loaded via slash command or workspace switch) so a coding session in this repo is not weighted down by runtime rules it never uses.
@@ -33,13 +33,13 @@ Direct snapshot walking is still allowed when (a) the normalization layer does n
 
 ### Fetching prices
 
-Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has a gate under `src/gates/` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout. Most gates are single modules; IBM is a package because its catalog walk has multiple steps.
+Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has an ingest module under `src/ingest/` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout. Most ingest modules are single files; IBM is a package because its catalog walk has multiple steps.
 
 Before answering any pricing question:
 
 1. Check `store/<provider>/` for the latest snapshot directory.
 2. If the latest snapshot is under 24 hours old, use it. Do not re-fetch.
-3. Otherwise run `uv run python -m gates.<provider>`. The gate enforces the freshness rule itself; calling it on a fresh store is a no-op that returns the existing receipt.
+3. Otherwise run `uv run python -m ingest.<provider>`. The ingest module enforces the freshness rule itself; calling it on a fresh store is a no-op that returns the existing receipt.
 4. If the user signals they want fresh data ("refetch", "live prices", "as of right now"), run with `--force`.
 
 Never quote a price from training memory. Every number in the response must trace to a snapshot file that exists on disk.

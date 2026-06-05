@@ -1,4 +1,4 @@
-"""Linode (Akamai) pricing gate: single-shot fetch from the public /v4/linode/types endpoint."""
+"""Vultr pricing ingest from the public /v2/plans endpoint."""
 
 from __future__ import annotations
 
@@ -6,11 +6,10 @@ import argparse
 import asyncio
 import json
 from dataclasses import asdict, dataclass
-from datetime import timedelta
 
 import httpx
 
-from gates._shared import (
+from ingest._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
@@ -23,19 +22,18 @@ from gates._shared import (
     sha256_bytes,
     store_root,
 )
+from ingest.config import ingest_settings
 
-PROVIDER = "linode"
-SERVICE = "types"
-TYPES_URL = "https://api.linode.com/v4/linode/types"
-FRESHNESS = timedelta(hours=24)
+PROVIDER = "vultr"
+SERVICE = "plans"
+PLANS_URL = "https://api.vultr.com/v2/plans"
+FRESHNESS = ingest_settings.snapshot_freshness
 
-# Linode's /v4/linode/types is no-auth, single page (~75 types, ~42 KB).
-# The schema is distinctive: each type carries a base price.{hourly,monthly} that
-# applies globally, PLUS an explicit region_prices[] list of per-region overrides
-# (id, hourly, monthly) for regions that price differently from the base. No
-# other provider in v0 publishes per-region overrides like this. The agent must
-# read region_prices[] before quoting a region-specific number; the base price is
-# the fallback for any region not listed.
+# Vultr's /v2/plans is no-auth, no-pagination, single response (~70 KB, ~100 plans).
+# Each plan carries vcpu_count, ram, disk, bandwidth, monthly_cost, hourly_cost,
+# type (vc2/vhf/vhp/etc.), and a locations[] list of region codes where the plan
+# is available. Price is global per plan; locations[] is an availability filter,
+# not a pricing dimension (same shape as Oracle and DigitalOcean).
 
 STORE_ROOT = store_root(PROVIDER)
 
@@ -48,20 +46,24 @@ class Receipt:
     source_url: str
     store_dir: str
     fetched_at: str
-    regions_with_overrides: list[str]
-    type_count: int
+    regions_included: list[str]
+    plan_count: int
     files: list[FileRecord]
     total_size_bytes: int
 
 
-async def fetch_types() -> dict:
+async def fetch_plans() -> dict:
     async with httpx.AsyncClient(follow_redirects=True) as client:
-        resp = await fetch_polite(client, TYPES_URL, timeout=120.0)
+        resp = await fetch_polite(
+            client,
+            PLANS_URL,
+            timeout=ingest_settings.http_timeout_seconds,
+        )
         return resp.json()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch Linode pricing snapshot.")
+    parser = argparse.ArgumentParser(description="Fetch Vultr pricing snapshot.")
     parser.add_argument("--force", action="store_true", help="Bypass the 24h freshness rule.")
     args = parser.parse_args()
 
@@ -74,40 +76,38 @@ def main() -> None:
     snapshot_dir = STORE_ROOT / iso_compact(fetched_at)
 
     try:
-        upstream = asyncio.run(fetch_types())
+        upstream = asyncio.run(fetch_plans())
     except httpx.HTTPError as exc:
         emit(
             {
                 "success": False,
                 "provider": PROVIDER,
                 "error": str(exc),
-                "hint": "Check network connectivity and that api.linode.com is reachable.",
+                "hint": "Check network connectivity and that api.vultr.com is reachable.",
             },
             code=1,
         )
 
-    types_ = upstream.get("data", [])
-    regions_with_overrides = sorted(
-        {rp["id"] for t in types_ for rp in t.get("region_prices", []) if "id" in rp}
-    )
+    plans = upstream.get("plans", [])
+    regions = sorted({loc for plan in plans for loc in plan.get("locations", [])})
 
     snapshot_payload = {
         "fetched_at": iso_z(fetched_at),
-        "source_url": TYPES_URL,
-        "type_count": len(types_),
-        "types": types_,
+        "source_url": PLANS_URL,
+        "plan_count": len(plans),
+        "plans": plans,
     }
     snapshot_bytes = json.dumps(snapshot_payload, indent=2).encode("utf-8")
 
     snapshot_dir.mkdir(parents=True, exist_ok=True)
-    (snapshot_dir / "types.json").write_bytes(snapshot_bytes)
+    (snapshot_dir / "plans.json").write_bytes(snapshot_bytes)
 
     files = [
         FileRecord(
-            name="types.json",
+            name="plans.json",
             hash=sha256_bytes(snapshot_bytes),
             size_bytes=len(snapshot_bytes),
-            source_url=TYPES_URL,
+            source_url=PLANS_URL,
         )
     ]
 
@@ -115,11 +115,11 @@ def main() -> None:
         success=True,
         provider=PROVIDER,
         service=SERVICE,
-        source_url=TYPES_URL,
+        source_url=PLANS_URL,
         store_dir=str(snapshot_dir.relative_to(PROJECT_ROOT)),
         fetched_at=iso_z(fetched_at),
-        regions_with_overrides=regions_with_overrides,
-        type_count=len(types_),
+        regions_included=regions,
+        plan_count=len(plans),
         files=files,
         total_size_bytes=sum(f.size_bytes for f in files),
     )

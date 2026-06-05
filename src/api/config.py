@@ -17,7 +17,7 @@ from typing import Annotated, Literal
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-from gates._shared import PROJECT_ROOT
+from ingest._shared import PROJECT_ROOT
 
 
 class Settings(BaseSettings):

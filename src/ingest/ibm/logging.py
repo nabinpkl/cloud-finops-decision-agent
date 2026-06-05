@@ -1,4 +1,4 @@
-"""IBM gate stderr logging."""
+"""IBM ingest stderr logging."""
 
 from __future__ import annotations
 
@@ -11,4 +11,3 @@ def log(msg: str) -> None:
 
 def on_retry_log(attempt: int, status: int, wait: float) -> None:
     log(f"retry attempt {attempt}: {status}, waiting {wait:.1f}s")
-

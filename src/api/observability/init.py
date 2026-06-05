@@ -15,7 +15,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 from api.config import settings
 from api.observability.jsonl_exporter import JsonlSpanExporter
 from api.observability.provider import infer_provider_name
-from gates._shared import PROJECT_ROOT
+from ingest._shared import PROJECT_ROOT
 
 TRACER_NAME = "cloud-finops-decision-agent"
 

@@ -1,14 +1,14 @@
 """Mocked integration tests for normalize.data_quality.
 
-A tiny on-disk store is built under tmp_path and the PROJECT_ROOT seams that
-store_root() and the report_path computation read are patched to point at it.
+A tiny on-disk store is built under tmp_path and the configured ingest store
+root is patched to point at it.
 This exercises the real age/status logic, including the 24h staleness boundary
 and the UTC-aware parse that AGENTS.md warns about.
 """
 
 from __future__ import annotations
 
-import gates._shared as shared
+import ingest._shared as shared
 import normalize.data_quality as dq
 from helpers import iso_hours_ago, make_snapshot
 
@@ -24,9 +24,9 @@ REPORT = {
 
 
 def _point_at(monkeypatch, tmp_path):
-    monkeypatch.setattr(shared, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(dq, "PROJECT_ROOT", tmp_path)
-    return tmp_path / "store"
+    store = tmp_path / "store"
+    monkeypatch.setattr(shared.ingest_settings, "store_root", str(store))
+    return store
 
 
 def test_fresh_clean_is_ok(monkeypatch, tmp_path):

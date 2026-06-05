@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from gates._shared import PROJECT_ROOT
+from ingest._shared import PROJECT_ROOT
 from normalize.indexing import SUPPORTED_PROVIDERS, build_provider
 
 

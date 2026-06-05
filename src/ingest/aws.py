@@ -1,4 +1,4 @@
-"""AWS EC2 pricing gate: fetch the v0 region set and snapshot to store/aws/<ISO>/."""
+"""AWS EC2 pricing ingest: fetch the v0 region set and snapshot."""
 
 from __future__ import annotations
 
@@ -6,11 +6,10 @@ import argparse
 import asyncio
 import json
 from dataclasses import asdict, dataclass
-from datetime import timedelta
 
 import httpx
 
-from gates._shared import (
+from ingest._shared import (
     FileRecord,
     PROJECT_ROOT,
     emit,
@@ -23,13 +22,14 @@ from gates._shared import (
     sha256_bytes,
     store_root,
 )
+from ingest.config import ingest_settings
 
 PROVIDER = "aws"
 SERVICE = "ec2"
 PRICING_HOST = "https://pricing.us-east-1.amazonaws.com"
 REGION_INDEX_PATH = "/offers/v1.0/aws/AmazonEC2/current/region_index.json"
 REGION_INDEX_URL = PRICING_HOST + REGION_INDEX_PATH
-FRESHNESS = timedelta(hours=24)
+FRESHNESS = ingest_settings.snapshot_freshness
 REGIONS: list[str] = ["us-east-1", "eu-central-1", "ap-southeast-1"]
 
 STORE_ROOT = store_root(PROVIDER)
@@ -50,7 +50,11 @@ class Receipt:
 
 async def fetch_all(regions: list[str]) -> tuple[bytes, dict[str, tuple[bytes, str]]]:
     async with httpx.AsyncClient(follow_redirects=True) as client:
-        index_resp = await fetch_polite(client, REGION_INDEX_URL, timeout=60.0)
+        index_resp = await fetch_polite(
+            client,
+            REGION_INDEX_URL,
+            timeout=ingest_settings.http_short_timeout_seconds,
+        )
         index_bytes = index_resp.content
         index = json.loads(index_bytes)
         offers = index["regions"]
@@ -60,7 +64,11 @@ async def fetch_all(regions: list[str]) -> tuple[bytes, dict[str, tuple[bytes, s
 
         async def one(region: str) -> tuple[str, bytes, str]:
             url = PRICING_HOST + offers[region]["currentVersionUrl"]
-            resp = await fetch_polite(client, url, timeout=600.0)
+            resp = await fetch_polite(
+                client,
+                url,
+                timeout=ingest_settings.http_large_timeout_seconds,
+            )
             return region, resp.content, url
 
         results = await asyncio.gather(*(one(r) for r in regions))

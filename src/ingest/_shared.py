@@ -1,11 +1,10 @@
-"""Shared helpers for provider gates: hashing, timestamps, freshness, env, output, HTTP."""
+"""Shared helpers for provider ingest: hashing, timestamps, freshness, env, output, HTTP."""
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import json
-import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -17,17 +16,12 @@ import httpx
 
 from normalize.snapshot_time import parse_fetched_at
 
+from ingest import config as ingest_config
 
-def _find_project_root(start: Path) -> Path:
-    for candidate in start.parents:
-        if (candidate / "pyproject.toml").is_file():
-            return candidate
-    raise RuntimeError(f"could not find project root above {start}")
-
-
-PROJECT_ROOT = _find_project_root(Path(__file__).resolve())
-SRC_ROOT = PROJECT_ROOT / "src"
-TAXONOMY_DIR = SRC_ROOT / "normalize" / "taxonomy"
+PROJECT_ROOT = ingest_config.PROJECT_ROOT
+SRC_ROOT = ingest_config.SRC_ROOT
+TAXONOMY_DIR = ingest_config.TAXONOMY_DIR
+ingest_settings = ingest_config.ingest_settings
 
 
 @dataclass
@@ -55,7 +49,7 @@ def iso_z(ts: datetime) -> str:
 
 
 def store_root(provider: str) -> Path:
-    return PROJECT_ROOT / "store" / provider
+    return ingest_settings.store_root_path / provider
 
 
 def latest_receipt_path(provider: str) -> Path | None:
@@ -85,6 +79,8 @@ def load_dotenv_if_present() -> None:
         if key.startswith("export "):
             key = key[len("export "):].strip()
         value = value.strip().strip("'").strip('"')
+        import os
+
         os.environ.setdefault(key, value)
 
 
@@ -93,25 +89,33 @@ def emit(payload: dict, code: int = 0) -> NoReturn:
     sys.exit(code)
 
 
-DEFAULT_MAX_RETRIES = 5
-DEFAULT_INITIAL_BACKOFF = 2.0
-DEFAULT_MAX_BACKOFF = 60.0
-
-
 async def fetch_polite(
     client: httpx.AsyncClient,
     url: str,
     *,
     params: dict | None = None,
-    timeout: float = 120.0,
-    max_retries: int = DEFAULT_MAX_RETRIES,
-    initial_backoff: float = DEFAULT_INITIAL_BACKOFF,
-    max_backoff: float = DEFAULT_MAX_BACKOFF,
+    timeout: float | None = None,
+    max_retries: int | None = None,
+    initial_backoff: float | None = None,
+    max_backoff: float | None = None,
     on_retry: Callable[[int, int, float], object] | None = None,
 ) -> httpx.Response:
     # Honor Retry-After when present, exponential backoff otherwise. Retries on 429
     # and 5xx; 4xx other than 429 raise immediately. on_retry(attempt, status, wait)
-    # is optional; gates that want stderr breadcrumbs supply it.
+    # is optional; ingest that want stderr breadcrumbs supply it.
+    timeout = ingest_settings.http_timeout_seconds if timeout is None else timeout
+    max_retries = ingest_settings.http_max_retries if max_retries is None else max_retries
+    initial_backoff = (
+        ingest_settings.http_initial_backoff_seconds
+        if initial_backoff is None
+        else initial_backoff
+    )
+    max_backoff = (
+        ingest_settings.http_max_backoff_seconds
+        if max_backoff is None
+        else max_backoff
+    )
+
     delay = initial_backoff
     for attempt in range(max_retries + 1):
         resp = await client.get(url, params=params, timeout=timeout)

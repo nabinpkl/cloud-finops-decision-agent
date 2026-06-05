@@ -3,14 +3,14 @@
 Review date: 2026-06-04.
 
 Update 2026-06-05: the Python backend has been moved to a `src/` layout.
-Historical path references below that start with `api/`, `gates/`, `normalize/`,
+Historical path references below that start with `api/`, `ingest/`, `normalize/`,
 or `scripts/` now resolve under `src/`. The current FastAPI shape is
 `src/api/main.py` as the ASGI entry point, `src/api/app.py` for app assembly,
 and `src/api/routes/` for deterministic HTTP routes.
 
 Implementation update 2026-06-05: the follow-up clustering pass split the
 assistant transport into `src/api/assistant_transport/`, observability into
-`src/api/observability/`, IBM's gate into `src/gates/ibm/`, index-build support
+`src/api/observability/`, IBM's gate into `src/ingest/ibm/`, index-build support
 into `src/normalize/index_*`, and larger provider row parsing into
 `src/normalize/builders/{azure_rows,gcp_rows}.py`.
 
@@ -170,7 +170,7 @@ than one place:
 
 - `normalize/query.py:501` to `normalize/query.py:502`.
 - `normalize/data_quality.py:132` to `normalize/data_quality.py:134`.
-- `gates/_shared.py:56` to `gates/_shared.py:60` parses receipts for freshness.
+- `ingest/_shared.py:56` to `ingest/_shared.py:60` parses receipts for freshness.
 
 The implementations are currently correct, but duplication around this rule is
 risky because one future edit can reintroduce naive local time.
@@ -181,7 +181,7 @@ Recommended change:
   `normalize/snapshot_time.py`, with `parse_fetched_at()` and
   `snapshot_age_hours()`.
 - Use it in `normalize/query.py`, `normalize/data_quality.py`, and
-  `gates/_shared.py`.
+  `ingest/_shared.py`.
 - Preserve the existing tests that assert the 24h boundary and add one direct
   unit test for a trailing-`Z` timestamp.
 

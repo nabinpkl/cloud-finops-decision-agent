@@ -6,15 +6,15 @@ Citation-backed cloud pricing where the agent draws the UI from a deterministic 
 
 Cloud pricing comparison is a solved problem for humans (CloudPrice, getdeploying, VPSBenchmarks). It is not a solved problem for agents. Existing comparison sites are static, ad-supported, and read with eyes. Existing FinOps tooling (OpenCost, Kubecost, Vantage, CloudZero, Infracost) targets the post-deployment spend question, not the greenfield "where should I deploy" decision. The empty quadrant is pre-purchase, agent-callable, and open. That is the space this repo lives in.
 
-The deeper question underneath: where do agents actually help that deterministic gates do not. Cloud pricing is the testbed because the provider's API is the truth, so any claim the agent makes can be checked by re-fetch. Full framing in `PRD.md`.
+The deeper question underneath: where do agents actually help that deterministic ingestion does not. Cloud pricing is the testbed because the provider's API is the truth, so any claim the agent makes can be checked by re-fetch. Full framing in `PRD.md`.
 
-A second, larger experiment rides on top, and we do not have answers yet. The deterministic gates are themselves prefilters. Someone chose what to fetch, what fields to keep, what regions to include, what to normalize. A model handed only the post-gate view inherits those decisions silently and treats them as neutral ground truth. The open question is whether a model given the raw snapshots, the citation tools, and the freedom to explore can surface insights the prefilter would have missed, and whether it can notice when reality has shifted under a stable workflow. This is closer to post-training or agent-training in spirit than to a single-query benchmark. Self-improvement and surprise-noticing are the most valuable agent behaviors precisely because they cannot be hand-coded; when the world changes but the workflow stays the same, the only thing that matters is whether the model catches it. We do not have a way to measure either yet. What we have is the precondition for trying: every trace visible, every citation auditable, so any noticing the model claims can be checked rather than fabricated. The findings log (`FINDINGS.md`) is where evidence for or against this accumulates.
+A second, larger experiment rides on top, and we do not have answers yet. The deterministic ingest modules are themselves prefilters. Someone chose what to fetch, what fields to keep, what regions to include, what to normalize. A model handed only the post-ingest view inherits those decisions silently and treats them as neutral ground truth. The open question is whether a model given the raw snapshots, the citation tools, and the freedom to explore can surface insights the prefilter would have missed, and whether it can notice when reality has shifted under a stable workflow. This is closer to post-training or agent-training in spirit than to a single-query benchmark. Self-improvement and surprise-noticing are the most valuable agent behaviors precisely because they cannot be hand-coded; when the world changes but the workflow stays the same, the only thing that matters is whether the model catches it. We do not have a way to measure either yet. What we have is the precondition for trying: every trace visible, every citation auditable, so any noticing the model claims can be checked rather than fabricated. The findings log (`FINDINGS.md`) is where evidence for or against this accumulates.
 
 ## How it works
 
 Three layers in one repo. SPEC.md owns the contracts between them.
 
-**Gates** (`src/gates/`) are deterministic Python modules that fetch a provider's compute pricing catalog and save a timestamped snapshot under `store/<provider>/<ISO>/`. One gate per provider, with a polite 429-aware HTTP layer in `src/gates/_shared.py`. They print a JSON receipt to stdout.
+**Ingest** (`src/ingest/`) is the deterministic provider-fetch layer. Each module fetches a provider's compute pricing catalog and saves a timestamped snapshot under `store/<provider>/<ISO>/`. The shared polite, 429-aware HTTP layer lives in `src/ingest/_shared.py`. Ingest modules print a JSON receipt to stdout.
 
 **Normalization layer** (`src/normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
 
@@ -50,12 +50,12 @@ Then open a Claude Code session in this repo and ask a pricing question naturall
 
 ### One credential to provision
 
-AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through public endpoints with no auth. Only GCP gates its catalog behind an API key for quota tracking, even though the data is public. Set `GCP_API_KEY` in `.env` (gitignored) per the instructions in `.env.example`. Provisioning is free and takes about two minutes in the GCP console.
+AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through public endpoints with no auth. Only GCP requires an API key for quota tracking, even though the catalog data is public. Set `GCP_API_KEY` in `.env` (gitignored) per the instructions in `.env.example`. Provisioning is free and takes about two minutes in the GCP console.
 
 ## Layout
 
-- `src/gates/`: per-provider fetchers (aws, gcp, azure, oracle, vultr, linode, ibm in v0; IBM is a package because its catalog walk has multiple steps)
-- `src/gates/_shared.py`: timestamps, freshness check, `.env` loader, 429-aware HTTP helper
+- `src/ingest/`: per-provider fetchers (aws, gcp, azure, oracle, vultr, linode, ibm in v0; IBM is a package because its catalog walk has multiple steps)
+- `src/ingest/_shared.py`: timestamps, freshness check, `.env` loader, 429-aware HTTP helper
 - `store/<provider>/<ISO>/`: timestamped snapshot directories holding raw data files plus `receipt.json`
 - `src/normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
 - `src/normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
@@ -69,6 +69,6 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 ## Status
 
-Gates ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `just compare 4 8 eu-central general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
+Ingest modules ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `just compare 4 8 eu-central general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
 
 The FastAPI query wrapper over `compare()`/`lookup()` (plus `/citation/excerpt` and `/health`) is built and tested. The server-side `/assistant` endpoint is implemented, the runtime port supports both `deepagents` and OpenAI Agents SDK adapters, budget controls protect the model surface, and the frontend renders a `ComparisonTable` tool result. Remaining v0 work is citation depth, prose tuning, browser smoke verification, and the LLM-judge eval over `eval/v0.jsonl`.

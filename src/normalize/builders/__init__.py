@@ -5,7 +5,7 @@ reads the raw JSON files in the snapshot directory and returns the parquet rows
 plus a fingerprint of the source structure.
 
 All schema knowledge for the seven providers lives in this package (per
-ADR 0002). Gates fetch; builders translate."""
+ADR 0002). Ingest fetches; builders translate."""
 
 from __future__ import annotations
 

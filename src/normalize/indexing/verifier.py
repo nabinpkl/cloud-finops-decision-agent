@@ -16,12 +16,13 @@ from typing import Any
 import orjson
 from jsonpath_ng.ext import parse as jsonpath_parse
 
-from gates._shared import PROJECT_ROOT
+from ingest._shared import PROJECT_ROOT
+from normalize.config import normalize_settings
 from normalize.schema import CitationVerification, IndexRow
 
 # Sampling: every snapshot's index is verified on up to N rows, deterministic
 # per (provider, snapshot_iso) so a re-run reproduces the same sample.
-SAMPLE_CAP = 50
+SAMPLE_CAP = normalize_settings.citation_verifier_sample_cap
 
 # Numeric tolerance when comparing the resolved JSON value to the recorded
 # price. Some providers store prices as floats with tiny rounding noise.

@@ -9,7 +9,7 @@ Cloud VM pricing is the chosen bench because it has **authoritative ground truth
 
 ## 2. What it is
 
-- An open, **agent-consumable** comparator that answers "cheapest VM across providers for spec X, right now, with citations." Three layers in one repo: deterministic **gates** that snapshot per-provider catalogs, a deterministic **normalization layer** (Python module + FastAPI + CLI) that maps a spec to ranked candidates with citations, and a server-hosted **agent runtime** that draws the comparison surface from the normalization layer's output. The agent runtime runs in FastAPI behind a framework-neutral port (ADR-0012): `deepagents` is the default adapter and the OpenAI Agents SDK is optional. A **frontend** (`web/`, Next.js + assistant-ui) renders the stream. SPEC.md owns the contracts.
+- An open, **agent-consumable** comparator that answers "cheapest VM across providers for spec X, right now, with citations." Three layers in one repo: deterministic **ingest modules** that snapshot per-provider catalogs, a deterministic **normalization layer** (Python module + FastAPI + CLI) that maps a spec to ranked candidates with citations, and a server-hosted **agent runtime** that draws the comparison surface from the normalization layer's output. The agent runtime runs in FastAPI behind a framework-neutral port (ADR-0012): `deepagents` is the default adapter and the OpenAI Agents SDK is optional. A **frontend** (`web/`, Next.js + assistant-ui) renders the stream. SPEC.md owns the contracts.
 - A **test bench** for one falsifiable claim (§6), instrumented so that "where did the agent earn its cost" is *observable*, not asserted. The normalization layer is the deterministic baseline; the agent is the system under test; eval scores the divergence.
 - Scoped to the **greenfield moment** — choosing where to deploy a fresh project — for the audience that can actually act on the answer.
 
@@ -18,7 +18,7 @@ Cloud VM pricing is the chosen bench because it has **authoritative ground truth
 - Not a product. No growth target, no users to acquire, no revenue.
 - Not another comparison website. Not trying to beat or replace CloudPrice / getdeploying.
 - Not a spend-management / FinOps dashboard for resources already running.
-- Not a model-first wrapper. The model surface is server-hosted, budgeted, traced, and limited to the semantic-judgment layer; the gates and normalization layer remain deterministic.
+- Not a model-first wrapper. The model surface is server-hosted, budgeted, traced, and limited to the semantic-judgment layer; the ingest and normalization layer remain deterministic.
 - Not a forever-research project — it has a defined v0 and a finding to produce (§8–9).
 
 ## 4. What already exists (prior art)
@@ -45,11 +45,11 @@ Test this claim, stated so it can be broken:
 - A layer where the agent reliably beats the deterministic alternative *without* doing irreducible judgment → breaks "everything else is plumbing."
 - The judgment layer turns out to be formalizable (a rule set or lookup captures the equivalences) → then even that layer didn't need a model, and the honest move is to delete the agent.
 
-**A second open question (no answer yet).** The claim above is about where the agent earns its cost on a single query. A larger experiment rides on top, and this repo is the substrate for it. Every gate in `src/gates/` is a prefilter. Someone chose what to fetch, what to drop, what to normalize. A model handed only the post-gate view inherits those decisions silently and answers as if they were neutral. The open question is whether a model given the raw snapshots, citation tools, and exploration freedom can (1) surface insights a deterministic gate would have prefiltered out and (2) notice when reality has shifted under a stable workflow. This is closer in spirit to post-training or agent-training than to a single-query bench. Self-improvement and surprise-noticing are the most valuable agent behaviors precisely because they cannot be hand-coded; when the world breaks but the workflow stays the same, the only thing that matters is whether the model catches it. We do not have a way to measure either yet. What we have is the precondition: every trace visible, every citation auditable, so any noticing the model claims can be checked rather than fabricated. The findings log (`FINDINGS.md`) is where evidence for or against this accumulates.
+**A second open question (no answer yet).** The claim above is about where the agent earns its cost on a single query. A larger experiment rides on top, and this repo is the substrate for it. Every ingest module in `src/ingest/` is a prefilter. Someone chose what to fetch, what to drop, what to normalize. A model handed only the post-ingest view inherits those decisions silently and answers as if they were neutral. The open question is whether a model given the raw snapshots, citation tools, and exploration freedom can (1) surface insights deterministic ingestion would have prefiltered out and (2) notice when reality has shifted under a stable workflow. This is closer in spirit to post-training or agent-training than to a single-query bench. Self-improvement and surprise-noticing are the most valuable agent behaviors precisely because they cannot be hand-coded; when the world breaks but the workflow stays the same, the only thing that matters is whether the model catches it. We do not have a way to measure either yet. What we have is the precondition: every trace visible, every citation auditable, so any noticing the model claims can be checked rather than fabricated. The findings log (`FINDINGS.md`) is where evidence for or against this accumulates.
 
 ## 7. Design principles / invariants
 
-1. **No model in the data layer.** Gates, indexes, taxonomy loading, lookup, comparison, citations, freshness, and drift detection are deterministic plumbing.
+1. **No model in the data layer.** Ingest modules, indexes, taxonomy loading, lookup, comparison, citations, freshness, and drift detection are deterministic plumbing.
 2. **The server-hosted agent is the only judgment layer.** The model sees the normalization output through tools and turns it into an answer; it does not fetch prices directly or bypass citations.
 3. **Memory freezes judgment.** An agent-derived equivalence, once human-approved, becomes a deterministic lookup. The probabilistic step happens once, not per query.
 4. **Trust the data and the human, not the agent.** Every price carries provenance + an `as_of` timestamp + freshness. A citation is a claim about a *past* state, not a guarantee about the present. The human verifies only *novel* mappings.
@@ -60,7 +60,7 @@ Test this claim, stated so it can be broken:
 ## 8. Draft Scope
 
 **v0 — in:**
-- Per-provider deterministic gates writing timestamped snapshots to `store/<provider>/<ISO>/` for AWS, GCP, Azure, Oracle, Vultr, Linode, IBM. Done.
+- Per-provider deterministic ingest writing timestamped snapshots to `store/<provider>/<ISO>/` for AWS, GCP, Azure, Oracle, Vultr, Linode, IBM. Done.
 - Normalization layer (`src/normalize/`): Python module + FastAPI wrapper + `python -m normalize` CLI. `compare(vcpu, ram_gb, region?, family?)` -> cheapest-per-provider ranked, each result carrying provider, instance, monthly/hourly USD, citation block, and `considered_count`. `lookup(provider, instance_type, region)` for single-instance answers. Match policy is closest-larger (>=vCPU and >=RAM).
 - Family taxonomy (`src/normalize/taxonomy/families.json`) and region taxonomy (`src/normalize/taxonomy/regions.json`) — JSON files that encode the cross-provider equivalence, hand-seeded, editable in PRs, citable by the agent when it makes equivalence claims. SPEC.md defines the file shape.
 - Agent runtime in FastAPI: the loop calls `compare` as an in-process tool through a framework-neutral runtime port (ADR-0012). The default adapter is `deepagents`; OpenAI Agents SDK is an optional adapter. The model uses an OpenAI-compatible base URL (provider is config, not a fixed vendor). Frontend (`web/`): Next.js + assistant-ui, frontend-only, renders the agent stream. The shipped v0 custom tool component is `ComparisonTable` for multi-provider ranking; `PriceCard` for single-instance lookup is captured for v1. Staleness handled inline in prose per AGENTS.md.
@@ -80,7 +80,7 @@ Test this claim, stated so it can be broken:
 
 1. The agent UI answers a cheapest-VM-by-spec question end to end, rendering a ComparisonTable whose every row carries a citation that resolves to a real snapshot file on disk.
 2. The bench produces a **finding** on the claim — *including* the case where the claim is falsified, which is a valid and publishable outcome.
-3. The one layer where the agent earns its cost is observable and named, with the plumbing layers (gates, normalization, taxonomy) demonstrably cheaper done deterministically.
+3. The one layer where the agent earns its cost is observable and named, with the plumbing layers (ingest, normalization, taxonomy) demonstrably cheaper done deterministically.
 4. The artifact is **legible**: repo + a real agent-interaction transcript + eval results, so it reads as a build, not a take.
 
 ## 10. Risks

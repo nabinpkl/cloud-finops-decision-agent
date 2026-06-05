@@ -1,6 +1,6 @@
 """Index build orchestrator.
 
-Per ADR 0002 the build seam lives here, not in gates."""
+Per ADR 0002 the build seam lives here, not in ingest."""
 
 from __future__ import annotations
 

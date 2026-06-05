@@ -8,7 +8,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gates._shared import store_root
+from ingest._shared import store_root
 from normalize.indexing.fingerprint import read as fp_read
 from normalize.schema import INDEX_SCHEMA, IndexRow
 

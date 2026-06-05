@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from gates._shared import FileRecord, PROJECT_ROOT, iso_z, sha256_bytes
-from gates.ibm.constants import CATALOG_BASE, CATALOG_FIRST_URL, COMPUTE_SERVICE_NAMES, PROVIDER, SERVICE
+from ingest._shared import FileRecord, PROJECT_ROOT, iso_z, sha256_bytes
+from ingest.ibm.constants import CATALOG_BASE, CATALOG_FIRST_URL, COMPUTE_SERVICE_NAMES, PROVIDER, SERVICE
 
 
 @dataclass

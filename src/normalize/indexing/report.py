@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from normalize.config import normalize_settings
 from normalize.schema import CitationVerification, DriftFlag, IndexReport, IndexRow
 from normalize.taxonomy.loader import UNCLASSIFIED, families_for_provider
 
 # Drift thresholds per ADR 0004.
-ROW_DROP_HARD_FAIL_PCT = 50.0
-ROW_DROP_WARN_PCT = 30.0
-CITATION_FAIL_HARD_FAIL_PCT = 1.0
+ROW_DROP_HARD_FAIL_PCT = normalize_settings.row_drop_hard_fail_pct
+ROW_DROP_WARN_PCT = normalize_settings.row_drop_warn_pct
+CITATION_FAIL_HARD_FAIL_PCT = normalize_settings.citation_fail_hard_fail_pct
 
 
 def build_report(
@@ -146,4 +147,3 @@ def _report_flags(
     if citation.sampled > 0 and citation.failed > 0:
         flags.append(DriftFlag.CITATION_VERIFICATION_PARTIAL)
     return flags
-

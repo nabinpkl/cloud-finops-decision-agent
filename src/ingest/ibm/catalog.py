@@ -6,14 +6,15 @@ import asyncio
 
 import httpx
 
-from gates._shared import fetch_polite, now_utc
-from gates.ibm.constants import (
+from ingest._shared import fetch_polite, now_utc
+from ingest.config import ingest_settings
+from ingest.ibm.constants import (
     CATALOG_BASE,
     CATALOG_FIRST_URL,
     COMPUTE_SERVICE_NAMES,
     PRICING_CONCURRENCY,
 )
-from gates.ibm.logging import log, on_retry_log
+from ingest.ibm.logging import log, on_retry_log
 
 
 async def fetch_all_services(client: httpx.AsyncClient) -> tuple[list[dict], int]:
@@ -23,7 +24,12 @@ async def fetch_all_services(client: httpx.AsyncClient) -> tuple[list[dict], int
     while next_url:
         pages += 1
         t0 = now_utc()
-        resp = await fetch_polite(client, next_url, timeout=120.0, on_retry=on_retry_log)
+        resp = await fetch_polite(
+            client,
+            next_url,
+            timeout=ingest_settings.http_timeout_seconds,
+            on_retry=on_retry_log,
+        )
         dt = (now_utc() - t0).total_seconds()
         page = resp.json()
         chunk = page.get("resources", [])
@@ -41,7 +47,12 @@ async def fetch_children(client: httpx.AsyncClient, service_id: str) -> list[dic
     first_url = f"{CATALOG_BASE}/{service_id}/%2A"
     next_url: str | None = first_url
     while next_url:
-        resp = await fetch_polite(client, next_url, timeout=120.0, on_retry=on_retry_log)
+        resp = await fetch_polite(
+            client,
+            next_url,
+            timeout=ingest_settings.http_timeout_seconds,
+            on_retry=on_retry_log,
+        )
         page = resp.json()
         plans.extend(page.get("resources", []))
         next_url = page.get("next") or None
@@ -53,7 +64,12 @@ async def fetch_plan_pricing(
 ) -> dict:
     url = f"{CATALOG_BASE}/{plan_id}/pricing/deployment"
     async with sem:
-        resp = await fetch_polite(client, url, timeout=120.0, on_retry=on_retry_log)
+        resp = await fetch_polite(
+            client,
+            url,
+            timeout=ingest_settings.http_timeout_seconds,
+            on_retry=on_retry_log,
+        )
     return resp.json()
 
 
@@ -110,4 +126,3 @@ async def fetch_all() -> tuple[list[dict], int, dict[str, dict], int, set[str]]:
         services_by_name = {name: service for service in services if (name := service.get("name"))}
         compute, pricing_calls, regions = await fetch_compute_pricing(client, services_by_name)
     return services, page_count, compute, pricing_calls, regions
-

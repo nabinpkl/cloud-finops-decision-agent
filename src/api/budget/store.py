@@ -11,7 +11,7 @@ from typing import ClassVar
 from api.budget.identity import utc_date_str
 from api.budget.models import SessionUsage
 from api.config import settings
-from gates._shared import PROJECT_ROOT
+from ingest._shared import PROJECT_ROOT
 
 _LOCK = threading.Lock()
 

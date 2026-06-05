@@ -17,7 +17,7 @@ from typing import Iterable
 
 import polars as pl
 
-from gates._shared import PROJECT_ROOT, store_root
+from ingest._shared import store_root
 
 
 def latest_snapshot_dir(provider: str) -> Path | None:
@@ -42,7 +42,7 @@ def latest_snapshot_dir(provider: str) -> Path | None:
 def load_index(provider: str, snapshot_iso: str) -> pl.DataFrame:
     """Read a provider's parquet at a specific snapshot. Cached so repeat
     compare/lookup calls do not re-parse."""
-    parquet = PROJECT_ROOT / "store" / provider / snapshot_iso / "index.parquet"
+    parquet = store_root(provider) / snapshot_iso / "index.parquet"
     return pl.read_parquet(parquet)
 
 

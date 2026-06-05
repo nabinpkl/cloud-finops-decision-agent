@@ -65,7 +65,7 @@ fingerprint_diff:                {added: [...], removed: [...]}
 | Unclassified rows appear | Soft warn. Index built. Rows logged for human review. |
 | Median family price shifts >2x | Soft warn. Build proceeds. Receipt flagged. |
 
-Hard fail keeps yesterday's index usable so the agent does not go dark while the human investigates. This is important: total outage is worse than degraded service with an honest warning.
+Hard fail keeps yesterday's index usable so the agent does not go dark while the human investiingest. This is important: total outage is worse than degraded service with an honest warning.
 
 ### Flag taxonomy
 

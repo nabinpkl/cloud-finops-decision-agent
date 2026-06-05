@@ -1,16 +1,15 @@
-"""IBM gate constants."""
+"""IBM ingest constants."""
 
 from __future__ import annotations
 
-from datetime import timedelta
-
-from gates._shared import store_root
+from ingest._shared import store_root
+from ingest.config import ingest_settings
 
 PROVIDER = "ibm"
 SERVICE = "global-catalog+compute-pricing"
 CATALOG_BASE = "https://globalcatalog.cloud.ibm.com/api/v1"
 CATALOG_FIRST_URL = f"{CATALOG_BASE}?q=kind:service"
-FRESHNESS = timedelta(hours=24)
+FRESHNESS = ingest_settings.snapshot_freshness
 
 COMPUTE_SERVICE_NAMES: list[str] = [
     "is.instance",
@@ -18,6 +17,5 @@ COMPUTE_SERVICE_NAMES: list[str] = [
     "is.dedicated-host",
 ]
 
-PRICING_CONCURRENCY = 8
+PRICING_CONCURRENCY = ingest_settings.ibm_pricing_concurrency
 STORE_ROOT = store_root(PROVIDER)
-

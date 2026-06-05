@@ -15,12 +15,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from gates._shared import PROJECT_ROOT
+from ingest.config import PROJECT_ROOT, ingest_settings
 from normalize.query.loader import latest_snapshot_dir
 from normalize.schema import DriftFlag
 from normalize.snapshot_time import snapshot_age_hours
 
-STALENESS_THRESHOLD_HOURS = 24.0
+STALENESS_THRESHOLD_HOURS = ingest_settings.snapshot_freshness_hours
 
 # Status ordering for the rollup: rightmost wins when comparing.
 _STATUS_ORDER = ["ok", "warn", "stale", "broken"]
@@ -93,7 +93,8 @@ def _quality_for(provider: str) -> ProviderQuality:
     status = _derive_status(flags=flags, age_hours=age_hours)
     if status == "stale":
         human_summary = (
-            f"{provider} snapshot is {age_hours:.1f}h old, past the 24h freshness threshold. "
+            f"{provider} snapshot is {age_hours:.1f}h old, past the "
+            f"{STALENESS_THRESHOLD_HOURS:g}h freshness threshold. "
             f"Re-fetch with `just fetch-force {provider}` for live prices."
         )
 
@@ -102,7 +103,7 @@ def _quality_for(provider: str) -> ProviderQuality:
         snapshot_age_hours=age_hours,
         flags=flags,
         human_summary=human_summary,
-        report_path=str(report_path.relative_to(PROJECT_ROOT)),
+        report_path=_display_path(report_path),
         snapshot_iso=snapshot_dir.name,
         evidence={
             k: report[k]
@@ -129,6 +130,13 @@ def _age_hours_from_receipt(receipt_path: Path) -> float | None:
         return snapshot_age_hours(fetched_at_raw)
     except (json.JSONDecodeError, ValueError, KeyError):
         return None
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _derive_status(

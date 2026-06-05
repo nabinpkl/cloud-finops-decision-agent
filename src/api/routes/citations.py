@@ -7,11 +7,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from gates._shared import PROJECT_ROOT
+from ingest.config import ingest_settings
 from normalize.citations.excerpt import build_excerpt
 from normalize.index import SUPPORTED_PROVIDERS
 
-STORE_ROOT = PROJECT_ROOT / "store"
+STORE_ROOT = ingest_settings.store_root_path
 
 router = APIRouter()
 

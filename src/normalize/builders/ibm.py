@@ -1,7 +1,7 @@
 """IBM index builder.
 
 IBM publishes a global catalog plus per-plan pricing reached via a three-hop
-walk that the gate already collapses into compute.json. The compute.json file
+walk that ingest already collapses into compute.json. The compute.json file
 has top-level shape:
 
     compute.is.instance.{service_id, plans[], pricing.<plan_id>.resources[]}
@@ -34,7 +34,7 @@ from typing import Any
 
 import orjson
 
-from gates._shared import PROJECT_ROOT
+from ingest._shared import PROJECT_ROOT
 from normalize.builders import BuilderOutput
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow
