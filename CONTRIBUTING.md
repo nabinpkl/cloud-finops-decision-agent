@@ -2,9 +2,9 @@
 
 Thanks for taking the time to improve `cloud-finops-decision-agent`. This repo is a Python/uv/just project for citation-backed cloud pricing. The important split is:
 
-- `src/ingest/`: provider fetchers that write raw timestamped snapshots.
-- `src/normalize/`: deterministic index building, taxonomy loading, queries, and citations.
-- `src/api/`: FastAPI app and server-side agent runtime.
+- `backend/src/ingest/`: provider fetchers that write raw timestamped snapshots.
+- `backend/src/normalize/`: deterministic index building, taxonomy loading, queries, and citations.
+- `backend/src/api/`: FastAPI app and server-side agent runtime.
 - `web/`: frontend-only Next.js UI.
 
 Read `README.md`, `SPEC.md`, and `AGENTS.md` before larger changes. `SPEC.md` owns data/API contracts. `AGENTS.md` owns agent behavior and citation rules.
@@ -12,7 +12,7 @@ Read `README.md`, `SPEC.md`, and `AGENTS.md` before larger changes. `SPEC.md` ow
 ## Setup
 
 ```sh
-uv sync
+uv sync --project backend
 cp .env.example .env
 just check
 ```
@@ -41,7 +41,7 @@ just test-e2e
 
 ## Provider Ingest Changes
 
-Provider fetchers live in `src/ingest/`. Keep ingest deterministic: fetch provider data, write raw snapshot files plus `receipt.json`, and print the receipt. Do not put model calls or semantic judgment in ingest code.
+Provider fetchers live in `backend/src/ingest/`. Keep ingest deterministic: fetch provider data, write raw snapshot files plus `receipt.json`, and print the receipt. Do not put model calls or semantic judgment in ingest code.
 
 Use the shared fetch/storage helpers where possible, respect the freshness behavior, and document any provider-specific narrowing in `README.md`, `SPEC.md`, or an ADR when it changes the data contract.
 
@@ -55,13 +55,13 @@ just fetch-all
 
 ## Normalize Builder Changes
 
-Normalize builders turn raw provider snapshots into comparable indexed rows. Keep provider-specific translation close to the relevant builder under `src/normalize/builders/`.
+Normalize builders turn raw provider snapshots into comparable indexed rows. Keep provider-specific translation close to the relevant builder under `backend/src/normalize/builders/`.
 
 When changing builders:
 
 - Preserve citation fields: `source_url`, `store_path`, `json_path`, `fetched_at`, and `age_hours`.
 - Keep prices traceable to a specific snapshot file and JSON path.
-- Update taxonomy JSON under `src/normalize/taxonomy/` through reviewable diffs.
+- Update taxonomy JSON under `backend/src/normalize/taxonomy/` through reviewable diffs.
 - Rebuild the affected provider index with `just index <provider>` or `just index-force <provider>`.
 - Add or update tests for parsing, citations, and query behavior.
 
@@ -91,4 +91,3 @@ Before opening a PR:
 - Confirm no secrets, local `.env`, traces, budget DBs, or large generated snapshots are included.
 
 Contributions are accepted under the Apache License 2.0 in `LICENSE`.
-

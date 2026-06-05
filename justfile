@@ -1,58 +1,56 @@
 set dotenv-load := true
 
+backend := "backend"
+backend_just := "backend/justfile"
+
 default:
     @just --list
 
+# List backend recipes.
+backend:
+    just -f {{backend_just}} -d {{backend}} --list
+
 # Fetch one provider's full compute pricing catalog into store/<provider>/.
 fetch provider:
-    uv run python -m ingest.{{provider}}
+    just -f {{backend_just}} -d {{backend}} fetch {{provider}}
 
 # Fetch every provider in the v0 set.
-fetch-all: (fetch "aws") (fetch "gcp") (fetch "azure") (fetch "oracle") (fetch "vultr") (fetch "linode") (fetch "ibm")
+fetch-all:
+    just -f {{backend_just}} -d {{backend}} fetch-all
 
 # Force a refetch ignoring the 24h freshness rule.
 fetch-force provider:
-    uv run python -m ingest.{{provider}} --force
+    just -f {{backend_just}} -d {{backend}} fetch-force {{provider}}
 
 # Build the parquet index for one provider's latest snapshot.
 index provider:
-    uv run python -m normalize.index {{provider}}
+    just -f {{backend_just}} -d {{backend}} index {{provider}}
 
 # Force-rebuild the index even if index.parquet already exists.
 index-force provider:
-    uv run python -m normalize.index {{provider}} --force
+    just -f {{backend_just}} -d {{backend}} index-force {{provider}}
 
 # Build indexes for every provider that has a supported builder.
-index-all: (index "linode") (index "vultr") (index "azure") (index "ibm") (index "aws") (index "gcp") (index "oracle")
+index-all:
+    just -f {{backend_just}} -d {{backend}} index-all
 
 # Compare cheapest matching instance across providers.
-# Example: just compare 4 8 eu-central general-purpose
 compare vcpu ram region family="any":
-    uv run python -m normalize compare --vcpu {{vcpu}} --ram {{ram}} --region {{region}} --family {{family}}
+    just -f {{backend_just}} -d {{backend}} compare {{vcpu}} {{ram}} {{region}} {{family}}
 
 # Look up a single instance type's price.
-# Example: just lookup aws m5.xlarge eu-central-1
 lookup provider instance_type region:
-    uv run python -m normalize lookup --provider {{provider}} --instance-type {{instance_type}} --region {{region}}
+    just -f {{backend_just}} -d {{backend}} lookup {{provider}} {{instance_type}} {{region}}
 
-# Run the FastAPI app (compare/lookup/citation excerpt + agent). Port from API_PORT (.env), default 8000.
+# Run the FastAPI app.
 api:
-    #!/usr/bin/env bash
-    # Same shadowing trap as `smoke`: `set dotenv-load` pre-resolves
-    # PROVIDER_*/MODEL_NAME from .env, but just's dotenv parser does not honor
-    # the ${VAR:-default} POSIX form, so it exports them empty and that shadows
-    # pydantic-settings (env wins over the .env file), leaving the agent model
-    # unconfigured under `just dev` / `just infcl-dev`. Unset them so pydantic
-    # does its own python-dotenv interpolation, resolving ${OPENROUTER_*} from
-    # the infisical-injected environment.
-    unset PROVIDER_BASE_URL PROVIDER_API_KEY MODEL_NAME
-    uv run uvicorn api.main:app --reload --port ${API_PORT:-8000}
+    just -f {{backend_just}} -d {{backend}} api
 
 # Run the frontend dev server (Next.js + assistant-ui) on localhost:3000.
 web:
     pnpm --dir web dev
 
-# Wrap `just dev` with `infisical run` so secrets come from Infisical (one-time: `infisical login` + `infisical init`). INFISICAL_ENV picks the slug, default dev.
+# Wrap `just dev` with Infisical. INFISICAL_ENV picks the slug, default dev.
 infcl-dev:
     infisical run --env=${INFISICAL_ENV:-dev} -- just dev
 
@@ -70,33 +68,30 @@ dev:
     just web &
     wait
 
-# Drive one live agent turn and print token deltas. Runtime from AGENT_RUNTIME. Expects creds in env (use `infisical run -- just smoke`).
+# Drive one live backend agent turn and print token deltas.
 smoke:
-    #!/usr/bin/env bash
-    # `set dotenv-load` makes just pre-resolve PROVIDER_*/MODEL_NAME from .env,
-    # but just's dotenv parser does not honor the ${VAR:-default} POSIX form, so
-    # it exports PROVIDER_BASE_URL empty and that shadows pydantic-settings
-    # (env wins over the .env file). Unset them here so pydantic does its own
-    # python-dotenv interpolation, which resolves ${OPENROUTER_*} from the
-    # infisical-injected environment.
-    unset PROVIDER_BASE_URL PROVIDER_API_KEY MODEL_NAME
-    uv run python -m scripts.agent_smoke
+    just -f {{backend_just}} -d {{backend}} smoke
 
-# Lint with ruff.
+# Run offline prompt/tool/citation evals. No model credentials or snapshots required.
+eval:
+    just -f {{backend_just}} -d {{backend}} eval
+
+# Lint backend Python.
 lint:
-    uv run ruff check .
+    just -f {{backend_just}} -d {{backend}} lint
 
-# Type-check with ty.
+# Type-check backend Python.
 typecheck:
-    uv run ty check
+    just -f {{backend_just}} -d {{backend}} typecheck
 
-# Run the mocked integration tests (fast, no store/ dependency).
+# Run backend mocked integration tests.
 test:
-    uv run pytest -m "not e2e"
+    just -f {{backend_just}} -d {{backend}} test
 
-# Run the real-file end-to-end tests (needs a populated store/).
+# Run backend real-file end-to-end tests.
 test-e2e:
-    uv run pytest -m e2e
+    just -f {{backend_just}} -d {{backend}} test-e2e
 
-# Full gate: lint, type-check, mocked tests. e2e is separate (needs a store).
-check: lint typecheck test
+# Full gate: backend lint/type/test/eval. Frontend build remains separate.
+check:
+    just -f {{backend_just}} -d {{backend}} check

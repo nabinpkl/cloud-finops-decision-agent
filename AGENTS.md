@@ -19,7 +19,7 @@ In coding agent mode, read the repo-local context before editing:
 
 Coding rules:
 
-- Keep Python under `src/` with absolute imports.
+- Keep Python under `backend/src/` with absolute imports.
 - Use type hints for new Python code.
 - Prefer dataclasses or Pydantic models for structured data over untyped dict contracts.
 - Use `uv` for Python dependencies and `just check` for local verification.
@@ -42,7 +42,7 @@ Direct snapshot walking is still allowed when (a) the normalization layer does n
 
 ### Fetching prices
 
-Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has an ingest module under `src/ingest/` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout. Most ingest modules are single files; IBM is a package because its catalog walk has multiple steps.
+Provider price catalogs live as timestamped snapshot directories at `store/<provider>/<ISO>/`. Seven providers in v0: `aws`, `gcp`, `azure`, `oracle`, `vultr`, `linode`, `ibm`. Each has an ingest module under `backend/src/ingest/` that fetches the catalog, writes one or more data files plus a `receipt.json`, and prints the receipt to stdout. Most ingest modules are single files; IBM is a package because its catalog walk has multiple steps.
 
 Before answering any pricing question:
 
@@ -91,7 +91,7 @@ Do not use `datetime.now()` without a `tz=` argument: it returns naive local tim
 
 ### Equivalence claims
 
-Equivalence between provider instance types (claiming AWS `m5.xlarge` and GCP `n2-standard-4` are interchangeable for a "4 vCPU general purpose" spec) is captured in `src/normalize/taxonomy/families.json` for the cases v0 has hand-seeded. When quoting from the taxonomy, surface the `dimensions_matched` and `dimensions_not_normalized` fields in prose so the equivalence basis is visible.
+Equivalence between provider instance types (claiming AWS `m5.xlarge` and GCP `n2-standard-4` are interchangeable for a "4 vCPU general purpose" spec) is captured in `backend/src/normalize/taxonomy/families.json` for the cases v0 has hand-seeded. When quoting from the taxonomy, surface the `dimensions_matched` and `dimensions_not_normalized` fields in prose so the equivalence basis is visible.
 
 When the user's question reaches a spec not covered by the taxonomy, the equivalence is judgment, not lookup. Cite the snapshot fields used to justify it, name the dimensions the equivalence holds on (vCPU count, RAM, CPU class) and the dimensions it does not (CPU generation, baseline performance, network bandwidth, included storage), and flag that the equivalence is agent-derived rather than from the taxonomy. v1 will queue agent-derived equivalences for PR review (`propose_equivalence`); for v0, surfacing them transparently in prose is sufficient.
 

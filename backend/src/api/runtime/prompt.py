@@ -11,7 +11,10 @@ from pathlib import Path
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "prompts" / "finops_agent.md").is_file():
+            return candidate
+    raise RuntimeError("could not find repo root containing prompts/finops_agent.md")
 
 
 INSTRUCTIONS = (_repo_root() / "prompts" / "finops_agent.md").read_text(

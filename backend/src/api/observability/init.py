@@ -32,7 +32,7 @@ def get_tracer() -> otel_trace.Tracer:
 
 
 def init_observability(app: FastAPI) -> None:
-    if _Init.done or not settings.otel_enabled:
+    if _Init.done:
         return
 
     resource = Resource.create({"service.name": TRACER_NAME})
@@ -63,4 +63,3 @@ def init_observability(app: FastAPI) -> None:
 def _resolve_jsonl_path(raw: str) -> Path:
     path = Path(raw)
     return path if path.is_absolute() else PROJECT_ROOT / path
-

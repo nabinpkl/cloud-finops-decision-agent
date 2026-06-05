@@ -14,9 +14,9 @@ A second, larger experiment rides on top, and we do not have answers yet. The de
 
 Three layers in one repo. SPEC.md owns the contracts between them.
 
-**Ingest** (`src/ingest/`) is the deterministic provider-fetch layer. Each module fetches a provider's compute pricing catalog and saves a timestamped snapshot under `store/<provider>/<ISO>/`. The shared polite, 429-aware HTTP layer lives in `src/ingest/_shared.py`. Ingest modules print a JSON receipt to stdout.
+**Ingest** (`backend/src/ingest/`) is the deterministic provider-fetch layer. Each module fetches a provider's compute pricing catalog and saves a timestamped snapshot under `store/<provider>/<ISO>/`. The shared polite, 429-aware HTTP layer lives in `backend/src/ingest/_shared.py`. Ingest modules print a JSON receipt to stdout.
 
-**Normalization layer** (`src/normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
+**Normalization layer** (`backend/src/normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
 
 **Agent runtime** runs server-side in FastAPI behind a framework-neutral port (ADR-0012). The default adapter is the LangChain-backed `deepagents` selector; the OpenAI Agents SDK remains an optional runtime. Both call the normalization layer in-process through the same tool body, on a model wired to an OpenAI-compatible base URL (the provider is a `.env` knob, not a fixed vendor). The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure. **Frontend** (`web/`) is a frontend-only Next.js app using `assistant-ui` as the chat shell; it renders the agent's stream and holds no agent logic or model keys. The shipped custom component is `ComparisonTable`; single-instance `PriceCard` stays captured for v1.
 
@@ -38,7 +38,7 @@ Post-v0 the price / cloud rules split into their own space (likely `price-agent/
 ## Running it
 
 ```
-uv sync                     # one-time: create .venv and install deps
+uv sync --project backend   # one-time: create backend/.venv and install deps
 cp .env.example .env        # one-time: fill in GCP_API_KEY (see below)
 
 just fetch-all              # fetch fresh snapshots for all providers
@@ -54,12 +54,12 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 
 ## Layout
 
-- `src/ingest/`: per-provider fetchers (aws, gcp, azure, oracle, vultr, linode, ibm in v0; IBM is a package because its catalog walk has multiple steps)
-- `src/ingest/_shared.py`: timestamps, freshness check, `.env` loader, 429-aware HTTP helper
+- `backend/src/ingest/`: per-provider fetchers (aws, gcp, azure, oracle, vultr, linode, ibm in v0; IBM is a package because its catalog walk has multiple steps)
+- `backend/src/ingest/_shared.py`: timestamps, freshness check, `.env` loader, 429-aware HTTP helper
 - `store/<provider>/<ISO>/`: timestamped snapshot directories holding raw data files plus `receipt.json`
-- `src/normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
-- `src/normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
-- `src/api/`: FastAPI. `main.py` is the ASGI entry point, `app.py` assembles middleware and routers, `routes/` holds deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`), and `assistant_transport/` holds the streaming chat endpoint. The server-side agent runtime port (`deepagents` default, OpenAI Agents SDK optional) lives under `runtime/`.
+- `backend/src/normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
+- `backend/src/normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
+- `backend/src/api/`: FastAPI. `main.py` is the ASGI entry point, `app.py` assembles middleware and routers, `routes/` holds deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`), and `assistant_transport/` holds the streaming chat endpoint. The server-side agent runtime port (`deepagents` default, OpenAI Agents SDK optional) lives under `runtime/`.
 - `web/`: frontend-only Next.js + assistant-ui app that renders the agent's stream
 - `prompts/`: production prompts shared by all agent runtime adapters
 - `EVALS.md`: planned offline and live eval suite for prompt/tool/citation behavior

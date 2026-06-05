@@ -1,7 +1,9 @@
 """Central config for the API process: HTTP surface knobs and the agent's model
-provider. Per the no-hardcoded-config rule, every value that changes between
-environments lives here and is sourced from the environment / .env, never as a
-literal in a source file.
+provider.
+
+Defaults live in this settings object as reviewable code constants. Values that
+actually change between environments are sourced from environment variables or
+the repo-root .env file.
 
 The agent provider (`provider_*`, `model_name`) is deliberately not vendor-fixed:
 it points at any OpenAI-compatible base URL (ADR-0009). The provider fields
@@ -52,9 +54,9 @@ class Settings(BaseSettings):
     # Off by default; non-thinking models do not need it.
     langchain_reasoning_roundtrip: bool = False
 
-    # Observability (ADR-0010): JSONL OTel traces on disk so any OTel-aware
-    # backend can ingest them later without re-instrumenting. All optional.
-    otel_enabled: bool = True
+    # Observability (ADR-0010): JSONL OTel traces are always enabled so the
+    # agent surface is auditable in every runtime. Export destination and
+    # content capture are still deployment knobs.
     # Resolved relative to PROJECT_ROOT when relative; absolute paths are kept
     # as-is. The exporter creates the parent directory on first export.
     otel_jsonl_path: str = "var/traces/traces.jsonl"

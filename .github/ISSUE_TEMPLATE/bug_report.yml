@@ -68,7 +68,7 @@ body:
       label: Reproduction steps
       description: List the smallest steps someone can run from a fresh checkout.
       placeholder: |
-        1. `uv sync`
+        1. `uv sync --project backend`
         2. `cp .env.example .env`
         3. `just fetch aws`
         4. `just check`

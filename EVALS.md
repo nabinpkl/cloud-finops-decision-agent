@@ -58,7 +58,7 @@ These use fake runtime/model behavior and fixture tool results. They should not 
 
 ### Layer 3: Transcript Compliance Evals
 
-Create `evals/cases/*.jsonl` with inputs, fake tool results, and expected behavioral checks. A local grader should inspect the final answer with deterministic rules first:
+Create `backend/evals/cases/*.jsonl` with inputs, fake tool results, and expected behavioral checks. A local grader should inspect the final answer with deterministic rules first:
 
 - Price mentions must match prices in the supplied tool result.
 - Each price mention must have nearby `snapshot`.
@@ -80,11 +80,11 @@ Live evals should save enough evidence to debug regressions: prompt version, run
 ## Proposed Files
 
 - `prompts/finops_agent.md`: canonical production system prompt.
-- `evals/README.md`: how to run evals and read results.
-- `evals/cases/v0.jsonl`: model-facing scenarios.
-- `src/evals/`: Python eval runner and graders.
-- `tests/test_prompt_loading.py`: prompt source-of-truth test.
-- `tests/test_eval_graders.py`: deterministic grader tests.
+- `backend/evals/README.md`: how to run evals and read results.
+- `backend/evals/cases/v0.jsonl`: model-facing scenarios.
+- `backend/src/evals/`: Python eval runner and graders.
+- `backend/tests/test_prompt_loading.py`: prompt source-of-truth test.
+- `backend/tests/test_eval_graders.py`: deterministic grader tests.
 - `just eval`: fast offline evals using fixtures.
 - `just eval-smoke`: one live model smoke eval.
 

@@ -16,8 +16,9 @@ def _find_project_root(start: Path) -> Path:
     raise RuntimeError(f"could not find project root above {start}")
 
 
-PROJECT_ROOT = _find_project_root(Path(__file__).resolve())
-SRC_ROOT = PROJECT_ROOT / "src"
+BACKEND_ROOT = _find_project_root(Path(__file__).resolve())
+PROJECT_ROOT = BACKEND_ROOT.parent
+SRC_ROOT = BACKEND_ROOT / "src"
 TAXONOMY_DIR = SRC_ROOT / "normalize" / "taxonomy"
 
 

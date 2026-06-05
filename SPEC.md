@@ -17,8 +17,8 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     └────────────────┬─────────────────┘
                                      │ HTTP (chat stream)
                     ┌────────────────▼─────────────────┐
-                    │  Backend (src/api +              │
-                    │  src/normalize)                  │
+                    │  Backend (backend/src/api +              │
+                    │  backend/src/normalize)                  │
                     │  FastAPI hosts two concerns:     │
                     │  (1) agent runtime behind a      │
                     │      neutral port: deepagents    │
@@ -35,20 +35,20 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     └────────────────┬─────────────────┘
                                      │ filesystem
                     ┌────────────────▼─────────────────┐
-                    │  Ingest (src/ingest/)             │
+                    │  Ingest (backend/src/ingest/)             │
                     │  Per-provider fetchers writing   │
                     │  timestamped snapshots.          │
                     │  Already in place.               │
                     └──────────────────────────────────┘
 
-                    Eval (eval/) runs scenarios end-to-end through the agent
+                    Eval (backend/evals/) runs scenarios end-to-end through the agent
                     runtime, with an LLM-as-judge scoring two lanes: citation
                     correctness and staleness / refusal behavior.
 ```
 
 ## Normalization layer
 
-Single implementation in Python under `src/normalize/`, callable three ways: imported as a module, hit over HTTP via FastAPI, or run as `python -m normalize` from the shell through the project environment. Same input schema, same output schema, same citation block.
+Single implementation in Python under `backend/src/normalize/`, callable three ways: imported as a module, hit over HTTP via FastAPI, or run as `python -m normalize` from the shell through the backend project environment. Same input schema, same output schema, same citation block.
 
 ### Python module
 
@@ -241,7 +241,7 @@ Every response carries a `data_quality` block per ADR 0005. The shape:
 
 ## Taxonomies
 
-Two JSON files in `src/normalize/taxonomy/`, editable in PRs, readable by the agent at runtime so it can cite the file when it explains an equivalence.
+Two JSON files in `backend/src/normalize/taxonomy/`, editable in PRs, readable by the agent at runtime so it can cite the file when it explains an equivalence.
 
 ### `families.json`
 
@@ -318,7 +318,7 @@ The stream bridge runs over assistant-ui's assistant-transport protocol: the fro
 
 ## Eval
 
-`eval/v0.jsonl` carries 20–30 hand-written scenarios. The `python -m eval` runner replays each scenario through the deployed agent UI (or the agent runtime directly), captures the full transcript including tool calls and rendered components, and asks an LLM judge to score it on two lanes:
+`backend/evals/cases/v0.jsonl` carries hand-written scenarios. The offline `python -m evals` runner grades canned tool calls, tool results, and final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
 
 ### Lane 1: citation correctness
 
@@ -348,18 +348,18 @@ The judge confirms:
 ### Running
 
 ```
-python -m eval --judge claude-opus-4-7 --scenarios eval/v0.jsonl
+python -m evals --cases evals/cases/v0.jsonl
 ```
 
-Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs because scenarios are static; judge non-determinism is the only variance source and is tracked across runs in `eval/runs/`.
+Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs because scenarios are static; judge non-determinism is the only variance source and is tracked across runs in `var/evals/`.
 
 ## Build sequence
 
-1. `src/normalize/taxonomy/families.json` and `regions.json` — the load-bearing data shapes.
-2. `src/normalize/` Python module + CLI — operates against snapshots already on disk.
+1. `backend/src/normalize/taxonomy/families.json` and `regions.json` — the load-bearing data shapes.
+2. `backend/src/normalize/` Python module + CLI — operates against snapshots already on disk.
 3. FastAPI query wrapper (`compare`/`lookup`/`excerpt`/`health`) — thin layer over the module.
 4. Agent runtime in FastAPI behind `api.runtime.AgentRuntime`: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
 5. `web/` Next.js + assistant-ui frontend consuming the `/assistant` stream and rendering the `ComparisonTable` tool component.
-6. `eval/v0.jsonl` + runner.
+6. `backend/evals/cases/v0.jsonl` + runner.
 
 Each step is independently runnable. Steps 2 and 3 ship a usable comparator before the agent or UI exists; the frontend is the last product layer, not the first.
