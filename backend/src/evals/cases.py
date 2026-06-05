@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_CASES_PATH = Path("evals/cases/v0.jsonl")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_CASES_PATH = PROJECT_ROOT / "evals/cases/v0.jsonl"
 
 
 @dataclass(frozen=True)

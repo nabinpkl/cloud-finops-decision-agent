@@ -41,7 +41,7 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     │  Already in place.               │
                     └──────────────────────────────────┘
 
-                    Eval (backend/evals/) runs scenarios end-to-end through the agent
+                    Eval (evals/) runs scenarios end-to-end through the agent
                     runtime, with an LLM-as-judge scoring two lanes: citation
                     correctness and staleness / refusal behavior.
 ```
@@ -318,7 +318,7 @@ The stream bridge runs over assistant-ui's assistant-transport protocol: the fro
 
 ## Eval
 
-`backend/evals/cases/v0.jsonl` carries hand-written scenarios. The offline `python -m evals` runner grades canned tool calls, tool results, and final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
+`evals/cases/v0.jsonl` carries hand-written scenarios. The offline `python -m evals` runner grades canned tool calls, tool results, and final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
 
 ### Lane 1: citation correctness
 
@@ -360,6 +360,6 @@ Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs 
 3. FastAPI query wrapper (`compare`/`lookup`/`excerpt`/`health`) — thin layer over the module.
 4. Agent runtime in FastAPI behind `api.runtime.AgentRuntime`: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
 5. `frontend/` Next.js + assistant-ui frontend consuming the `/assistant` stream and rendering the `ComparisonTable` tool component.
-6. `backend/evals/cases/v0.jsonl` + runner.
+6. `evals/cases/v0.jsonl` + runner.
 
 Each step is independently runnable. Steps 2 and 3 ship a usable comparator before the agent or UI exists; the frontend is the last product layer, not the first.

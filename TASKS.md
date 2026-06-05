@@ -49,8 +49,8 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 
 ## Phase 5: eval
 
-- R15. `eval/v0.jsonl`: hand-written scenarios across cheapest-ranking, single-lookup, stale-data, and out-of-taxonomy-refusal lanes. State the assertion per scenario.
-- R16. `eval/` runner: replay scenarios through the slice, LLM judge scores citation correctness (excerpt resolves to quote) plus staleness and refusal behavior. Assert composite `contribution_usd` sum equals `hourly_usd` per ADR-0007.
+- R15. `evals/cases/v0.jsonl`: hand-written scenarios across cheapest-ranking, single-lookup, stale-data, and out-of-taxonomy-refusal lanes. State the assertion per scenario.
+- R16. `backend/src/evals/` runner: replay scenarios through the slice, LLM judge scores citation correctness (excerpt resolves to quote) plus staleness and refusal behavior. Assert composite `contribution_usd` sum equals `hourly_usd` per ADR-0007.
 
 (R17 to R19 reserved so v1 cross-references survive.)
 
@@ -85,6 +85,6 @@ R11  pending     pending     CompositeCitation component
 R12  pending     pending     excerpt-on-click hunk UI
 R13  pending     pending     staleness banner + refetch
 R14  pending     pending     agent prose tuning
-R15  pending     pending     eval/v0.jsonl scenarios
+R15  pending     pending     evals/cases/v0.jsonl scenarios
 R16  pending     pending     eval runner + LLM judge
 ```
