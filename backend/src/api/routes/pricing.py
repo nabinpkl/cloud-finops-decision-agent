@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
-from api.wire import wire_response
+from normalize.wire import wire_response
 from normalize.query import compare, lookup
 
 router = APIRouter()

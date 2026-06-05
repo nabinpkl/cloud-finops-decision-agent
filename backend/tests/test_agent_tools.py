@@ -1,16 +1,16 @@
-"""Mocked tests for the agent's `compare` tool logic (api/tools_core.py).
+"""Mocked tests for the agent's `compare` tool logic.
 
-The neutral tool body lives in `api/tools_core.py` (ADR-0012); the OpenAI-agents
-binding in `api/tools.py` and the future DeepAgents binding both wrap it. The
-agent shares its citation translation with the HTTP surface via `api/wire.py`:
-every tool result the model sees has its `store_path` stripped and replaced with
-a logical `snapshot` ref. These tests pin that contract using the same canned
-compare payloads as test_integration_api.py.
+The neutral tool body lives in `agent.tools.pricing` (ADR-0012); the runtime
+adapters wrap it in framework-specific tool bindings. The agent shares its
+citation translation with the HTTP surface via `normalize.wire`: every tool
+result the model sees has its `store_path` stripped and replaced with a logical
+`snapshot` ref. These tests pin that contract using the same canned compare
+payloads as test_integration_api.py.
 """
 
 from __future__ import annotations
 
-import api.agent_tools.core as tools_core
+import agent.tools.pricing as tools_core
 from test_integration_api import CANNED_COMPARE
 
 

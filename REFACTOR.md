@@ -33,7 +33,7 @@ The live code and `pyproject.toml` say the default runtime is LangChain via the
   `langchain-openai` core dependencies.
 - `pyproject.toml:27` to `pyproject.toml:33` moves `openai-agents` to an
   optional extra.
-- `api/config.py:42` to `api/config.py:48` sets `agent_runtime` default to
+- `app_config/__init__.py` sets `agent_runtime` default to
   `deepagents`.
 - `architecture-decisions/0012-agent-runtime-port.md` records this as the
   accepted amendment.
@@ -43,16 +43,16 @@ But the user-facing docs still describe OpenAI Agents SDK as the runtime:
 - `README.md:21` and `README.md:62` say the server-side runtime is OpenAI
   Agents SDK.
 - `README.md:74` says the agent runtime and frontend are still next work,
-  although `api/transport.py`, `api/runtime/*`, and
-  `web/components/tools/comparison-table.tsx` exist.
+  although `api/assistant_transport/`, `agent/runtime/*`, and
+  `frontend/components/tools/comparison-table.tsx` exist.
 - `PRD.md:12` and `PRD.md:65` still lock the v0 agent runtime to OpenAI Agents
   SDK.
 - `SPEC.md:297` to `SPEC.md:314` describes the stream bridge as OpenAI Agents
   SDK work.
 - `TASKS.md:36` to `TASKS.md:38` still lists the compare tool, stream bridge,
-  and `ComparisonTable` as pending; the code now has `api/tools_core.py`,
-  `api/transport.py`, `api/runtime/deepagents.py`, and
-  `web/components/tools/comparison-table.tsx`.
+  and `ComparisonTable` as pending; the code now has `agent/tools/pricing.py`,
+  `api/assistant_transport/`, `agent/runtime/deepagents.py`, and
+  `frontend/components/tools/comparison-table.tsx`.
 
 This is now more than cosmetic drift. The docs are the first surface another
 agent will load before editing, so stale runtime docs push work back toward the
@@ -75,10 +75,10 @@ Severity: high.
 calling agent is outside the server. The implemented architecture now runs the
 agent loop inside FastAPI:
 
-- `api/transport.py:1` to `api/transport.py:36` documents `/assistant` as the
+- `api/assistant_transport/` documents `/assistant` as the
   server-side assistant transport endpoint.
-- `api/runtime/types.py` defines the neutral server-side runtime port.
-- `api/runtime/deepagents.py` and `api/runtime/openai_agents.py` run model
+- `agent/runtime/types.py` defines the neutral server-side runtime port.
+- `agent/runtime/deepagents.py` and `agent/runtime/openai_agents/` run model
   calls behind that port.
 
 That is a real product thesis change. The repo can still be a deterministic
@@ -217,15 +217,15 @@ Recommended change:
   for one commit; because this is v0, deleting the facade in the same arc is
   better once callers are moved.
 
-### 7. `web/package.json` uses `latest` for core UI packages
+### 7. `frontend/package.json` uses `latest` for core UI packages
 
 Severity: medium.
 
-`web/package.json:12` and `web/package.json:13` set
+`frontend/package.json:12` and `frontend/package.json:13` set
 `@assistant-ui/react` and `@assistant-ui/react-markdown` to `latest`.
 
 That conflicts with repeatable builds and with the code's own comments about
-version-specific assistant-ui behavior, for example `web/lib/session-limit.ts`
+version-specific assistant-ui behavior, for example `frontend/lib/session-limit.ts`
 documents a workaround for the current assistant-ui version. A fresh install
 can silently pull a different assistant-ui API surface while leaving the source
 comments and workarounds behind.
@@ -233,7 +233,7 @@ comments and workarounds behind.
 Recommended change:
 
 - Pin `@assistant-ui/react` and `@assistant-ui/react-markdown` to the versions
-  already resolved in `web/pnpm-lock.yaml`.
+  already resolved in `frontend/pnpm-lock.yaml`.
 - If using "latest" is intentional during active exploration, state the revisit
   trigger in `TASKS.md`; otherwise treat this as dependency drift.
 
@@ -243,15 +243,15 @@ Severity: medium-low.
 
 The chat shell still opens with generic assistant-ui copy:
 
-- `web/components/assistant-ui/thread.tsx:113` to
-  `web/components/assistant-ui/thread.tsx:123`: "Hello there!" and "How can I
+- `frontend/components/assistant-ui/thread.tsx:113` to
+  `frontend/components/assistant-ui/thread.tsx:123`: "Hello there!" and "How can I
   help you today?"
-- `web/components/assistant-ui/thread.tsx:166` to
-  `web/components/assistant-ui/thread.tsx:168`: generic "Send a message..."
+- `frontend/components/assistant-ui/thread.tsx:166` to
+  `frontend/components/assistant-ui/thread.tsx:168`: generic "Send a message..."
   placeholder.
-- `web/README.md:1` to `web/README.md:61`: generated "Assistant Transport
+- `frontend/README.md:1` to `frontend/README.md:61`: generated "Assistant Transport
   Example" instructions, including env names that do not match the repo's
-  `web/.env.example`.
+  `frontend/.env.example`.
 
 This matters because the frontend is the first product surface. The repo is a
 specific cloud-pricing bench, not a generic assistant demo.
@@ -259,25 +259,25 @@ specific cloud-pricing bench, not a generic assistant demo.
 Recommended change:
 
 - Replace the welcome copy and placeholder with pricing-specific prompts.
-- Replace `web/README.md` with a short project-specific note: `pnpm --dir web
-  install`, `just web`, `BACKEND_ORIGIN`, and the no-model-keys-in-browser
+- Replace `frontend/README.md` with a short project-specific note: `pnpm --dir frontend
+  install`, `just frontend`, `BACKEND_ORIGIN`, and the no-model-keys-in-browser
   invariant.
 
 ### 9. The comparison table duplicates backend citation semantics in loose TypeScript types
 
 Severity: medium-low.
 
-`web/components/tools/comparison-table.tsx:13` to
-`web/components/tools/comparison-table.tsx:52` hand-defines loose optional
+`frontend/components/tools/comparison-table.tsx:13` to
+`frontend/components/tools/comparison-table.tsx:52` hand-defines loose optional
 types for the backend tool result. The same file then implements frontend
 citation interpretation:
 
 - `rowAgeHours()` chooses max composite age at
-  `web/components/tools/comparison-table.tsx:81` to
-  `web/components/tools/comparison-table.tsx:88`.
+  `frontend/components/tools/comparison-table.tsx:81` to
+  `frontend/components/tools/comparison-table.tsx:88`.
 - `rowSource()` chooses the first composite source at
-  `web/components/tools/comparison-table.tsx:90` to
-  `web/components/tools/comparison-table.tsx:92`.
+  `frontend/components/tools/comparison-table.tsx:90` to
+  `frontend/components/tools/comparison-table.tsx:92`.
 
 The current logic is understandable, but this is exactly the kind of contract
 that should have one source of truth. Today the backend has Python dicts, the
@@ -288,8 +288,8 @@ Recommended change:
 
 - Once Python response models are Pydantic, generate or hand-maintain a small
   JSON Schema for the tool result and import a matching TypeScript type.
-- Split citation rendering into `web/components/tools/citation-age.tsx` and
-  `web/components/tools/citation-source.tsx` or similarly literal files once
+- Split citation rendering into `frontend/components/tools/citation-age.tsx` and
+  `frontend/components/tools/citation-source.tsx` or similarly literal files once
   excerpt-on-click lands.
 - Keep the table focused on table layout and ranking display.
 
@@ -297,7 +297,7 @@ Recommended change:
 
 Severity: low.
 
-`web/components/tools/comparison-table.tsx:55` defines medal emoji for ranking.
+`frontend/components/tools/comparison-table.tsx:55` defines medal emoji for ranking.
 The repo guidance bans emoji in prose, code, comments, commit messages, and
 docs. This is a small issue, but easy to fix and visible in the UI.
 
@@ -318,7 +318,7 @@ Recommended change:
 
 ## What I Would Not Refactor Yet
 
-- The runtime port itself is a good boundary. `api/runtime/types.py` keeps
+- The runtime port itself is a good boundary. `agent/runtime/types.py` keeps
   transport framework-neutral, and the adapters contain framework imports.
 - Provider builders under `normalize/builders/` are not obviously over-split or
   under-split from this pass. They are literal by provider and should stay that

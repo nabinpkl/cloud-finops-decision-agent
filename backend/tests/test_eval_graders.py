@@ -43,7 +43,7 @@ def _base_case(final_answer: str) -> EvalCase:
     )
 
 
-def test_v0_eval_cases_all_pass():
+def test_eval_case_suites_all_pass():
     cases = load_cases()
 
     assert len(cases) == 5

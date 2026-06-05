@@ -12,7 +12,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
-from api.config import settings
+from app_config import settings
 from api.observability.jsonl_exporter import JsonlSpanExporter
 from api.observability.provider import infer_provider_name
 from ingest._shared import PROJECT_ROOT

@@ -15,8 +15,8 @@ from langchain_core.language_models import BaseChatModel  # noqa: E402
 from langchain_core.messages import AIMessage  # noqa: E402
 from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
 
-import api.runtime.deepagents as da  # noqa: E402
-from api.runtime.types import RunUsage, Turn  # noqa: E402
+import agent.runtime.deepagents as da  # noqa: E402
+from agent.runtime.types import RunUsage, Turn  # noqa: E402
 
 
 class _FakeToolModel(BaseChatModel):

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from api import runtime as runtime_pkg
-from api.config import Settings, settings
+from agent import runtime as runtime_pkg
+from app_config import Settings, settings
 
 
 def test_default_value_is_deepagents():
@@ -38,7 +38,7 @@ def test_failed_adapter_import_propagates_not_silent_fallback(
     real_import = builtins.__import__
 
     def fake_import(name: str, *args, **kwargs):
-        if name == "api.runtime.deepagents" or name.startswith("langchain"):
+        if name == "agent.runtime.deepagents" or name.startswith("langchain"):
             raise ImportError("simulated adapter import failure")
         return real_import(name, *args, **kwargs)
 

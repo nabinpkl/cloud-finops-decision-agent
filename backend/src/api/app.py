@@ -5,12 +5,12 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.budget.store import init_budgets
-from api.config import settings
+from api.assistant_transport.routes import router as assistant_router
 from api.budget.middleware import BudgetMiddleware
+from api.budget.store import init_budgets
 from api.observability import init_observability
 from api.routes import citations, health, pricing
-from api.transport import router as transport_router
+from app_config import settings
 
 
 def create_app() -> FastAPI:
@@ -31,5 +31,5 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(pricing.router)
     app.include_router(citations.router)
-    app.include_router(transport_router)
+    app.include_router(assistant_router)
     return app

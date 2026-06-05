@@ -9,7 +9,7 @@ from api.assistant_transport.models import (
     AddToolResultCommand,
     Command,
 )
-from api.runtime import Turn
+from agent.runtime import Turn
 
 SESSION_LIMIT_MESSAGE = (
     "This conversation reached its token limit. "

@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import api.budget.store as budget_store
-from api.config import settings
+from app_config import settings
 
 
 @pytest.fixture

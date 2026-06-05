@@ -40,7 +40,7 @@ The eval suite should verify that full loop, not just whether a model sounds hel
 
 These run in normal CI with no model and no provider snapshots. They should assert the stable contracts below:
 
-- `prompts/finops_agent.md` is the source of `api.runtime.prompt.INSTRUCTIONS`.
+- `prompts/finops_agent.md` is the source of `agent.runtime.prompt.INSTRUCTIONS`.
 - Both runtime adapters import the same `INSTRUCTIONS`.
 - `run_compare` returns the frontend-safe wire shape.
 - Tool descriptions mention closest-larger match policy and citations.
@@ -58,7 +58,7 @@ These use fake runtime/model behavior and fixture tool results. They should not 
 
 ### Layer 3: Transcript Compliance Evals
 
-Create `evals/cases/*.jsonl` with inputs, fake tool results, and expected behavioral checks. A local grader should inspect the final answer with deterministic rules first:
+Create behavior-named YAML suites under `evals/cases/` with inputs, fake tool results, and expected behavioral checks. A local grader should inspect the final answer with deterministic rules first:
 
 - Price mentions must match prices in the supplied tool result.
 - Each price mention must have nearby `snapshot`.
@@ -81,7 +81,10 @@ Live evals should save enough evidence to debug regressions: prompt version, run
 
 - `prompts/finops_agent.md`: canonical production system prompt.
 - `evals/README.md`: how to run evals and read results.
-- `evals/cases/v0.jsonl`: model-facing scenarios.
+- `evals/cases/ranking_and_candidates.yaml`: cheapest and full-candidate scenarios.
+- `evals/cases/staleness.yaml`: stale snapshot scenarios.
+- `evals/cases/missing_data_refusal.yaml`: unsupported provider or region scenarios.
+- `evals/cases/provider_scope.yaml`: provider boundary scenarios.
 - `backend/src/evals/`: Python eval runner and graders.
 - `backend/tests/test_prompt_loading.py`: prompt source-of-truth test.
 - `backend/tests/test_eval_graders.py`: deterministic grader tests.
@@ -91,7 +94,7 @@ Live evals should save enough evidence to debug regressions: prompt version, run
 ## First Implementation Slice
 
 1. Land the root `prompts/` directory and loader test.
-2. Add JSONL eval case schema with five initial cases:
+2. Add YAML eval suite schema with five initial cases split by behavior:
    - cheapest 4 vCPU 8 GB general-purpose in EU.
    - stale snapshot over 24 hours.
    - unsupported provider/region.

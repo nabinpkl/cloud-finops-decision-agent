@@ -10,7 +10,7 @@ from typing import ClassVar
 
 from api.budget.identity import utc_date_str
 from api.budget.models import SessionUsage
-from api.config import settings
+from app_config import settings
 from ingest._shared import PROJECT_ROOT
 
 _LOCK = threading.Lock()

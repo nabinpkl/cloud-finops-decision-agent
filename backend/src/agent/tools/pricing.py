@@ -1,10 +1,10 @@
-"""Framework-neutral tool logic (ADR-0012).
+"""Framework-neutral pricing tool logic (ADR-0012).
 
 The pricing tools' actual work lives here, free of any agent framework. Each
 runtime adapter wraps `run_compare` in its own tool type (the OpenAI Agents
-SDK's `function_tool` in `api/tools.py`; a LangChain `@tool` in the DeepAgents
-adapter), but the body, including the `wire_response` citation translation that
-protects every caller, is defined once in this module.
+SDK's `function_tool`; a LangChain `StructuredTool` in the DeepAgents adapter),
+but the body, including the `wire_response` citation translation that protects
+every caller, is defined once in this module.
 
 Keeping this here is what lets the citation contract sit *below* both
 frameworks: neither adapter can weaken it, because neither owns it.
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.wire import wire_response
+from normalize.wire import wire_response
 from normalize.query import compare as _normalize_compare
 
 COMPARE_DESCRIPTION = (

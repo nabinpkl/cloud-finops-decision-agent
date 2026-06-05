@@ -59,7 +59,8 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 - `store/<provider>/<ISO>/`: timestamped snapshot directories holding raw data files plus `receipt.json`
 - `backend/src/normalize/`: Python module + FastAPI + CLI; reads snapshots, applies taxonomy, returns ranked candidates with citations
 - `backend/src/normalize/taxonomy/families.json`, `regions.json`: cross-provider equivalence, hand-seeded, editable in PRs
-- `backend/src/api/`: FastAPI. `main.py` is the ASGI entry point, `app.py` assembles middleware and routers, `routes/` holds deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`), and `assistant_transport/` holds the streaming chat endpoint. The server-side agent runtime port (`deepagents` default, OpenAI Agents SDK optional) lives under `runtime/`.
+- `backend/src/api/`: FastAPI. `main.py` is the ASGI entry point, `app.py` assembles middleware and routers, `routes/` holds deterministic query endpoints (`compare`/`lookup`/`excerpt`/`health`), and `assistant_transport/` holds the streaming chat endpoint.
+- `backend/src/agent/`: server-side agent runtime port, framework adapters (`deepagents` default, OpenAI Agents SDK optional), prompt loading, and framework-neutral tool bodies.
 - `frontend/`: frontend-only Next.js + assistant-ui app that renders the agent's stream
 - `prompts/`: production prompts shared by all agent runtime adapters
 - `EVALS.md`: planned offline and live eval suite for prompt/tool/citation behavior

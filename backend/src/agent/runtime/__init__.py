@@ -7,13 +7,13 @@ inside the branch, so importing this package is cheap and flipping the runtime
 is one env var.
 
 The neutral port types are re-exported here so callers import everything they
-need from `api.runtime`.
+need from `agent.runtime`.
 """
 
 from __future__ import annotations
 
-from api.config import settings
-from api.runtime.types import (
+from app_config import settings
+from agent.runtime.types import (
     AgentRuntime,
     Emitter,
     RunUsage,
@@ -33,9 +33,9 @@ __all__ = [
 
 def get_runtime() -> AgentRuntime:
     if settings.agent_runtime == "deepagents":
-        from api.runtime.deepagents import DeepAgentsRuntime
+        from agent.runtime.deepagents import DeepAgentsRuntime
 
         return DeepAgentsRuntime()
-    from api.runtime.openai_agents import OpenAIAgentsRuntime
+    from agent.runtime.openai_agents import OpenAIAgentsRuntime
 
     return OpenAIAgentsRuntime()

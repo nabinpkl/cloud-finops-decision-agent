@@ -4,7 +4,7 @@
  * Sticky banner shown when the per-session token cap (ADR-0011) is hit.
  *
  * The flag arrives in the transport state as `sessionLimitReached: true`,
- * written by the backend's session-cap branch in `api/transport.py`. The
+ * written by the backend's session-cap branch in `api/assistant_transport`. The
  * "Start new conversation" button clears the `finops_session_id` cookie
  * client-side and reloads the page; the next request lands without a
  * cookie, so the backend issues a fresh session id and the per-session

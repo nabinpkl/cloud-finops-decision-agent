@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from api.runtime.prompt import INSTRUCTIONS
+from agent.runtime.prompt import INSTRUCTIONS
 
 
 def test_agent_prompt_loads_from_root_prompts_directory():

@@ -1,11 +1,11 @@
 """OpenAI Agents SDK tool bindings (ADR-0009, ADR-0012).
 
 This module is part of the OpenAI-agents *adapter*: it wraps the
-framework-neutral logic in `api/agent_tools/core.py` with the Agents SDK's
+framework-neutral logic in `agent/tools/pricing.py` with the Agents SDK's
 `function_tool` so the OpenAI runtime adapter can call
 it. The DeepAgents adapter binds the same `run_compare` with a LangChain
 `@tool` instead; the shared body, and the `wire_response` citation translation
-inside it, lives once in `api.agent_tools.core`.
+inside it, lives once in `agent.tools.pricing`.
 
 `_run_compare` is re-exported for tests that exercise the callable without
 going through the SDK's `FunctionTool` invoke wrapper.
@@ -17,7 +17,7 @@ from typing import Any
 
 from agents import function_tool
 
-from api.agent_tools.core import run_compare as _run_compare
+from agent.tools.pricing import run_compare as _run_compare
 
 __all__ = ["compare", "_run_compare"]
 

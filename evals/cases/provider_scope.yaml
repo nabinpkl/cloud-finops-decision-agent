@@ -1,0 +1,92 @@
+cases:
+  - id: big3_provider_scope
+    user: For the big 3 only, compare 8 vCPU 32 GB memory-optimized in EU.
+    tool_call:
+      name: compare
+      args:
+        vcpu: 8
+        ram_gb: 32
+        region: eu-central
+        family: memory-optimized
+        providers:
+          - aws
+          - gcp
+          - azure
+        expand: cheapest
+    tool_result:
+      request:
+        vcpu: 8
+        ram_gb: 32
+        region: eu-central
+        family: memory-optimized
+        providers:
+          - aws
+          - gcp
+          - azure
+      results:
+        - provider: aws
+          instance_type: r6i.2xlarge
+          region_native: eu-central-1
+          monthly_usd: 322.56
+          hourly_usd: 0.442
+          citation:
+            source_url: https://aws.example/prices
+            json_path: $.aws.r6i
+            fetched_at: "2026-06-05T10:00:00Z"
+            age_hours: 5.0
+            snapshot:
+              provider: aws
+              snapshot_iso: "2026-06-05T10-00-00Z"
+              filename: eu-central-1.json
+        - provider: gcp
+          instance_type: n2-highmem-8
+          region_native: europe-west3
+          monthly_usd: 356.40
+          hourly_usd: 0.488
+          citation:
+            source_url: https://gcp.example/skus
+            json_path: $.gcp.highmem
+            fetched_at: "2026-06-05T09:00:00Z"
+            age_hours: 6.0
+            snapshot:
+              provider: gcp
+              snapshot_iso: "2026-06-05T09-00-00Z"
+              filename: skus.json
+        - provider: azure
+          instance_type: Standard_E8s_v5
+          region_native: westeurope
+          monthly_usd: 372.30
+          hourly_usd: 0.51
+          citation:
+            source_url: https://azure.example/prices
+            json_path: $.azure.e8
+            fetched_at: "2026-06-05T08:00:00Z"
+            age_hours: 7.0
+            snapshot:
+              provider: azure
+              snapshot_iso: "2026-06-05T08-00-00Z"
+              filename: westeurope.json
+      ranked_by: monthly_usd
+      unmet_requirements: []
+    final_answer: |
+      For the big 3 only, AWS r6i.2xlarge is cheapest at $322.56/mo (snapshot 5h old). Candidates considered: AWS r6i.2xlarge at $322.56/mo (snapshot 5h old), GCP n2-highmem-8 at $356.40/mo (snapshot 6h old), and Azure Standard_E8s_v5 at $372.30/mo (snapshot 7h old).
+    checks:
+      - tool_call
+      - price_provenance
+      - snapshot_age
+      - provider_scope
+      - candidate_coverage
+    expect:
+      required_providers:
+        - aws
+        - gcp
+        - azure
+      forbidden_providers:
+        - oracle
+        - vultr
+        - linode
+        - ibm
+      required_candidates:
+        - r6i.2xlarge
+        - n2-highmem-8
+        - Standard_E8s_v5

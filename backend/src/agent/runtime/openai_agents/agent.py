@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel
 
-from api.config import settings
-from api.runtime.prompt import INSTRUCTIONS
-from api.runtime.openai_agents.tools import compare as compare_tool
+from app_config import settings
+from agent.runtime.prompt import INSTRUCTIONS
+from agent.runtime.openai_agents.tools import compare as compare_tool
 
 
 def build_model() -> OpenAIChatCompletionsModel:

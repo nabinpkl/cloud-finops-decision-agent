@@ -1,20 +1,18 @@
-"""The agent-runtime port (ADR-0012): a framework-neutral seam between the
-transport layer (`api/assistant_transport/`, ours) and the agent frameworks behind it
-(the OpenAI Agents SDK today, DeepAgents next).
+"""The agent-runtime port (ADR-0012): a framework-neutral seam between API
+transport adapters and the agent frameworks behind it.
 
 Nothing in this module imports an agent framework. The types here are the only
 vocabulary transport speaks: it hands a runtime a list of `Turn`s and an
 `Emitter`, the runtime streams output back through the emitter's neutral verbs
 (`text_delta`, `tool_call`, `tool_result`) and accumulates token usage into the
 caller-owned `RunUsage`. Which framework actually runs is chosen by
-`api.runtime.get_runtime()` off `settings.agent_runtime`.
+`agent.runtime.get_runtime()` off `settings.agent_runtime`.
 
 The split this enforces: the citation contract, budget enforcement, session
-identity, and the assistant-ui wire shape are *ours* and live above this port;
-the agent loop, model client, tool binding, and stream-event shapes are
-*adapter* concerns and live below it. An adapter may import `api.config` and
-the neutral tool logic (`api/tools_core.py`); it must never leak a framework
-type back across this boundary.
+identity, and the assistant-ui wire shape are *ours* and live above this port.
+The agent loop, model client, tool binding, and stream-event shapes are adapter
+concerns and live below it. An adapter may import shared settings and neutral
+tool logic; it must never leak a framework type back across this seam.
 """
 
 from __future__ import annotations

@@ -5,7 +5,7 @@ ADR-0012).
 LLM call inside a single `Runner.run_streamed(...)`. After each call it
 adds the response's token usage to a per-run counter; once the cumulative
 total crosses `settings.turn_token_cap` the hook raises the neutral
-`TurnTokenCapExceeded` (defined in `api/runtime/types.py`), which propagates up
+`TurnTokenCapExceeded` (defined in `agent/runtime/types.py`), which propagates up
 through the SDK and is caught by `api/assistant_transport/turn.py` (where it is
 recorded on the OTel `agent.turn` span and surfaced to the visible thread).
 This file is part of the OpenAI-agents adapter; the DeepAgents adapter enforces
@@ -21,7 +21,7 @@ This module does **not** persist usage. Persistence runs in
 consumed.
 
 `TurnTokenCapExceeded` is re-exported here for backward compatibility; its
-canonical home is `api.runtime.types`.
+canonical home is `agent.runtime.types`.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ from agents.items import ModelResponse
 from agents.lifecycle import RunHooksBase
 from agents.run_context import RunContextWrapper
 
-from api.config import settings
-from api.runtime.types import TurnTokenCapExceeded
+from app_config import settings
+from agent.runtime.types import TurnTokenCapExceeded
 
 __all__ = ["BudgetHooks", "TurnTokenCapExceeded"]
 

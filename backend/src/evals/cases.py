@@ -1,53 +1,69 @@
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+from pydantic import BaseModel, ConfigDict, Field
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CASES_PATH = PROJECT_ROOT / "evals/cases/v0.jsonl"
+DEFAULT_CASES_PATH = PROJECT_ROOT / "evals/cases"
 
 
-@dataclass(frozen=True)
-class EvalCase:
+class EvalCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     id: str
     user: str
     tool_call: dict[str, Any]
     tool_result: dict[str, Any]
     final_answer: str
     checks: list[str]
-    expect: dict[str, Any] = field(default_factory=dict)
+    expect: dict[str, Any] = Field(default_factory=dict)
+
+
+class EvalSuite(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cases: list[EvalCase]
 
 
 def load_cases(path: Path = DEFAULT_CASES_PATH) -> list[EvalCase]:
-    cases: list[EvalCase] = []
-    with path.open(encoding="utf-8") as fh:
-        for line_number, line in enumerate(fh, start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            data = json.loads(stripped)
-            cases.append(_case_from_dict(data, line_number=line_number))
+    suite_files = _suite_files(path)
+    cases = [case for suite_file in suite_files for case in _load_suite(suite_file).cases]
+    _reject_duplicate_ids(cases)
     return cases
 
 
-def _case_from_dict(data: dict[str, Any], *, line_number: int) -> EvalCase:
-    missing = {
-        key
-        for key in ("id", "user", "tool_call", "tool_result", "final_answer", "checks")
-        if key not in data
-    }
-    if missing:
-        joined = ", ".join(sorted(missing))
-        raise ValueError(f"eval case line {line_number} missing required field(s): {joined}")
-    return EvalCase(
-        id=str(data["id"]),
-        user=str(data["user"]),
-        tool_call=dict(data["tool_call"]),
-        tool_result=dict(data["tool_result"]),
-        final_answer=str(data["final_answer"]),
-        checks=list(data["checks"]),
-        expect=dict(data.get("expect") or {}),
-    )
+def _suite_files(path: Path) -> list[Path]:
+    if path.is_dir():
+        files = sorted(path.glob("*.yaml")) + sorted(path.glob("*.yml"))
+        if not files:
+            raise ValueError(f"eval case directory has no YAML suites: {path}")
+        return files
+    if path.suffix not in {".yaml", ".yml"}:
+        raise ValueError(f"eval case path must be a YAML file or directory: {path}")
+    return [path]
+
+
+def _load_suite(path: Path) -> EvalSuite:
+    with path.open(encoding="utf-8") as fh:
+        raw = yaml.safe_load(fh)
+    if raw is None:
+        raise ValueError(f"eval suite is empty: {path}")
+    if not isinstance(raw, dict):
+        raise ValueError(f"eval suite must be a mapping with a cases list: {path}")
+    return EvalSuite.model_validate(raw)
+
+
+def _reject_duplicate_ids(cases: list[EvalCase]) -> None:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for case in cases:
+        if case.id in seen:
+            duplicates.add(case.id)
+        seen.add(case.id)
+    if duplicates:
+        joined = ", ".join(sorted(duplicates))
+        raise ValueError(f"duplicate eval case id(s): {joined}")

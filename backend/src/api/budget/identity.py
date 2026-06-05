@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timezone
 from hashlib import sha256
 
-from api.config import settings
+from app_config import settings
 
 
 def utc_date_str() -> str:

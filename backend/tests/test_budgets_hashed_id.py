@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 import api.budget.identity as budget_identity
-from api.config import settings
+from app_config import settings
 
 
 @pytest.fixture

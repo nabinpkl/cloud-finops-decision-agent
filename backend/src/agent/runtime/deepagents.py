@@ -33,10 +33,10 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 
-from api.config import settings
-from api.runtime.types import Emitter, RunUsage, Turn, TurnTokenCapExceeded
-from api.runtime.prompt import INSTRUCTIONS
-from api.agent_tools.core import COMPARE_DESCRIPTION, run_compare
+from app_config import settings
+from agent.runtime.types import Emitter, RunUsage, Turn, TurnTokenCapExceeded
+from agent.runtime.prompt import INSTRUCTIONS
+from agent.tools.pricing import COMPARE_DESCRIPTION, run_compare
 
 
 def _compare_tool() -> StructuredTool:
@@ -94,7 +94,7 @@ def _build_model() -> ChatOpenAI:
         stream_usage=True,
     )
     if settings.langchain_reasoning_roundtrip:
-        from api.runtime._reasoning_model import ReasoningRoundTripChatOpenAI
+        from agent.runtime.reasoning_model import ReasoningRoundTripChatOpenAI
 
         return ReasoningRoundTripChatOpenAI(**kwargs)
     return ChatOpenAI(**kwargs)

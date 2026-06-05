@@ -12,7 +12,7 @@ pytest.importorskip("langchain_openai")
 from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
 from pydantic import SecretStr  # noqa: E402
 
-from api.runtime._reasoning_model import ReasoningRoundTripChatOpenAI  # noqa: E402
+from agent.runtime.reasoning_model import ReasoningRoundTripChatOpenAI  # noqa: E402
 
 
 def _model() -> ReasoningRoundTripChatOpenAI:

@@ -1,4 +1,4 @@
-// Mirrors the backend `compare` tool result after api/wire.wire_response.
+// Mirrors the backend `compare` tool result after normalize.wire.wire_response.
 // Keep this close to the Python Pydantic models in normalize/query_models.py.
 export type CitationConstituent = {
   source_url?: string;

@@ -294,7 +294,7 @@ The normalization layer accepts either form on input. Output always carries the 
 
 ## Agent runtime and UI surface
 
-Per ADR-0009 and ADR-0012 the agent loop runs server-side in FastAPI behind `api.runtime.AgentRuntime`. The default runtime is `deepagents`, implemented as a lean LangChain `create_agent` adapter; the OpenAI Agents SDK runtime remains available through `AGENT_RUNTIME=openai_agents`. The model is built against an OpenAI-compatible base URL, so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tool calls route through `api.tools_core.run_compare`, which calls `normalize.compare` in-process; the wire translation (drop `store_path`, add a `snapshot` ref) is shared with the HTTP endpoints. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.
+Per ADR-0009 and ADR-0012 the agent loop runs server-side in FastAPI behind `agent.runtime.AgentRuntime`. The default runtime is `deepagents`, implemented as a lean LangChain `create_agent` adapter; the OpenAI Agents SDK runtime remains available through `AGENT_RUNTIME=openai_agents`. The model is built against an OpenAI-compatible base URL, so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tool calls route through `agent.tools.pricing.run_compare`, which calls `normalize.compare` in-process; the `normalize.wire` translation (drop `store_path`, add a `snapshot` ref) is shared with the HTTP endpoints. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.
 
 `frontend/` is a Next.js app using `assistant-ui` as the chat shell, and it is frontend-only: no `app/api/*` route handlers, no agent logic, no model keys. It uses `useAssistantTransportRuntime`, which POSTs to a same-origin `/assistant` path that `next.config.js` rewrites to the backend (`BACKEND_ORIGIN` env knob) — so the browser never holds a backend URL and there is no CORS round-trip. The agent decides which custom tool component to render based on the query shape; the frontend maps tool names to components.
 
@@ -318,7 +318,7 @@ The stream bridge runs over assistant-ui's assistant-transport protocol: the fro
 
 ## Eval
 
-`evals/cases/v0.jsonl` carries hand-written scenarios. The offline `python -m evals` runner grades canned tool calls, tool results, and final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
+`evals/cases/*.yaml` carries hand-written behavior suites. The offline `python -m evals` runner grades canned tool calls, tool results, and final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
 
 ### Lane 1: citation correctness
 
@@ -339,16 +339,39 @@ The judge confirms:
 
 ### Scenario shape
 
-```jsonl
-{"id": "eu-cheapest-4x8", "question": "Cheapest 4 vCPU 8 GB general-purpose VM in EU?", "expected": {"must_cite_providers": ["aws", "gcp", "azure"], "staleness_expected": false, "refusal_expected": false}}
-{"id": "stale-snapshot", "question": "What does m5.xlarge cost in eu-central-1?", "setup": "force_snapshot_age=30h", "expected": {"staleness_expected": true}}
-{"id": "absent-ibm-power", "question": "What's the cheapest IBM Power Systems shape?", "expected": {"refusal_expected": true, "refusal_reason_contains": "Power Systems"}}
+```yaml
+cases:
+  - id: cheapest_4vcpu_8gb_eu
+    user: Cheapest 4 vCPU 8 GB general-purpose VM across the big 3 in EU?
+    tool_call:
+      name: compare
+      args:
+        vcpu: 4
+        ram_gb: 8
+        region: eu-central
+        family: general-purpose
+        providers: [aws, gcp, azure]
+        expand: cheapest
+    tool_result:
+      request:
+        vcpu: 4
+        ram_gb: 8
+        region: eu-central
+        family: general-purpose
+        providers: [aws, gcp, azure]
+      results: []
+      unmet_requirements: []
+    final_answer: |
+      Cheapest is AWS m5.xlarge at $140.16/mo (snapshot 6h old).
+    checks: [tool_call, price_provenance, snapshot_age, candidate_coverage]
+    expect:
+      required_providers: [aws, gcp, azure]
 ```
 
 ### Running
 
 ```
-python -m evals --cases evals/cases/v0.jsonl
+python -m evals --cases evals/cases
 ```
 
 Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs because scenarios are static; judge non-determinism is the only variance source and is tracked across runs in `var/evals/`.
@@ -358,8 +381,8 @@ Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs 
 1. `backend/src/normalize/taxonomy/families.json` and `regions.json` — the load-bearing data shapes.
 2. `backend/src/normalize/` Python module + CLI — operates against snapshots already on disk.
 3. FastAPI query wrapper (`compare`/`lookup`/`excerpt`/`health`) — thin layer over the module.
-4. Agent runtime in FastAPI behind `api.runtime.AgentRuntime`: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
+4. Agent runtime in FastAPI behind `agent.runtime.AgentRuntime`: the `compare` tool over the in-process module, model on an OpenAI-compatible base URL, `POST /assistant` (assistant-transport) over `assistant-stream`.
 5. `frontend/` Next.js + assistant-ui frontend consuming the `/assistant` stream and rendering the `ComparisonTable` tool component.
-6. `evals/cases/v0.jsonl` + runner.
+6. `evals/cases/*.yaml` + runner.
 
 Each step is independently runnable. Steps 2 and 3 ship a usable comparator before the agent or UI exists; the frontend is the last product layer, not the first.

@@ -10,7 +10,7 @@ from api.assistant_transport.models import AssistantRequest
 from api.assistant_transport.state import apply_commands, prepare_incoming_state
 from api.assistant_transport.turn import run_agent_turn
 from api.budget.identity import new_session_id
-from api.config import settings
+from app_config import settings
 
 router = APIRouter()
 

@@ -14,7 +14,7 @@ def main(argv: list[str] | None = None) -> int:
         "--cases",
         type=Path,
         default=DEFAULT_CASES_PATH,
-        help="JSONL eval case path.",
+        help="YAML eval suite file or directory.",
     )
     args = parser.parse_args(argv)
 

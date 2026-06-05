@@ -14,8 +14,8 @@ pytest.importorskip("agents")
 
 from agents.items import ModelResponse  # noqa: E402
 
-from api.config import settings  # noqa: E402
-from api.runtime.openai_agents.hooks import (  # noqa: E402
+from app_config import settings  # noqa: E402
+from agent.runtime.openai_agents.hooks import (  # noqa: E402
     BudgetHooks,
     TurnTokenCapExceeded,
 )

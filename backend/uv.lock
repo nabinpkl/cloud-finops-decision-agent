@@ -208,6 +208,7 @@ dependencies = [
     { name = "polars" },
     { name = "pyarrow" },
     { name = "pydantic-settings" },
+    { name = "pyyaml" },
 ]
 
 [package.optional-dependencies]
@@ -240,6 +241,7 @@ requires-dist = [
     { name = "polars", specifier = ">=1.41.0" },
     { name = "pyarrow", specifier = ">=24.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 provides-extras = ["openai-agents"]
 

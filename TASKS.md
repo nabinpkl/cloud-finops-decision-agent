@@ -4,7 +4,7 @@
 
 ## Position
 
-The normalize layer, HTTP surface, server-side agent runtime, assistant transport bridge, and first rendered tool component are done. What remains in v0 is browser smoke verification, citation depth, agent prose tuning, and eval. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. ADR-0012 is now the current runtime contract: the loop is server-side in FastAPI behind `api.runtime.AgentRuntime`; `deepagents` is the default adapter, OpenAI Agents SDK is optional, `web/` is a frontend-only client that renders the stream, and the model provider is an OpenAI-compatible base-URL knob (not a hardcoded vendor). Reasons:
+The normalize layer, HTTP surface, server-side agent runtime, assistant transport bridge, and first rendered tool component are done. What remains in v0 is browser smoke verification, citation depth, agent prose tuning, and eval. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. ADR-0012 is now the current runtime contract: the loop is server-side in FastAPI behind `agent.runtime.AgentRuntime`; `deepagents` is the default adapter, OpenAI Agents SDK is optional, `frontend/` is a frontend-only client that renders the stream, and the model provider is an OpenAI-compatible base-URL knob (not a hardcoded vendor). Reasons:
 
 - A thin end-to-end slice surfaces integration bugs (tool-call wiring, citation shape) on the first real query, not after both halves are built.
 - The eval lane replays scenarios through the rendered slice, so it cannot start until the slice renders.
@@ -16,7 +16,7 @@ Ordering edges:
 - Agent prose tuning (Phase 4) after the components render, because tuning needs real rendered output to judge against.
 - Eval (Phase 5) last: it scores the finished slice.
 
-Config note: the API's CORS origins and port are literals in `api/main.py` today, acceptable as the first consumer. R7 lands `web/` (a second consumer of the origin/port) and the agent runtime (a consumer of the provider knobs), so R7 moves both to `.env.example`: `API_PORT`, `CORS_ALLOWED_ORIGINS`, plus the agent's `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`. Per the no-hardcoded-config rule, `api/main.py` reads them from a central config module rather than `process.env`-style scattered reads.
+Config note: the API's CORS origins and port are literals in `api/main.py` today, acceptable as the first consumer. R7 lands `frontend/` (a second consumer of the origin/port) and the agent runtime (a consumer of the provider knobs), so R7 moves both to `.env.example`: `API_PORT`, `CORS_ALLOWED_ORIGINS`, plus the agent's `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`. Per the no-hardcoded-config rule, `api/main.py` reads them from a central config module rather than `process.env`-style scattered reads.
 
 ## Phase 0: readiness ADR (gate) [done]
 
@@ -32,14 +32,14 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 
 ## Phase 2: the vertical slice (compare end-to-end in a browser)
 
-- D7. Frontend scaffold and backend config landed. `api/config.py` central settings (`API_PORT`, `CORS_ALLOWED_ORIGINS`, `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`); CORS/port lifted out of `api/main.py`. `web/` scaffolded from the assistant-ui `with-assistant-transport` example, frontend-only (no `app/api/*`). `useAssistantTransportRuntime` POSTs to same-origin `/assistant`, which `next.config.js` rewrites to `BACKEND_ORIGIN` (env knob, no CORS round-trip, no backend URL in client). `just web` recipe added. [ADR-0009]
-- D8. `api/tools_core.py`, `api/transport.py`, and `api/runtime/*`: compare tool body calls `normalize.compare()` in-process (no HTTP self-hop), drops `store_path` for `snapshot` refs through `wire_response`, implements `POST /assistant` over assistant-stream, and routes model execution through `api.runtime.AgentRuntime`. `deepagents` is the default adapter; OpenAI Agents SDK is optional. [ADR-0012]
-- D9. `web/components/tools/comparison-table.tsx`: assistant-ui Tool component renders ranked `compare` results streamed from FastAPI, including snapshot age and source link per row. Session-limit banner wiring also landed.
+- D7. Frontend scaffold and backend config landed. `app_config` central settings (`API_PORT`, `CORS_ALLOWED_ORIGINS`, `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`); CORS/port lifted out of `api/main.py`. `frontend/` scaffolded from the assistant-ui `with-assistant-transport` example, frontend-only (no `app/api/*`). `useAssistantTransportRuntime` POSTs to same-origin `/assistant`, which `next.config.js` rewrites to `BACKEND_ORIGIN` (env knob, no CORS round-trip, no backend URL in client). `just frontend` recipe added. [ADR-0009]
+- D8. `agent/tools/pricing.py`, `api/assistant_transport/`, and `agent/runtime/*`: compare tool body calls `normalize.compare()` in-process (no HTTP self-hop), drops `store_path` for `snapshot` refs through `normalize.wire.wire_response`, implements `POST /assistant` over assistant-stream, and routes model execution through `agent.runtime.AgentRuntime`. `deepagents` is the default adapter; OpenAI Agents SDK is optional. [ADR-0012]
+- D9. `frontend/components/tools/comparison-table.tsx`: assistant-ui Tool component renders ranked `compare` results streamed from FastAPI, including snapshot age and source link per row. Session-limit banner wiring also landed.
 - R10. Slice smoke test: in a browser, "cheapest 4 vCPU 8 GB general-purpose in EU" renders the ranked table with citations. State explicitly if the UI cannot be exercised; do not claim success otherwise.
 
 ## Phase 3: citation depth
 
-- R11. `web/components/CompositeCitation.tsx`: render the synthesis formula plus one collapsible sub-row per constituent (`rate x quantity = contribution`, each with its own `json_path` and `source_url`).
+- R11. `frontend/components/CompositeCitation.tsx`: render the synthesis formula plus one collapsible sub-row per constituent (`rate x quantity = contribution`, each with its own `json_path` and `source_url`).
 - R12. Excerpt-on-click: a citation action calls `GET /citation/excerpt` with the snapshot ref and `json_path`, renders the returned hunk as a monospace block with line numbers and the matched line highlighted. Label it a canonical rendering, not the upstream file's own line numbers.
 - R13. Staleness banner: when `data_quality.overall_status != "ok"` render a banner; when `stale`, surface a refetch affordance that names `just fetch-force <provider>`.
 
@@ -49,7 +49,7 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 
 ## Phase 5: eval
 
-- R15. `evals/cases/v0.jsonl`: hand-written scenarios across cheapest-ranking, single-lookup, stale-data, and out-of-taxonomy-refusal lanes. State the assertion per scenario.
+- R15. `evals/cases/*.yaml`: behavior-named scenarios across cheapest-ranking, full candidate listing, stale-data, provider scoping, and out-of-coverage refusal lanes. State the assertion per scenario.
 - R16. `backend/src/evals/` runner: replay scenarios through the slice, LLM judge scores citation correctness (excerpt resolves to quote) plus staleness and refusal behavior. Assert composite `contribution_usd` sum equals `hourly_usd` per ADR-0007.
 
 (R17 to R19 reserved so v1 cross-references survive.)
@@ -58,10 +58,10 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 
 ## v1 scope (captured, not started)
 
-- R20. lookup UI: `web/components/PriceCard.tsx` for single-instance answers.
+- R20. lookup UI: `frontend/components/PriceCard.tsx` for single-instance answers.
 - R21. `expand=full` rendering: "show me what else was considered" surfaces the `considered[]` candidate list.
 - R22. Excerpt performance: byte-offset index or precomputed excerpt store to remove the first-hit ~1s parse of the 200 MB AWS region file (ADR-0008 negative consequence).
-- R23. Deploy story: FastAPI behind Cloud Run or Fly, `web/` on Vercel, auth plus rate limiting. v0 is localhost-only.
+- R23. Deploy story: FastAPI behind Cloud Run or Fly, `frontend/` on Vercel, auth plus rate limiting. v0 is localhost-only.
 - R24. `propose_equivalence`: queue agent-derived equivalences for PR review (SPEC.md).
 
 ### Alternative arc (rejected for now, captured)
@@ -77,7 +77,7 @@ D3   2026-05-28  committed   citation_excerpt serve-time hunk builder
 D4   2026-05-28  committed   mocked + real-file test lanes
 D5   2026-05-28  committed   just check = ruff+ty+pytest, debt cleared
 D6   2026-05-28  committed   /health carries data_quality envelope
-D7   2026-05-29  committed   config knobs + frontend-only web/ scaffold
+D7   2026-05-29  committed   config knobs + frontend-only frontend scaffold
 D8   2026-06-03  committed   in-process compare tool + POST /assistant + runtime port
 D9   2026-06-03  committed   ComparisonTable component + session-limit banner wiring
 R10  pending     pending     slice smoke test
@@ -85,6 +85,6 @@ R11  pending     pending     CompositeCitation component
 R12  pending     pending     excerpt-on-click hunk UI
 R13  pending     pending     staleness banner + refetch
 R14  pending     pending     agent prose tuning
-R15  pending     pending     evals/cases/v0.jsonl scenarios
+R15  pending     pending     behavior-named eval YAML suites
 R16  pending     pending     eval runner + LLM judge
 ```

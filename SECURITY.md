@@ -11,7 +11,7 @@ Use GitHub private vulnerability reporting for this repository if it is enabled.
 Please include:
 
 - A short impact summary.
-- Affected component or path, such as `src/api/`, `src/ingest/`, `src/normalize/`, or `web/`.
+- Affected component or path, such as `backend/src/api/`, `backend/src/ingest/`, `backend/src/normalize/`, or `frontend/`.
 - Reproduction steps using local fixtures or redacted inputs.
 - Whether the issue exposes credentials, trace content, pricing snapshots, model-provider keys, budget state, or user prompts.
 

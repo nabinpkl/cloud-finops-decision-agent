@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from api.budget.identity import utc_date_str
 from api.budget.models import BudgetBlock
 from api.budget.store import _LOCK, conn, read_session_usage
-from api.config import settings
+from app_config import settings
 
 
 def seconds_to_next_utc_midnight() -> int:

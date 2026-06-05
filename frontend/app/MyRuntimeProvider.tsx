@@ -24,7 +24,7 @@ type JSONObject = { [key: string]: JSONValue };
 // The backend (POST /assistant) streams assistant-ui-native messages: a role
 // plus an ordered list of parts. Text parts stream token-by-token; tool-call
 // parts carry the tool name, args, and (once done) the result. This is the
-// shape the backend in api/transport.py emits.
+// shape the backend in api/assistant_transport emits.
 type NativePart =
   | { type: "text"; text: string }
   | {

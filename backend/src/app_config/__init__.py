@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     model_name: str = ""
 
     # Agent runtime selection (ADR-0012). Chooses which framework adapter
-    # `api.runtime.get_runtime()` returns. "deepagents" (the default) routes to
+    # `agent.runtime.get_runtime()` returns. "deepagents" (the default) routes to
     # the lean LangChain create_agent adapter; "openai_agents" routes to the
     # OpenAI Agents SDK adapter. Both stacks are core dependencies.
     agent_runtime: Literal["openai_agents", "deepagents"] = "deepagents"

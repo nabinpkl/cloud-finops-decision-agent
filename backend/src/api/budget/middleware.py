@@ -26,7 +26,7 @@ from starlette.responses import Response
 from api.budget.identity import hashed_client_id
 from api.budget.models import BudgetBlock
 from api.budget.policy import check_client_rate, check_global_daily
-from api.config import settings
+from app_config import settings
 
 
 _GUARDED_PATH = "/assistant"

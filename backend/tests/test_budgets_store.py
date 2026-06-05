@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 import api.budget.store as budget_store
-from api.config import settings
+from app_config import settings
 
 
 def _conn() -> sqlite3.Connection:

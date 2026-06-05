@@ -14,7 +14,7 @@ and the trigger to revisit. See the dependency rules in the worker guidelines.
   already depend on). There is no maintained alternative; hand-rolling the
   wire protocol would be more risk, not less.
 - **Risk accepted:** the protocol/API may change across `0.0.x` releases and
-  break the `POST /assistant` bridge in `api/transport.py`. Surface is small, so
+  break the `POST /assistant` bridge in `api/assistant_transport/`. Surface is small, so
   a break is cheap to chase.
 - **Revisit trigger:** drop this exception when assistant-stream reaches a `0.1+`
   / stable line, or if a break lands. Re-pin and re-test the bridge then.

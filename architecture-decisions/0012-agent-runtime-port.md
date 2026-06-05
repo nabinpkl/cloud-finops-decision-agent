@@ -19,13 +19,14 @@ workload, behind one env var, without a rewrite.
 
 The risk in adding a second framework is entanglement. The valuable, hard-won
 parts of this repo are framework-independent: the citation contract
-(`normalize` + `api/wire.py`), budget enforcement (ADR-0011), session identity,
+(`normalize` + `normalize/wire.py`), budget enforcement (ADR-0011), session identity,
 and the assistant-ui wire shape. If a second framework's idioms leak into those,
 each framework swap re-touches the asset. The point of this ADR is to draw the
 boundary once so that adding, swapping, or removing a framework touches only an
 adapter.
 
-Before this change, the coupling was already small but unnamed: `api/transport.py`
+Before this change, the coupling was already small but unnamed: the assistant
+transport
 imported `agents` types in exactly two spots (constructing/running the agent, and
 the `stream_events()` translation loop), and the cross-turn input was already a
 neutral `[{role, content}]` list. This ADR names that seam and moves the two
@@ -35,7 +36,7 @@ coupled spots behind it.
 
 ### 1. A one-method port
 
-`api/runtime/types.py` defines the contract transport speaks, and it imports no
+`agent/runtime/types.py` defines the contract transport speaks, and it imports no
 agent framework:
 
 - `Turn(role, content)` — one cross-turn message in (text-only in v0).
@@ -64,21 +65,21 @@ generalized so every adapter obeys it.
 
 ```
 ours/  (framework-free — the asset; must NOT import agents/langchain/deepagents)
-  api/runtime/types.py        the port + neutral types
-  api/transport.py            HTTP, session, budgets, _StateEmitter, the agent.turn span
+  agent/runtime/types.py      the port + neutral types
+  api/assistant_transport/    HTTP, session, budgets, StateEmitter, the agent.turn span
   api/budgets.py  api/middleware.py
-  api/tools_core.py           run_compare = normalize.compare + wire_response  (tool LOGIC)
-  normalize/...  api/wire.py  the deterministic data + citation layer
+  agent/tools/pricing.py      run_compare = normalize.compare + wire_response  (tool logic)
+  normalize/...  normalize/wire.py  the deterministic data + citation layer
 
 adapter/  (framework glue — swappable; imports exactly one framework)
-  api/runtime/openai_agents.py   Agent + OpenAIChatCompletionsModel; Runner.run_streamed;
+  agent/runtime/openai_agents/   Agent + OpenAIChatCompletionsModel; Runner.run_streamed;
                                  stream_events() -> Emitter; BudgetHooks for the cap
-  api/agent.py  api/hooks.py  api/tools.py   (the OpenAI-agents binding of the above)
-  api/runtime/deepagents.py      create_deep_agent; @tool wrapping run_compare;
+  agent/runtime/openai_agents/  (the OpenAI-agents binding of the above)
+  agent/runtime/deepagents.py    create_agent; StructuredTool wrapping run_compare;
                                  LangGraph stream -> Emitter; @after_model cap middleware
 ```
 
-The invariant: **`api/tools_core.py` and everything under `ours/` import no
+The invariant: **`agent/tools/pricing.py` and everything under `ours/` import no
 agent framework.** Each adapter wraps the *same* `run_compare` in its own tool
 decorator. The citation translation lives in `wire_response`, below both
 frameworks, so neither can weaken it. This is the property ADR-0009's amendment
@@ -88,7 +89,7 @@ that guarantee cannot be a framework's responsibility.
 ### 4. Selection by env
 
 `settings.agent_runtime` (env `AGENT_RUNTIME`, default `openai_agents`) chooses
-the adapter. `api/runtime/get_runtime()` imports the chosen adapter **lazily
+the adapter. `agent/runtime/get_runtime()` imports the chosen adapter **lazily
 inside the branch**, so a runtime whose dependency is not installed (e.g.
 `deepagents`) never breaks the default path, and flipping the experiment is one
 env var. The active runtime is recorded on the `agent.turn` span as
@@ -146,13 +147,13 @@ per-call difference is not mistaken for a bug.
 ## Status of the implementation
 
 The port, the OpenAI-agents adapter, the env router, and the boundary refactor
-of `api/transport.py` are done and shipped behind no behavior change (`just
-check` green). `api/runtime/deepagents.py` is a placeholder that raises if
+of the assistant transport are done and shipped behind no behavior change (`just
+check` green). `agent/runtime/deepagents.py` is a placeholder that raises if
 selected; the real DeepAgents adapter is the next change.
 
 ## Amendment 2026-06-02: DeepAgents adapter shipped; default flipped
 
-The LangChain adapter (`api/runtime/deepagents.py`) is implemented: lean
+The LangChain adapter (`agent/runtime/deepagents.py`) is implemented: lean
 `langchain.agents.create_agent` with the single `compare` tool, the
 stream-to-`Emitter` mapping, a `CapMiddleware` enforcing the neutral per-turn
 cap, and `ReasoningRoundTripChatOpenAI` (gated by
