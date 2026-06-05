@@ -8,18 +8,7 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-def _find_project_root(start: Path) -> Path:
-    for candidate in start.parents:
-        if (candidate / "pyproject.toml").is_file():
-            return candidate
-    raise RuntimeError(f"could not find project root above {start}")
-
-
-BACKEND_ROOT = _find_project_root(Path(__file__).resolve())
-PROJECT_ROOT = BACKEND_ROOT.parent
-SRC_ROOT = BACKEND_ROOT / "src"
-TAXONOMY_DIR = SRC_ROOT / "normalize" / "taxonomy"
+from project_paths import PROJECT_ROOT
 
 
 class IngestSettings(BaseSettings):

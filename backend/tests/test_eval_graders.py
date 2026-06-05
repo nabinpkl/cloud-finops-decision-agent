@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from evals.cases import EvalCase, load_cases
 from evals.graders import grade_case
+from evals.replay import replay_case
 
 
 def _base_case(final_answer: str) -> EvalCase:
@@ -50,6 +51,17 @@ def test_eval_case_suites_all_pass():
     for case in cases:
         failures = [result for result in grade_case(case) if not result.passed]
         assert failures == []
+
+
+def test_eval_case_suites_replay_all_pass():
+    cases = load_cases()
+
+    for case in cases:
+        replayed = replay_case(case)
+        failures = [result for result in replayed.checks if not result.passed]
+        assert failures == []
+        assert replayed.usage.input_tokens > 0
+        assert replayed.usage.output_tokens > 0
 
 
 def test_price_not_in_tool_result_fails():

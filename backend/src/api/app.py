@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.assistant_transport.body_limit import AssistantBodySizeLimitMiddleware
 from api.assistant_transport.routes import router as assistant_router
 from api.budget.middleware import BudgetMiddleware
 from api.budget.store import init_budgets
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     # real /assistant request only. Inits below open the SQLite store and install
     # the OTel processor; both are idempotent under uvicorn --reload.
     app.add_middleware(BudgetMiddleware)
+    app.add_middleware(AssistantBodySizeLimitMiddleware)
     init_observability(app)
     init_budgets()
     app.include_router(health.router)

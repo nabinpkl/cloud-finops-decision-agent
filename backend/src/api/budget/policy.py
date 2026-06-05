@@ -87,6 +87,50 @@ def check_client_rate(hashed_id: str) -> BudgetBlock | None:
         return None
 
 
+def check_public_route_rate(
+    hashed_id: str,
+    *,
+    route: str,
+    requests_per_minute: int,
+) -> BudgetBlock | None:
+    """Increment and enforce a request cap for deterministic public routes."""
+    if not settings.budget_enabled:
+        return None
+    now = int(time.time())
+    with _LOCK:
+        db = conn()
+        row = db.execute(
+            "SELECT minute_window_start, minute_requests "
+            "FROM public_route_window WHERE hashed_id=? AND route=?",
+            (hashed_id, route),
+        ).fetchone()
+        if row is None:
+            minute_start, minute_requests = now, 0
+        else:
+            minute_start, minute_requests = int(row[0]), int(row[1])
+            if now - minute_start >= 60:
+                minute_start, minute_requests = now, 0
+
+        if minute_requests >= requests_per_minute:
+            return BudgetBlock(
+                reason="public_route_request_rate",
+                http_status=429,
+                retry_after_seconds=max(60 - (now - minute_start), 1),
+            )
+
+        db.execute(
+            """
+            INSERT INTO public_route_window (hashed_id, route, minute_window_start, minute_requests)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(hashed_id, route) DO UPDATE SET
+                minute_window_start = excluded.minute_window_start,
+                minute_requests     = excluded.minute_requests
+            """,
+            (hashed_id, route, minute_start, minute_requests + 1),
+        )
+        return None
+
+
 def check_session_cap(session_id: str) -> BudgetBlock | None:
     """Return a block if the cumulative session token total is at the cap."""
     if not settings.budget_enabled:

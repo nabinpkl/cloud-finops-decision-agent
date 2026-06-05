@@ -24,7 +24,7 @@ from typing import Protocol, runtime_checkable
 @dataclass(frozen=True)
 class Turn:
     """One cross-turn conversation message fed into a run. v0 is text-only;
-    `role` is one of "user", "assistant", "system"."""
+    `role` is one of "user" or "assistant"."""
 
     role: str
     content: str

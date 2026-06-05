@@ -7,7 +7,7 @@ import re
 from functools import lru_cache
 from typing import Any
 
-from ingest._shared import TAXONOMY_DIR
+from project_paths import TAXONOMY_DIR
 from normalize.schema import IndexRow
 from normalize.taxonomy.loader import canonical_region
 
@@ -139,4 +139,3 @@ def maybe_float(value: Any) -> float | None:
 def load_specs() -> dict[str, Any]:
     doc = json.loads(SPECS_PATH.read_text())
     return {key: value for key, value in doc.items() if not key.startswith("_")}
-

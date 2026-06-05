@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app_config import settings
 from ingest.config import ingest_settings
 from normalize.citations.excerpt import build_excerpt
 from normalize.index import SUPPORTED_PROVIDERS
@@ -25,6 +26,8 @@ def get_excerpt(
     context: int = Query(4, ge=0, le=40),
 ) -> dict[str, Any]:
     abs_path = _resolve_snapshot_file(provider, snapshot_iso, filename)
+    if abs_path.stat().st_size > settings.citation_excerpt_max_file_bytes:
+        raise HTTPException(status_code=413, detail="snapshot file too large for excerpt")
     return build_excerpt(abs_path=abs_path, json_path=path, context=context)
 
 

@@ -18,7 +18,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # noqa: E4
     InMemorySpanExporter,
 )
 
-from api.observability_agents_bridge import AgentsSdkOtelProcessor  # noqa: E402
+from api.observability.agents_bridge import AgentsSdkOtelProcessor  # noqa: E402
 
 
 def _attrs(span: ReadableSpan) -> dict[str, Any]:

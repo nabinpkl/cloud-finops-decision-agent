@@ -17,10 +17,10 @@ import httpx
 from normalize.snapshot_time import parse_fetched_at
 
 from ingest import config as ingest_config
+from project_paths import PROJECT_ROOT, SRC_ROOT as _SRC_ROOT, TAXONOMY_DIR as _TAXONOMY_DIR
 
-PROJECT_ROOT = ingest_config.PROJECT_ROOT
-SRC_ROOT = ingest_config.SRC_ROOT
-TAXONOMY_DIR = ingest_config.TAXONOMY_DIR
+SRC_ROOT = _SRC_ROOT
+TAXONOMY_DIR = _TAXONOMY_DIR
 ingest_settings = ingest_config.ingest_settings
 
 

@@ -8,7 +8,7 @@ total crosses `settings.turn_token_cap` the hook raises the neutral
 `TurnTokenCapExceeded` (defined in `agent/runtime/types.py`), which propagates up
 through the SDK and is caught by `api/assistant_transport/turn.py` (where it is
 recorded on the OTel `agent.turn` span and surfaced to the visible thread).
-This file is part of the OpenAI-agents adapter; the DeepAgents adapter enforces
+This file is part of the OpenAI-agents adapter; the LangChain adapter enforces
 the same neutral cap via its own middleware.
 
 Cumulative counters are kept on `self` because the SDK does not expose a

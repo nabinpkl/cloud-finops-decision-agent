@@ -10,6 +10,7 @@ from api.assistant_transport.models import (
     Command,
 )
 from agent.runtime import Turn
+from app_config import settings
 
 SESSION_LIMIT_MESSAGE = (
     "This conversation reached its token limit. "
@@ -20,6 +21,9 @@ SESSION_LIMIT_MESSAGE = (
 def prepare_incoming_state(raw_state: dict[str, Any] | None) -> dict[str, Any]:
     state = raw_state or {"messages": []}
     state.setdefault("messages", [])
+    if not isinstance(state["messages"], list):
+        state["messages"] = []
+    state["messages"] = state["messages"][-settings.assistant_max_state_messages:]
     # Round-tripped state is UI scaffolding. Enforcement flags are backend-owned.
     state.pop("sessionLimitReached", None)
     return state
@@ -40,10 +44,16 @@ def apply_commands(state: dict[str, Any], commands: list[Command]) -> bool:
 def build_turns(state: dict[str, Any]) -> list[Turn]:
     turns: list[Turn] = []
     for message in state["messages"]:
+        if not isinstance(message, dict):
+            continue
         text = _message_text(message)
-        if text and message.get("role") in ("user", "assistant", "system"):
+        if text and message.get("role") in ("user", "assistant"):
             turns.append(Turn(role=message["role"], content=text))
     return turns
+
+
+def history_text_length(state: dict[str, Any]) -> int:
+    return sum(len(turn.content) for turn in build_turns(state))
 
 
 def append_session_limit_message(state: dict[str, Any]) -> None:
@@ -75,9 +85,14 @@ def _apply_tool_result(state: dict[str, Any], cmd: AddToolResultCommand) -> None
 
 def _message_text(message: dict[str, Any]) -> str:
     """Concatenate all text parts of a message."""
-    return "".join(
-        (part.get("text") or "")
-        for part in message.get("parts", [])
-        if part.get("type") == "text"
-    ).strip()
-
+    parts = message.get("parts", [])
+    if not isinstance(parts, list):
+        return ""
+    text_parts: list[str] = []
+    for part in parts[:settings.assistant_max_message_parts]:
+        if not isinstance(part, dict) or part.get("type") != "text":
+            continue
+        text = part.get("text")
+        if isinstance(text, str):
+            text_parts.append(text[:settings.assistant_max_text_chars])
+    return "".join(text_parts).strip()

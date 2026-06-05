@@ -149,5 +149,6 @@ def _maybe_float(value: Any) -> float | None:
 
 
 def _relpath(path: Path) -> str:
-    from ingest._shared import PROJECT_ROOT
+    from project_paths import PROJECT_ROOT
+
     return str(path.relative_to(PROJECT_ROOT))

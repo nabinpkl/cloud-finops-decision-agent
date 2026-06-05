@@ -2,8 +2,13 @@
 
 Offline evals live here as behavior-named YAML suites. They do not call a model
 or require pricing snapshots; each case carries a canned tool call, canned tool
-result, and final answer transcript. The runner grades whether the transcript
-obeys the agent contract.
+result, and final answer transcript.
+
+`just eval` runs two CI-safe lanes:
+
+- `transcript`: grade the YAML transcript directly.
+- `replay`: emit the YAML case through the neutral runtime `Emitter` verbs
+  (`tool_call`, `tool_result`, `text_delta`) and grade the reconstructed case.
 
 Suites are split by what they protect:
 
@@ -16,6 +21,8 @@ Run:
 
 ```sh
 just eval
+uv run python -m evals --mode transcript
+uv run python -m evals --mode replay
 ```
 
 The live model evals described in `EVALS.md` are intentionally separate and will

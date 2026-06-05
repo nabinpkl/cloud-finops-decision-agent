@@ -14,12 +14,13 @@ agent-construction time.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Annotated, Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-from ingest._shared import PROJECT_ROOT
+from project_paths import PROJECT_ROOT
 
 
 class Settings(BaseSettings):
@@ -42,12 +43,12 @@ class Settings(BaseSettings):
     model_name: str = ""
 
     # Agent runtime selection (ADR-0012). Chooses which framework adapter
-    # `agent.runtime.get_runtime()` returns. "deepagents" (the default) routes to
+    # `agent.runtime.get_runtime()` returns. "langchain" (the default) routes to
     # the lean LangChain create_agent adapter; "openai_agents" routes to the
     # OpenAI Agents SDK adapter. Both stacks are core dependencies.
-    agent_runtime: Literal["openai_agents", "deepagents"] = "deepagents"
+    agent_runtime: Literal["openai_agents", "langchain"] = "langchain"
 
-    # Opt-in for the langchain runtime (AGENT_RUNTIME=deepagents): wrap the
+    # Opt-in for the langchain runtime (AGENT_RUNTIME=langchain): wrap the
     # ChatOpenAI model in the subclass that round-trips `reasoning_content`
     # (ADR-0012). Required for DeepSeek V4 thinking mode via OpenRouter, which
     # returns empty completions when prior-turn reasoning is not echoed back.
@@ -83,6 +84,24 @@ class Settings(BaseSettings):
     turn_token_cap: int = 20_000
     max_turns_per_run: int = 3
     trusted_proxy_count: int = 0
+    trusted_proxy_cidrs: Annotated[list[str], NoDecode] = []
+    public_deployment: bool = False
+
+    # Deterministic public route limits. These routes do not spend model tokens,
+    # but they still read local indexes/snapshot excerpts.
+    public_rate_requests_per_minute: int = 120
+    excerpt_rate_requests_per_minute: int = 30
+    citation_excerpt_max_file_bytes: int = 250_000_000
+
+    # Public assistant transport limits. These fire before runtime/model work
+    # so anonymous callers cannot use round-tripped UI state as unbounded prompt
+    # or memory input.
+    assistant_max_body_bytes: int = 262_144
+    assistant_max_commands: int = 8
+    assistant_max_state_messages: int = 24
+    assistant_max_message_parts: int = 16
+    assistant_max_text_chars: int = 8_000
+    assistant_max_history_chars: int = 32_000
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
@@ -91,6 +110,20 @@ class Settings(BaseSettings):
         # list. Split the former, pass the latter through untouched.
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("trusted_proxy_cidrs", mode="before")
+    @classmethod
+    def _split_cidrs(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [cidr.strip() for cidr in value.split(",") if cidr.strip()]
+        return value
+
+    @field_validator("trusted_proxy_cidrs")
+    @classmethod
+    def _validate_cidrs(cls, value: list[str]) -> list[str]:
+        for cidr in value:
+            ipaddress.ip_network(cidr, strict=False)
         return value
 
     @field_validator(
@@ -116,6 +149,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 "BUDGET_IP_HASH_SALT_SECRET must be set when BUDGET_ENABLED=true; "
                 "set a 32+ byte random value in .env or disable enforcement."
+            )
+        if self.trusted_proxy_count > 0 and not self.trusted_proxy_cidrs:
+            raise ValueError(
+                "TRUSTED_PROXY_CIDRS must be set when TRUSTED_PROXY_COUNT is non-zero; "
+                "otherwise X-Forwarded-For is client-controlled."
+            )
+        if self.public_deployment and not self.session_cookie_secure:
+            raise ValueError(
+                "SESSION_COOKIE_SECURE must be true when PUBLIC_DEPLOYMENT=true."
             )
         return self
 

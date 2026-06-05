@@ -16,7 +16,7 @@ from typing import Any
 import orjson
 from jsonpath_ng.ext import parse as jsonpath_parse
 
-from ingest._shared import PROJECT_ROOT
+from project_paths import PROJECT_ROOT
 from normalize.config import normalize_settings
 from normalize.schema import CitationVerification, IndexRow
 

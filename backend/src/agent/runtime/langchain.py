@@ -1,12 +1,9 @@
-"""LangChain runtime adapter (ADR-0012, AGENT_RUNTIME=deepagents).
+"""LangChain runtime adapter (ADR-0012, AGENT_RUNTIME=langchain).
 
 Implements the `AgentRuntime` port over the LangChain stack. The harness is the
 lean `langchain.agents.create_agent` with exactly one tool (`compare`), mirroring
 the OpenAI Agents agent one-for-one so the two runtimes are a fair A/B: same
 single tool, same citation prompt, honest per-turn token accounting. The
-`deepagents` package itself is not used; the selector value and module name keep
-the ADR-0012 naming.
-
 All LangChain types stay inside this module. Transport sees only `Turn`,
 `Emitter`, `RunUsage`, and `TurnTokenCapExceeded`.
 
@@ -128,7 +125,7 @@ class CapMiddleware(AgentMiddleware):
         return None
 
 
-class DeepAgentsRuntime:
+class LangChainRuntime:
     """`AgentRuntime` implementation backed by langchain's `create_agent`."""
 
     async def run(self, turns: list[Turn], emit: Emitter, usage: RunUsage) -> None:

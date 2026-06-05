@@ -15,7 +15,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 from app_config import settings
 from api.observability.jsonl_exporter import JsonlSpanExporter
 from api.observability.provider import infer_provider_name
-from ingest._shared import PROJECT_ROOT
+from project_paths import PROJECT_ROOT
 
 TRACER_NAME = "cloud-finops-decision-agent"
 
@@ -49,7 +49,7 @@ def init_observability(app: FastAPI) -> None:
     FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
 
     if settings.agent_runtime == "openai_agents":
-        from api.observability_agents_bridge import register_agents_bridge
+        from api.observability.agents_bridge import register_agents_bridge
 
         register_agents_bridge(
             tracer=_Init.tracer,

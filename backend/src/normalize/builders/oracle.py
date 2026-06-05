@@ -24,7 +24,7 @@ from typing import Any
 
 import orjson
 
-from ingest._shared import PROJECT_ROOT, TAXONOMY_DIR
+from project_paths import PROJECT_ROOT, TAXONOMY_DIR
 from normalize.builders import BuilderOutput
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow

@@ -23,7 +23,10 @@ class JsonlSpanExporter(SpanExporter):
     def _open(self) -> Any:
         if self._file is None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._file = open(self._path, "a", buffering=1, encoding="utf-8")
+            flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY
+            fd = os.open(self._path, flags, 0o600)
+            os.chmod(self._path, 0o600)
+            self._file = open(fd, "a", buffering=1, encoding="utf-8", closefd=True)
         return self._file
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
@@ -50,4 +53,3 @@ class JsonlSpanExporter(SpanExporter):
             if self._file is not None:
                 self._file.flush()
         return True
-

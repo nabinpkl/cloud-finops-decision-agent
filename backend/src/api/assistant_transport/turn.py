@@ -69,8 +69,9 @@ async def run_agent_turn(
         except Exception as exc:
             turn_span.record_exception(exc)
             turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
-            emitter.text_delta(f"\n\n[agent error: {type(exc).__name__}: {exc}]")
-            raise
+            emitter.text_delta(
+                "\n\nThe agent hit an internal error. Try again later."
+            )
         finally:
             if settings.budget_enabled and (run_usage.input_tokens or run_usage.output_tokens):
                 record_usage(
@@ -83,4 +84,3 @@ async def run_agent_turn(
                     "finops.session.tokens_after",
                     usage_before.total + run_usage.total,
                 )
-

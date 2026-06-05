@@ -21,7 +21,7 @@ Three layers, each independently defensible. If the frontend fails, the normaliz
                     │  backend/src/normalize)                  │
                     │  FastAPI hosts two concerns:     │
                     │  (1) agent runtime behind a      │
-                    │      neutral port: deepagents    │
+                    │      neutral port: langchain     │
                     │      default, OpenAI Agents SDK  │
                     │      optional; tools call        │
                     │      normalize in-process.       │
@@ -294,7 +294,7 @@ The normalization layer accepts either form on input. Output always carries the 
 
 ## Agent runtime and UI surface
 
-Per ADR-0009 and ADR-0012 the agent loop runs server-side in FastAPI behind `agent.runtime.AgentRuntime`. The default runtime is `deepagents`, implemented as a lean LangChain `create_agent` adapter; the OpenAI Agents SDK runtime remains available through `AGENT_RUNTIME=openai_agents`. The model is built against an OpenAI-compatible base URL, so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tool calls route through `agent.tools.pricing.run_compare`, which calls `normalize.compare` in-process; the `normalize.wire` translation (drop `store_path`, add a `snapshot` ref) is shared with the HTTP endpoints. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.
+Per ADR-0009 and ADR-0012 the agent loop runs server-side in FastAPI behind `agent.runtime.AgentRuntime`. The default runtime is `langchain`, implemented as a lean LangChain `create_agent` adapter; the OpenAI Agents SDK runtime remains available through `AGENT_RUNTIME=openai_agents`. The model is built against an OpenAI-compatible base URL, so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tool calls route through `agent.tools.pricing.run_compare`, which calls `normalize.compare` in-process; the `normalize.wire` translation (drop `store_path`, add a `snapshot` ref) is shared with the HTTP endpoints. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.
 
 `frontend/` is a Next.js app using `assistant-ui` as the chat shell, and it is frontend-only: no `app/api/*` route handlers, no agent logic, no model keys. It uses `useAssistantTransportRuntime`, which POSTs to a same-origin `/assistant` path that `next.config.js` rewrites to the backend (`BACKEND_ORIGIN` env knob) — so the browser never holds a backend URL and there is no CORS round-trip. The agent decides which custom tool component to render based on the query shape; the frontend maps tool names to components.
 

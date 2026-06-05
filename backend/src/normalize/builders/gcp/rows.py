@@ -7,7 +7,7 @@ import re
 from functools import lru_cache
 from typing import Any
 
-from ingest._shared import TAXONOMY_DIR
+from project_paths import TAXONOMY_DIR
 from normalize.schema import IndexRow
 from normalize.taxonomy.loader import canonical_region
 
@@ -140,4 +140,3 @@ def family_regex(rules: dict[str, Any]) -> re.Pattern:
     compiled = re.compile(pattern)
     FAMILY_RE_CACHE[key] = compiled
     return compiled
-

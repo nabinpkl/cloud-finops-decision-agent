@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from ingest.config import PROJECT_ROOT
+from project_paths import PROJECT_ROOT
 
 
 class NormalizeSettings(BaseSettings):

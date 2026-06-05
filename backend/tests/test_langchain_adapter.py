@@ -1,4 +1,4 @@
-"""The langchain adapter (ADR-0012): drive `DeepAgentsRuntime.run` with a
+"""The langchain adapter (ADR-0012): drive `LangChainRuntime.run` with a
 scripted fake chat model and assert the neutral `Emitter` receives the right
 verbs in order and `RunUsage` sums the per-step `usage_metadata`. No live
 provider; the citation/tool body is stubbed so no store/ snapshot is needed."""
@@ -15,7 +15,7 @@ from langchain_core.language_models import BaseChatModel  # noqa: E402
 from langchain_core.messages import AIMessage  # noqa: E402
 from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
 
-import agent.runtime.deepagents as da  # noqa: E402
+import agent.runtime.langchain as lc  # noqa: E402
 from agent.runtime.types import RunUsage, Turn  # noqa: E402
 
 
@@ -67,17 +67,17 @@ async def _run(monkeypatch) -> tuple[_RecordingEmitter, RunUsage]:
         usage_metadata={"input_tokens": 20, "output_tokens": 12, "total_tokens": 32},
     )
     monkeypatch.setattr(
-        da, "_build_model", lambda: _FakeToolModel(responses=[tool_turn, answer_turn])
+        lc, "_build_model", lambda: _FakeToolModel(responses=[tool_turn, answer_turn])
     )
     # Stub the citation/tool body so the test needs no store/ snapshot. Patch the
     # name the adapter closure actually calls (imported into da's namespace).
     monkeypatch.setattr(
-        da, "run_compare", lambda **kw: {"results": [{"provider": "aws", "monthly_usd": 140.16}]}
+        lc, "run_compare", lambda **kw: {"results": [{"provider": "aws", "monthly_usd": 140.16}]}
     )
 
     emitter = _RecordingEmitter()
     usage = RunUsage()
-    await da.DeepAgentsRuntime().run([Turn("user", "cheapest 4/8 eu?")], emitter, usage)
+    await lc.LangChainRuntime().run([Turn("user", "cheapest 4/8 eu?")], emitter, usage)
     return emitter, usage
 
 

@@ -20,8 +20,9 @@ from typing import Any
 
 import polars as pl
 
-from normalize.citations import build_citation
+from normalize.citations.build import build_citation
 from normalize.data_quality import compute_envelope
+from normalize.index import SUPPORTED_PROVIDERS
 from normalize.query.flex_synthesis import load_flex_rules
 from normalize.query.flex_synthesis import synthesize_rate_results
 from normalize.query.instance_ranking import (
@@ -41,6 +42,7 @@ from normalize.query.models import (
 )
 
 DEFAULT_PROVIDERS = ["aws", "azure", "ibm", "linode", "vultr", "gcp", "oracle"]
+SUPPORTED_PROVIDER_SET = set(SUPPORTED_PROVIDERS)
 ANY_FAMILY = "any"
 HOURS_PER_MONTH = 730.0
 
@@ -60,7 +62,7 @@ def compare(
     vcpu_actual >= vcpu AND ram_gb_actual >= ram_gb, smallest first, ties broken
     by lower monthly_usd.
     """
-    providers = providers or DEFAULT_PROVIDERS
+    providers = _validated_providers(providers or DEFAULT_PROVIDERS)
     results: list[CompareResult] = []
     unmet: list[UnmetRequirement] = []
 
@@ -159,6 +161,7 @@ def lookup(
     `region` accepts either a canonical bucket (us-east) or a provider-native
     code (us-east-1). Match is exact on instance_type.
     """
+    _validated_providers([provider])
     loaded = load_latest(provider)
     request = LookupRequest(
         provider=provider,
@@ -218,6 +221,13 @@ def lookup(
 
 
 # ---------- helpers ----------
+
+
+def _validated_providers(providers: list[str]) -> list[str]:
+    unknown = sorted(set(providers) - SUPPORTED_PROVIDER_SET)
+    if unknown:
+        raise ValueError(f"unsupported provider(s): {', '.join(unknown)}")
+    return providers
 
 
 def _read_receipt(snapshot_dir: Path) -> dict[str, Any]:

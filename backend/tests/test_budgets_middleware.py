@@ -26,6 +26,10 @@ def _build_app() -> FastAPI:
     def health() -> dict:
         return {"ok": True}
 
+    @app.get("/lookup")
+    def lookup() -> dict:
+        return {"ok": True}
+
     return app
 
 
@@ -37,6 +41,9 @@ def budgets_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "global_daily_token_cap", 1_000_000)
     monkeypatch.setattr(settings, "client_rate_requests_per_minute", 3)
     monkeypatch.setattr(settings, "client_rate_tokens_per_hour", 1_000_000)
+    monkeypatch.setattr(settings, "public_rate_requests_per_minute", 2)
+    monkeypatch.setattr(settings, "trusted_proxy_count", 0)
+    monkeypatch.setattr(settings, "trusted_proxy_cidrs", [])
     monkeypatch.setattr(budget_store._Init, "done", False)
     monkeypatch.setattr(budget_store._Init, "conn", None)
     budget_store.init_budgets()
@@ -89,3 +96,39 @@ def test_off_switch_passes_everything_through(monkeypatch: pytest.MonkeyPatch):
     client = TestClient(_build_app())
     for _ in range(20):
         assert client.post("/assistant", json={}).status_code == 200
+
+
+def test_public_route_rate_returns_429_after_burst(budgets_on):
+    client = TestClient(_build_app())
+    for _ in range(2):
+        assert client.get("/lookup").status_code == 200
+    r = client.get("/lookup")
+    assert r.status_code == 429
+    assert r.json()["error"] == "public_route_request_rate"
+
+
+def test_untrusted_peer_cannot_spoof_rate_identity_with_xff(
+    budgets_on,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(settings, "public_rate_requests_per_minute", 1)
+    monkeypatch.setattr(settings, "trusted_proxy_count", 1)
+    monkeypatch.setattr(settings, "trusted_proxy_cidrs", ["203.0.113.0/24"])
+    client = TestClient(_build_app(), client=("192.0.2.10", 12345))
+
+    assert client.get("/lookup", headers={"x-forwarded-for": "198.51.100.1"}).status_code == 200
+    r = client.get("/lookup", headers={"x-forwarded-for": "198.51.100.2"})
+    assert r.status_code == 429
+
+
+def test_trusted_peer_uses_xff_client_for_rate_identity(
+    budgets_on,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(settings, "public_rate_requests_per_minute", 1)
+    monkeypatch.setattr(settings, "trusted_proxy_count", 1)
+    monkeypatch.setattr(settings, "trusted_proxy_cidrs", ["203.0.113.0/24"])
+    client = TestClient(_build_app(), client=("203.0.113.10", 12345))
+
+    assert client.get("/lookup", headers={"x-forwarded-for": "198.51.100.1"}).status_code == 200
+    assert client.get("/lookup", headers={"x-forwarded-for": "198.51.100.2"}).status_code == 200

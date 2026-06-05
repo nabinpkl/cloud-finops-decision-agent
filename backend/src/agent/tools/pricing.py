@@ -2,7 +2,7 @@
 
 The pricing tools' actual work lives here, free of any agent framework. Each
 runtime adapter wraps `run_compare` in its own tool type (the OpenAI Agents
-SDK's `function_tool`; a LangChain `StructuredTool` in the DeepAgents adapter),
+SDK's `function_tool`; a LangChain `StructuredTool` in the LangChain adapter),
 but the body, including the `wire_response` citation translation that protects
 every caller, is defined once in this module.
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from normalize.wire import wire_response
-from normalize.query import compare as _normalize_compare
+from normalize.query.service import compare as _normalize_compare
 
 COMPARE_DESCRIPTION = (
     "Rank cloud providers by cheapest instance matching a vCPU/RAM spec.\n\n"

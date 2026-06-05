@@ -3,7 +3,7 @@
 This module is part of the OpenAI-agents *adapter*: it wraps the
 framework-neutral logic in `agent/tools/pricing.py` with the Agents SDK's
 `function_tool` so the OpenAI runtime adapter can call
-it. The DeepAgents adapter binds the same `run_compare` with a LangChain
+it. The LangChain adapter binds the same `run_compare` with a LangChain
 `@tool` instead; the shared body, and the `wire_response` citation translation
 inside it, lives once in `agent.tools.pricing`.
 

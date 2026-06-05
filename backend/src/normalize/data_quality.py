@@ -15,7 +15,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ingest.config import PROJECT_ROOT, ingest_settings
+from ingest.config import ingest_settings
+from project_paths import PROJECT_ROOT
 from normalize.query.loader import latest_snapshot_dir
 from normalize.schema import DriftFlag
 from normalize.snapshot_time import snapshot_age_hours

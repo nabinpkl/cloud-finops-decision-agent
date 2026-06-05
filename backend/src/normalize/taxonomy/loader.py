@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 
-from ingest._shared import TAXONOMY_DIR
+from project_paths import TAXONOMY_DIR
 
 FAMILIES_PATH = TAXONOMY_DIR / "families.json"
 REGIONS_PATH = TAXONOMY_DIR / "regions.json"

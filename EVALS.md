@@ -28,7 +28,7 @@ The eval suite should verify that full loop, not just whether a model sounds hel
 
 6. Runtime parity.
 
-   `AGENT_RUNTIME=deepagents` and `AGENT_RUNTIME=openai_agents` should receive the same prompt, expose the same tool shape, and produce equivalent tool calls and structured tool-result events.
+   `AGENT_RUNTIME=langchain` and `AGENT_RUNTIME=openai_agents` should receive the same prompt, expose the same tool shape, and produce equivalent tool calls and structured tool-result events.
 
 7. Transport behavior.
 
@@ -46,15 +46,15 @@ These run in normal CI with no model and no provider snapshots. They should asse
 - Tool descriptions mention closest-larger match policy and citations.
 - Stale/fresh citation examples can be checked by pure helper functions once prose validators exist.
 
-### Layer 2: Mocked Agent Loop Evals
+### Layer 2: Offline Replay Evals
 
-These use fake runtime/model behavior and fixture tool results. They should not call a live LLM. Their job is to test our wrappers:
+These use fake runtime/model behavior and fixture tool results. They should not call a live LLM. Their job is to test the neutral agent event contract:
 
-- The runtime emits `tool_call` with parsed args.
+- A user turn can drive `tool_call` with parsed args.
 - The runtime emits structured `tool_result`.
-- Token usage and turn caps are recorded.
-- Errors and capped turns produce clear assistant text.
-- Both runtime adapters can be exercised through the same fake compare payload.
+- Final text is reconstructed from `text_delta`.
+- Usage accounting is present for the replayed turn.
+- Transcript graders run against the emitted events, not only the raw YAML.
 
 ### Layer 3: Transcript Compliance Evals
 
@@ -101,6 +101,7 @@ Live evals should save enough evidence to debug regressions: prompt version, run
    - "big 3" provider scoping.
    - full candidate listing.
 3. Build deterministic graders for price provenance, snapshot-age presence, stale wording, missing-data refusal, and candidate coverage.
-4. Add a fixture runtime that feeds canned tool results to the grader without a live model.
+4. Add a replay runtime that emits canned tool calls/results/final text through
+   the neutral `Emitter` without a live model.
 5. Add `just eval` to run offline evals in CI after unit tests.
 6. Add optional live smoke command that writes transcripts to `var/evals/`.

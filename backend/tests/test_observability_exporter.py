@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 
 from opentelemetry.sdk.resources import Resource
@@ -52,3 +53,15 @@ def test_exporter_creates_parent_directory(tmp_path: Path):
     exporter.shutdown()
     assert deep.parent.is_dir()
     assert deep.exists()
+
+
+def test_exporter_creates_private_trace_file(tmp_path: Path):
+    deep = tmp_path / "traces.jsonl"
+    exporter = JsonlSpanExporter(deep)
+    provider = TracerProvider(resource=Resource.create({"service.name": "test"}))
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    provider.get_tracer("t").start_span("x").end()
+    provider.shutdown()
+    exporter.shutdown()
+
+    assert stat.S_IMODE(deep.stat().st_mode) == 0o600

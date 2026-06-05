@@ -28,6 +28,7 @@ class BudgetBlock(BudgetModel):
         "global_daily",
         "client_request_rate",
         "client_token_rate",
+        "public_route_request_rate",
         "session",
     ]
     http_status: int

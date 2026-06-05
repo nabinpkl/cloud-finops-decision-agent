@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 
-from normalize.query import ANY_FAMILY, compare, lookup
+from normalize.query.service import ANY_FAMILY, compare, lookup
 
 
 def main(argv: list[str] | None = None) -> None:

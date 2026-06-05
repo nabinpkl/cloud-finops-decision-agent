@@ -9,7 +9,7 @@ from typing import Any
 
 import polars as pl
 
-from ingest._shared import TAXONOMY_DIR
+from project_paths import TAXONOMY_DIR
 from normalize.query.models import (
     CompareResult,
     CompositeCitation,
