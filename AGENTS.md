@@ -9,14 +9,23 @@ This project has two modes the agent operates in:
 The two modes coexist in this file in v0. Post-v0, the price / cloud rules move into their own space (likely `price-agent/AGENTS.md` loaded via slash command or workspace switch) so a coding session in this repo is not weighted down by runtime rules it never uses.
 
 ## Coding Agent mode
-In coding agent mode load these first before editing code if not already loaded into your context.
 
-**At session start, and again after any context compaction, read these files if they are not already in context. Do not skip. Do not assume they are loaded.**
-These files do not live in this repo. They are referenced by absolute path from the canonical location. If a path no longer resolves, stop and surface the failure instead of inventing rules.
+In coding agent mode, read the repo-local context before editing:
 
-1. `/Users/nabin/projects/atc-agent-traffic-control/taste/library/universal-AGENTS.md` cross-cutting worker rules. Authoritative for voice, scope discipline, output format, coding rules, and how to write for other agents.
-2. `/Users/nabin/projects/atc-agent-traffic-control/taste/library/iteration/TASKS-MD-Guidelines.md` the shape of `TASKS.md` for any iteration that opens.
-3. `/Users/nabin/projects/atc-agent-traffic-control/taste/library/languages/python.md` Python conventions. Authoritative when writing or reviewing Python in this repo.
+1. `README.md` for project purpose, setup, and current status.
+2. `PRD.md` for product scope and non-goals.
+3. `SPEC.md` for technical contracts and data shapes.
+4. `architecture-decisions/README.md` plus any ADR relevant to the files being changed.
+
+Coding rules:
+
+- Keep Python under `src/` with absolute imports.
+- Use type hints for new Python code.
+- Prefer dataclasses or Pydantic models for structured data over untyped dict contracts.
+- Use `uv` for Python dependencies and `just check` for local verification.
+- Do not commit local runtime artifacts: `.env`, `.env.*`, `.infisical.json`, `store/`, `var/`, `.venv/`, caches, frontend build output, or `node_modules`.
+- Do not put provider credentials, API keys, traces, local database files, or fetched pricing snapshots in git.
+- Keep docs split by ownership: `README.md` for users, `PRD.md` for intent, `SPEC.md` for technical contracts, `AGENTS.md` for agent behavior.
 
 
 ## Price / cloud agent mode

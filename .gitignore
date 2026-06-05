@@ -4,14 +4,33 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.ty/
+.pnpm-store/
+node_modules/
+.next/
+out/
+*.tsbuildinfo
 
 # Pricing snapshots are local artifacts; re-fetched via `just fetch-all` on a fresh clone.
 store/
 
 # Runtime-mutable output (OTel JSONL traces and anything else the running app writes).
 var/
+traces/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+.coverage
+htmlcov/
+dist/
+build/
 
 .DS_Store
 
 .env
-.env.local
+.env.*
+!.env.example
+.infisical.json

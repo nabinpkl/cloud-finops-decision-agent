@@ -1,0 +1,93 @@
+name: Feature request
+description: Propose a provider, normalization improvement, API/frontend change, or contribution workflow update.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for new providers, better normalization coverage, API/frontend improvements, or developer workflow changes. Pricing features should preserve the citation contract: every price must trace to a snapshot file and upstream source.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project would change?
+      options:
+        - New ingest provider
+        - Existing ingest provider
+        - Normalize builder or taxonomy
+        - Query ranking or citation output
+        - FastAPI backend
+        - Frontend chat / comparison table
+        - Developer workflow or documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: Provider, service, or region
+      description: If this is cloud-pricing related, name the provider, service family, and regions in scope.
+      placeholder: hetzner cloud x86 shared vCPU, eu-central
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or contributor problem does this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the smallest useful change. For providers, include the public pricing source and expected snapshot shape.
+      placeholder: |
+        Add `src/ingest/<provider>` to fetch ...
+        Add `src/normalize/builders/<provider>` to emit normalized rows ...
+        Extend taxonomy for ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: citation_contract
+    attributes:
+      label: Citation and verification plan
+      description: How will a reviewer verify prices, equivalence claims, or rankings from source data?
+      placeholder: |
+        Source URL:
+        Snapshot files:
+        Citation JSON paths:
+        Ranking candidates considered:
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What must be true when this is done?
+      placeholder: |
+        - `just check` passes.
+        - New or changed pricing rows carry source_url, store_path, json_path, fetched_at, and age_hours.
+        - Query output lists all ranking candidates considered.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs or non-goals
+      description: What should stay out of scope for the first version?
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Contribution checks
+      options:
+        - label: I checked README.md, SPEC.md, and AGENTS.md for the current project contract.
+          required: true
+        - label: I understand raw provider snapshots may be large or redistribution-sensitive and should not be attached unless explicitly requested.
+          required: true

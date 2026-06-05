@@ -1,0 +1,100 @@
+name: Bug report
+description: Report incorrect behavior in ingest, normalization, API, or frontend.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. This project is citation-backed: pricing bugs need enough snapshot and citation detail for someone else to reproduce the claim.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project is affected?
+      options:
+        - Cloud pricing snapshots / store data
+        - Ingest provider module
+        - Normalize builder or taxonomy
+        - Query ranking or citation output
+        - FastAPI backend
+        - Frontend chat / comparison table
+        - Documentation or contribution workflow
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: Provider or region, if relevant
+      description: "Examples: aws us-east-1, gcp europe-west3, azure westeurope, ibm us-south."
+      placeholder: aws eu-central-1
+
+  - type: textarea
+    id: current_behavior
+    attributes:
+      label: Current behavior
+      description: What happened? Include the exact command, API route, UI flow, or agent question.
+      placeholder: "`just compare 4 8 eu-central general-purpose` returns ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: citation_context
+    attributes:
+      label: Snapshot and citation context
+      description: For pricing bugs, include store paths, receipt timestamps, JSON paths, cited source URLs, and whether the snapshot was stale.
+      placeholder: |
+        store/aws/2026-06-05T12:00:00Z/eu-central-1.json
+        receipt fetched_at:
+        json_path:
+        source_url:
+        age_hours:
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: List the smallest steps someone can run from a fresh checkout.
+      placeholder: |
+        1. `uv sync`
+        2. `cp .env.example .env`
+        3. `just fetch aws`
+        4. `just check`
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Paste relevant terminal output, traceback, API response, browser console output, or screenshot notes.
+      render: shell
+
+  - type: textarea
+    id: checks
+    attributes:
+      label: Verification run
+      description: Which checks did you run?
+      placeholder: "`just check` passed/failed with ..."
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Contribution checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I did not include secrets, API keys, private traces, or large raw snapshot files.
+          required: true

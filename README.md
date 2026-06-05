@@ -72,3 +72,13 @@ AWS, Azure, Oracle, Vultr, Linode, and IBM all expose their pricing through publ
 Ingest modules ship for all 7 providers, including IBM's three-hop walk to per-region compute pricing. The normalization layer is complete: parquet indexes per provider with citation-verified prices, drift detection via fingerprint plus coverage report, and a query layer (`compare()`, `lookup()`) that synthesizes composite results from per-resource rate rows for GCP and Oracle. `just compare 4 8 eu-central general-purpose` returns all 7 providers ranked by monthly cost with full citation blocks and a `data_quality` envelope.
 
 The FastAPI query wrapper over `compare()`/`lookup()` (plus `/citation/excerpt` and `/health`) is built and tested. The server-side `/assistant` endpoint is implemented, the runtime port supports both `deepagents` and OpenAI Agents SDK adapters, budget controls protect the model surface, and the frontend renders a `ComparisonTable` tool result. Remaining v0 work is citation depth, prose tuning, browser smoke verification, and the LLM-judge eval over `eval/v0.jsonl`.
+
+## Security and Local Data
+
+This repo is experimental and pre-release. Security fixes land on the default branch until tagged releases exist; see `SECURITY.md` for reporting guidance.
+
+Local runtime artifacts are intentionally excluded from source control. Keep `.env`, Infisical state, `store/` snapshots, `var/` traces, and SQLite budget databases private. Snapshots can be re-fetched from provider APIs, while traces and budget state may contain sensitive operational data.
+
+## License
+
+Apache-2.0; see `LICENSE`.
