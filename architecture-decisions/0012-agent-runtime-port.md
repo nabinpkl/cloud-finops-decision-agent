@@ -14,7 +14,7 @@ state (DeepSeek V4 thinking mode via OpenRouter) need their `reasoning_content`
 round-tripped on every turn, and the SDK's Chat Completions adapter does not do
 it, producing empty completions. That is one symptom of a general fact: the
 framework choice is not free, and we want the ability to run the same agent on a
-different framework (LangChain / DeepAgents next) to compare them on the same
+different framework (LangChain next) to compare them on the same
 workload, behind one env var, without a rewrite.
 
 The risk in adding a second framework is entanglement. The valuable, hard-won
@@ -64,7 +64,7 @@ generalized so every adapter obeys it.
 ### 3. Ours vs adapter — the boundary rule
 
 ```
-ours/  (framework-free — the asset; must NOT import agents/langchain/deepagents)
+ours/  (framework-free — the asset; must NOT import agents/langchain)
   agent/runtime/types.py      the port + neutral types
   api/assistant_transport/    HTTP, session, budgets, StateEmitter, the agent.turn span
   api/budgets.py  api/middleware.py
@@ -75,8 +75,8 @@ adapter/  (framework glue — swappable; imports exactly one framework)
   agent/runtime/openai_agents/   Agent + OpenAIChatCompletionsModel; Runner.run_streamed;
                                  stream_events() -> Emitter; BudgetHooks for the cap
   agent/runtime/openai_agents/  (the OpenAI-agents binding of the above)
-  agent/runtime/deepagents.py    create_agent; StructuredTool wrapping run_compare;
-                                 LangGraph stream -> Emitter; @after_model cap middleware
+  agent/runtime/langchain.py     create_agent; StructuredTool wrapping run_compare;
+                                 LangGraph stream -> Emitter; middleware cap enforcement
 ```
 
 The invariant: **`agent/tools/pricing.py` and everything under `ours/` import no
@@ -88,19 +88,19 @@ that guarantee cannot be a framework's responsibility.
 
 ### 4. Selection by env
 
-`settings.agent_runtime` (env `AGENT_RUNTIME`, default `openai_agents`) chooses
+`settings.agent_runtime` (env `AGENT_RUNTIME`, default `langchain`) chooses
 the adapter. `agent/runtime/get_runtime()` imports the chosen adapter **lazily
 inside the branch**, so a runtime whose dependency is not installed (e.g.
-`deepagents`) never breaks the default path, and flipping the experiment is one
-env var. The active runtime is recorded on the `agent.turn` span as
+`openai_agents`) never breaks the default path, and flipping the experiment is
+one env var. The active runtime is recorded on the `agent.turn` span as
 `finops.agent.runtime`, so traces and the smoke can be attributed per framework.
 
 ### 5. The cap is policy (ours); the hook is plumbing (adapter)
 
 `TurnTokenCapExceeded` and the "stop at `turn_token_cap`" rule are ours and
 neutral. *How* a framework counts tokens and interrupts differs: the Agents SDK
-gives a per-LLM-call `on_llm_end` hook; DeepAgents/LangChain gives an
-`@after_model` middleware. Each adapter enforces the same neutral exception with
+gives a per-LLM-call `on_llm_end` hook; LangChain gives middleware around model
+calls. Each adapter enforces the same neutral exception with
 its own mechanism. A consequence: token-counting **granularity** differs across
 runtimes (per-call vs per-step), so the smoke's per-call deltas will not line up
 one-to-one between frameworks. The cumulative per-turn total, which is what the
@@ -122,10 +122,10 @@ meant to contain.
 **Known wart — observability still imports `agents.tracing`.** `api/observability.py`
 bridges the Agents SDK's internal spans into the OTel JSONL (ADR-0010). It lives
 in an "ours"-looking file but is a second framework coupling. It is additive and
-only fires under `openai_agents`; under `deepagents` it produces nothing, so it
+only fires under `openai_agents`; under `langchain` it produces nothing, so it
 is not broken, but it is not neutral either. The neutral `agent.turn` span in
-transport is unaffected. Cleaning this (a tracing bridge per adapter; DeepAgents
-traces via LangSmith/LangGraph) is deferred to the DeepAgents adapter step, not
+transport is unaffected. Cleaning this (a tracing bridge per adapter; LangChain
+traces via LangSmith/LangGraph) is deferred to the LangChain adapter step, not
 done here, to keep this change a behavior-preserving refactor.
 
 **Granularity caveat (restated).** Cross-runtime token deltas are not
@@ -147,13 +147,12 @@ per-call difference is not mistaken for a bug.
 ## Status of the implementation
 
 The port, the OpenAI-agents adapter, the env router, and the boundary refactor
-of the assistant transport are done and shipped behind no behavior change (`just
-check` green). `agent/runtime/deepagents.py` is a placeholder that raises if
-selected; the real DeepAgents adapter is the next change.
+of the assistant transport shipped behind no behavior change (`just check`
+green). A later amendment added the LangChain adapter and made it the default.
 
-## Amendment 2026-06-02: DeepAgents adapter shipped; default flipped
+## Amendment 2026-06-02: LangChain adapter shipped; default flipped
 
-The LangChain adapter (`agent/runtime/deepagents.py`) is implemented: lean
+The LangChain adapter (`agent/runtime/langchain.py`) is implemented: lean
 `langchain.agents.create_agent` with the single `compare` tool, the
 stream-to-`Emitter` mapping, a `CapMiddleware` enforcing the neutral per-turn
 cap, and `ReasoningRoundTripChatOpenAI` (gated by
@@ -162,7 +161,7 @@ echo-back.
 
 Two decisions in this ADR are superseded:
 
-- **Default runtime is now `deepagents`, not `openai_agents`.** The LangChain
+- **Default runtime is now `langchain`, not `openai_agents`.** The LangChain
   runtime drives DeepSeek-via-OpenRouter correctly where the OpenAI Agents SDK
   Chat Completions path returns empty completions, so it is the better default
   for this deployment's provider. Verified live: a single-turn pricing question

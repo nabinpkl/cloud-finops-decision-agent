@@ -1,6 +1,6 @@
 # Eval Plan
 
-This project's agent is not a general cloud-pricing oracle. It is a server-side pricing assistant whose only runtime tool is `compare`. The tool calls the deterministic normalization layer in-process, returns ranked matching instances, and carries citation metadata. The prompt then constrains the model's prose: every price must come from the tool result, every quoted price must surface snapshot age inline, stale data must be marked stale, and uncovered questions must be answered plainly rather than guessed.
+This project's agent is not a general cloud-pricing oracle. It is a server-side pricing assistant whose only runtime tool is `compare`. The tool calls the deterministic normalization layer in-process, returns ranked matching instances, and carries citation metadata. The prompt now constrains the model to emit an `AnswerPlan` JSON object. Backend policy validates every plan claim against the tool result and renders final prose by interpolation, so every quoted price comes from the tool result, every quoted price surfaces snapshot age inline, stale data is marked stale, and uncovered questions are answered plainly rather than guessed.
 
 The eval suite should verify that full loop, not just whether a model sounds helpful.
 
@@ -12,7 +12,7 @@ The eval suite should verify that full loop, not just whether a model sounds hel
 
 2. Citation-contract compliance.
 
-   Any price in final prose must be traceable to a tool result row. The answer must include `(snapshot Xh old)` next to each quoted price, must not invent provider prices missing from the tool result, and must expose citation blocks or structured citation output through the tool result.
+   Any price claim in `AnswerPlan.price_claims[]` or priced `candidate_claims[]` must bind to a tool result row by `source_result_index`. Rendered prose must include `(snapshot Xh old)` next to each quoted price, must not invent provider prices missing from the tool result, and must expose structured citation output through the tool result.
 
 3. Staleness behavior.
 
@@ -28,7 +28,7 @@ The eval suite should verify that full loop, not just whether a model sounds hel
 
 6. Runtime parity.
 
-   `AGENT_RUNTIME=langchain` and `AGENT_RUNTIME=openai_agents` should receive the same prompt, expose the same tool shape, and produce equivalent tool calls and structured tool-result events.
+   `AGENT_RUNTIME=langchain` and `AGENT_RUNTIME=openai_agents` should receive the same prompt, expose the same tool shape, and produce equivalent tool calls, structured tool-result events, and `AnswerPlan` output.
 
 7. Transport behavior.
 
@@ -48,7 +48,7 @@ These run in normal CI with no model and no provider snapshots. They should asse
 - Both runtime adapters import the same `INSTRUCTIONS`.
 - `run_compare` returns the frontend-safe wire shape.
 - Tool descriptions mention closest-larger match policy and citations.
-- Stale/fresh citation examples can be checked by pure helper functions once prose validators exist.
+- `AnswerPlan` schema validation, source-row binding, deterministic rendering, and final-answer policy fallback can be checked by pure helper functions.
 
 ### Layer 2: Offline Replay Evals
 
@@ -56,15 +56,16 @@ These use fake runtime/model behavior and fixture tool results. They should not 
 
 - A user turn can drive `tool_call` with parsed args.
 - The runtime emits structured `tool_result`.
-- Final text is reconstructed from `text_delta`.
+- Final model JSON is reconstructed from `text_delta`, validated as an `AnswerPlan`, and rendered into final text by policy.
 - Usage accounting is present for the replayed turn.
 - Transcript graders run against the emitted events, not only the raw YAML.
 
 ### Layer 3: Transcript Compliance Evals
 
-Create behavior-named YAML suites under `evals/cases/` with inputs, fake tool results, and expected behavioral checks. A local grader should inspect the final answer with deterministic rules first:
+Create behavior-named YAML suites under `evals/cases/` with inputs, fake tool results, expected `answer_plan`, and expected rendered answer. A local grader should inspect the plan and final answer with deterministic rules first:
 
-- Price mentions must match prices in the supplied tool result.
+- Plan price claims must match prices in the supplied tool result.
+- Rendered price mentions must match prices in the supplied tool result.
 - Each price mention must have nearby `snapshot`.
 - Stale cases must include "stale" or equivalent wording plus a refetch offer.
 - Missing-coverage cases must not contain numeric price claims.
@@ -98,19 +99,19 @@ Live evals should save enough evidence to debug regressions: prompt version, run
 - `just eval`: fast offline evals using fixtures.
 - `just eval-smoke`: one live model smoke eval.
 
-## First Implementation Slice
+## Implemented Slice
 
-1. Land the root `prompts/` directory and loader test.
-2. Add YAML eval suite schema with five initial cases split by behavior:
+1. Root `prompts/` directory and loader test.
+2. YAML eval suite schema with behavior-split cases:
    - cheapest 4 vCPU 8 GB general-purpose in EU.
    - stale snapshot over 24 hours.
    - unsupported provider/region.
    - "big 3" provider scoping.
    - full candidate listing.
-3. Build deterministic graders for price provenance, snapshot-age presence, stale wording, missing-data refusal, and candidate coverage.
-4. Add a replay runtime that emits canned tool calls/results/final text through
+3. Deterministic graders for AnswerPlan binding, price provenance, snapshot-age presence, stale wording, missing-data refusal, and candidate coverage.
+4. Replay runtime that emits canned tool calls/results/AnswerPlan JSON through
    the neutral `Emitter` without a live model.
-5. Add `just eval` to run offline evals in CI after unit tests.
-6. Add strict tool args, XML trust-zone wrapping, and deterministic final-answer
-   policy checks before runtime text reaches the UI.
-7. Add optional live smoke command that writes transcripts to `var/evals/`.
+5. `just eval` runs offline evals in CI after unit tests.
+6. Strict tool args, XML trust-zone wrapping, deterministic AnswerPlan
+   validation/rendering, and final-answer policy checks before runtime text reaches the UI.
+7. Optional live smoke command writes transcripts to `var/evals/`.

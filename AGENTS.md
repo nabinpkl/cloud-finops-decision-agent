@@ -36,7 +36,7 @@ This project is a citation-backed cloud pricing tool. The agent is the major pla
 
 ### Calling the normalization layer
 
-The agent's primary tool for pricing answers is the normalization layer (`normalize.compare`, `normalize.lookup`). Per ADR-0009 the runtime agent lives inside the FastAPI process (Python OpenAI Agents SDK), so its tools call `normalize.compare` / `normalize.lookup` **in-process** (a direct Python import, no HTTP self-hop). The FastAPI HTTP endpoints remain for external consumers (the CLI, other services) and are not the path the in-repo agent uses to reach its own data layer. The normalization layer encapsulates the snapshot walk, taxonomy lookup, match policy (closest-larger), and citation block construction. The agent quotes its output and surfaces the citation in prose; it does not re-do the deterministic work.
+The agent's primary tool for pricing answers is the normalization layer (`normalize.compare`, `normalize.lookup`). Per ADR-0009 and ADR-0012 the runtime agent lives inside the FastAPI process behind a framework-neutral port, so its tools call `normalize.compare` / `normalize.lookup` **in-process** (a direct Python import, no HTTP self-hop). The FastAPI HTTP endpoints remain for external consumers (the CLI, other services) and are not the path the in-repo agent uses to reach its own data layer. The normalization layer encapsulates the snapshot walk, taxonomy lookup, match policy (closest-larger), and citation block construction. The agent quotes its output and surfaces the citation in prose; it does not re-do the deterministic work.
 
 Direct snapshot walking is still allowed when (a) the normalization layer does not cover the question (e.g. "are there any Power Systems prices in IBM's catalog?"), or (b) the user explicitly asks the agent to explore the raw data. In those cases the agent constructs the citation block by hand per SPEC.md.
 
@@ -69,11 +69,12 @@ Citations point at the specific file containing the price.
 
 ### Citation behavior
 
-The citation block schema (the five JSON fields `source_url`, `store_path`, `json_path`, `fetched_at`, `age_hours`) is defined in SPEC.md. This section governs how the agent surfaces it.
+The internal citation block schema (`source_url`, `store_path`, `json_path`, `fetched_at`, `age_hours`) is defined in SPEC.md. The model-visible wire shape deliberately drops `store_path` and adds a logical `snapshot` ref per ADR-0008, so local filesystem paths are not exposed through the unauthenticated assistant surface. This section governs how the agent surfaces citations.
 
-- Every price in a response carries a citation block AND has its age surfaced inline in prose. The user must never have to dig into a JSON block to learn how old the data is.
-- Inline prose format: append `(snapshot Xh old)` to every price the agent quotes. The full JSON citation lives below the prose answer (or inside the rendered tool component's Source primitive in the agent UI).
-- If `age_hours` exceeds 24 for any snapshot used, mark that answer as stale in prose and prompt the user about re-fetching with `--force`.
+- Every price in a response carries a citation through the tool result AND has its age surfaced inline in prose. The user must never have to dig into JSON to learn how old the data is.
+- Inline prose format: append `(snapshot Xh old)` to every price the agent quotes.
+- The model emits an `AnswerPlan` JSON object, not final user-facing prose. Backend policy validates every plan claim against the latest tool result and renders the prose by interpolation per ADR-0013.
+- If `age_hours` exceeds 24 for any snapshot used, the rendered answer marks the snapshot stale in prose and prompts the user about re-fetching with `--force`.
 
 #### Computing `age_hours` correctly
 
@@ -107,6 +108,6 @@ Agent response opens with:
 
 > Cheapest is AWS `m5.xlarge` at $140.16/mo (eu-central-1, snapshot 6h old). Close runners: GCP `n2-standard-4` at $148.92/mo (europe-west3, snapshot just fetched), Azure `Standard_D4s_v5` at $154.20/mo (westeurope, snapshot just fetched). Equivalence basis: vCPU and RAM exact, all general-purpose class (excluded compute- and memory-optimized SKUs). Dimensions not normalized: CPU generation, network bandwidth, attached storage.
 
-Followed by one JSON citation block per result in the shape above. Each `store_path` points at the specific file the number came from (e.g. `store/aws/<ISO>/eu-central-1.json`, `store/gcp/<ISO>/skus.json`, `store/azure/<ISO>/westeurope.json`).
+Followed by one public citation entry per result in the tool result / UI Source primitive. Each public citation carries `source_url`, `json_path`, `age_hours`, and a logical `snapshot` ref. Internal verification resolves that snapshot ref back to the specific `store/<provider>/<ISO>/<file>` path.
 
-Verification path for the user: open each listed `store_path`, walk to `json_path`, confirm the number. Or hit `source_url` directly and compare against the live response.
+Verification path for the user: open the Source primitive or citation excerpt for each result, confirm the `json_path` resolves to the quoted number, and compare against `source_url` if a live check is needed.

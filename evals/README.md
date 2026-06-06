@@ -2,7 +2,7 @@
 
 Offline evals live here as behavior-named YAML suites. They do not call a model
 or require pricing snapshots; each case carries a canned tool call, canned tool
-result, and final answer transcript.
+result, model-emitted `AnswerPlan`, and expected rendered final answer.
 
 `just eval` runs two CI-safe lanes:
 

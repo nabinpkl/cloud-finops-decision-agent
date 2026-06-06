@@ -21,7 +21,8 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md) | Agent runtime in FastAPI on the OpenAI Agents SDK; frontend/ frontend-only; provider is a base-URL knob | Accepted |
 | [0010](0010-observability-via-otel-jsonl.md) | Observability via OTel JSONL traces on disk for the agent runtime | Accepted |
 | [0011](0011-public-endpoint-threat-model.md) | Public-endpoint threat model and budget enforcement seams (tokens as primitive) | Accepted |
-| [0012](0012-agent-runtime-port.md) | Agent-runtime port: framework-neutral seam to swap the agent loop (OpenAI Agents / DeepAgents) by env | Accepted |
+| [0012](0012-agent-runtime-port.md) | Agent-runtime port: framework-neutral seam to swap the agent loop (OpenAI Agents / LangChain) by env | Accepted |
+| [0013](0013-verified-answer-plan-rendering.md) | Verified AnswerPlan rendering for agent prose | Accepted |
 
 ## When to write an ADR
 

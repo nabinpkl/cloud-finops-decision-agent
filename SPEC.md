@@ -318,15 +318,15 @@ The stream bridge runs over assistant-ui's assistant-transport protocol: the fro
 
 ## Eval
 
-`evals/cases/*.yaml` carries hand-written behavior suites. The offline `python -m evals` runner grades canned tool calls, tool results, and final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
+`evals/cases/*.yaml` carries hand-written behavior suites. The offline `python -m evals` runner grades canned tool calls, tool results, model-emitted `AnswerPlan` JSON, and rendered final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
 
 ### Lane 1: citation correctness
 
-For every price the agent quotes, the judge confirms:
-1. The cited `store_path` exists on disk.
-2. The cited `json_path` resolves to a price node in that file.
-3. The price reported in prose matches the price at that JSON path (within rounding).
-4. `age_hours` agrees with `(now - fetched_at)`.
+For every price the agent quotes, deterministic checks run at two levels:
+1. Internal normalize/index checks confirm the cited `store_path` exists on disk.
+2. Internal normalize/index checks confirm the cited `json_path` resolves to a price node in that file.
+3. Agent eval checks confirm each `AnswerPlan` price claim binds to a public tool-result citation (`source_url`, `json_path`, `snapshot`) and the price reported in prose matches the bound tool row (within rounding).
+4. Agent eval checks confirm rendered prose surfaces the bound `age_hours` as `(snapshot Xh old)`.
 
 A single failed citation fails the lane for that scenario.
 
@@ -360,6 +360,30 @@ cases:
         family: general-purpose
         providers: [aws, gcp, azure]
       results: []
+      unmet_requirements: []
+    answer_plan:
+      answer_type: ranking
+      price_claims:
+        - provider: aws
+          instance_type: m5.xlarge
+          region_native: eu-central-1
+          monthly_usd: 140.16
+          hourly_usd: 0.192
+          snapshot_age_hours: 6.0
+          source_result_index: 0
+          citation:
+            source_url: https://aws.example/prices
+            json_path: $.aws.m5
+            snapshot:
+              provider: aws
+              snapshot_iso: "2026-06-05T10-00-00Z"
+              filename: eu-central-1.json
+      candidate_claims:
+        - provider: aws
+          instance_type: m5.xlarge
+          monthly_usd: 140.16
+          snapshot_age_hours: 6.0
+          source_result_index: 0
       unmet_requirements: []
     final_answer: |
       Cheapest is AWS m5.xlarge at $140.16/mo (snapshot 6h old).
