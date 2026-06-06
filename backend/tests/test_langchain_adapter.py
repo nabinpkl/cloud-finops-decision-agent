@@ -72,7 +72,12 @@ async def _run(monkeypatch) -> tuple[_RecordingEmitter, RunUsage]:
     # Stub the citation/tool body so the test needs no store/ snapshot. Patch the
     # name the adapter closure actually calls (imported into da's namespace).
     monkeypatch.setattr(
-        lc, "run_compare", lambda **kw: {"results": [{"provider": "aws", "monthly_usd": 140.16}]}
+        lc,
+        "run_compare_for_model",
+        lambda **kw: (
+            "<trusted_tool_result><json>{}</json></trusted_tool_result>",
+            {"results": [{"provider": "aws", "monthly_usd": 140.16}]},
+        ),
     )
 
     emitter = _RecordingEmitter()

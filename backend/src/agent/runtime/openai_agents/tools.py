@@ -17,7 +17,12 @@ from typing import Any
 
 from agents import function_tool
 
-from agent.tools.pricing import run_compare as _run_compare
+from agent.tools.pricing import (
+    ExpandMode,
+    FamilyName,
+    ProviderName,
+    run_compare as _run_compare,
+)
 
 __all__ = ["compare", "_run_compare"]
 
@@ -27,9 +32,9 @@ def compare(
     vcpu: int,
     ram_gb: float,
     region: str,
-    family: str = "any",
-    providers: list[str] | None = None,
-    expand: str = "cheapest",
+    family: FamilyName = "any",
+    providers: list[ProviderName] | None = None,
+    expand: ExpandMode = "cheapest",
 ) -> dict[str, Any]:
     """Rank cloud providers by cheapest instance matching a vCPU/RAM spec.
 

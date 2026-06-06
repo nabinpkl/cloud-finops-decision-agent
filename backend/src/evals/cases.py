@@ -18,6 +18,7 @@ class EvalCase(BaseModel):
     user: str
     tool_call: dict[str, Any]
     tool_result: dict[str, Any]
+    answer_plan: dict[str, Any] | None = None
     final_answer: str
     checks: list[str]
     expect: dict[str, Any] = Field(default_factory=dict)

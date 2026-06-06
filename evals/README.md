@@ -16,6 +16,8 @@ Suites are split by what they protect:
 - `staleness.yaml`: stale snapshot disclosure and refetch behavior.
 - `missing_data_refusal.yaml`: unsupported provider or region refusals.
 - `provider_scope.yaml`: user-requested provider boundaries.
+- `prompt_injection.yaml`: role override, XML/tag injection, fake prices,
+  internal leakage, invalid providers, and provider-scope manipulation.
 
 Run:
 

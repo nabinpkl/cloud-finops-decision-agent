@@ -69,7 +69,68 @@ cases:
       ranked_by: monthly_usd
       unmet_requirements: []
     final_answer: |
-      Cheapest is AWS m5.xlarge at $140.16/mo in eu-central-1 (snapshot 6h old). Candidates considered: AWS m5.xlarge at $140.16/mo (snapshot 6h old), GCP n2-standard-4 at $148.92/mo (snapshot 7h old), and Azure Standard_D4s_v5 at $154.20/mo (snapshot 7.5h old).
+      Cheapest is AWS m5.xlarge at $140.16/mo in eu-central-1 (snapshot 6h old). Candidates considered: AWS considered m5.xlarge at $140.16/mo (snapshot 6h old), GCP considered n2-standard-4 at $148.92/mo (snapshot 7h old), and Azure considered Standard_D4s_v5 at $154.20/mo (snapshot 7.5h old).
+    answer_plan:
+      answer_type: ranking
+      price_claims:
+        - provider: aws
+          instance_type: m5.xlarge
+          region_native: eu-central-1
+          monthly_usd: 140.16
+          hourly_usd: 0.192
+          snapshot_age_hours: 6.0
+          source_result_index: 0
+          citation:
+            source_url: https://aws.example/prices
+            json_path: $.aws.m5
+            snapshot:
+              provider: aws
+              snapshot_iso: "2026-06-05T10-00-00Z"
+              filename: eu-central-1.json
+        - provider: gcp
+          instance_type: n2-standard-4
+          region_native: europe-west3
+          monthly_usd: 148.92
+          hourly_usd: 0.204
+          snapshot_age_hours: 7.0
+          source_result_index: 1
+          citation:
+            source_url: https://gcp.example/skus
+            json_path: $.gcp.n2
+            snapshot:
+              provider: gcp
+              snapshot_iso: "2026-06-05T09-00-00Z"
+              filename: skus.json
+        - provider: azure
+          instance_type: Standard_D4s_v5
+          region_native: westeurope
+          monthly_usd: 154.20
+          hourly_usd: 0.2112
+          snapshot_age_hours: 7.5
+          source_result_index: 2
+          citation:
+            source_url: https://azure.example/prices
+            json_path: $.azure.d4
+            snapshot:
+              provider: azure
+              snapshot_iso: "2026-06-05T08-30-00Z"
+              filename: westeurope.json
+      candidate_claims:
+        - provider: aws
+          instance_type: m5.xlarge
+          monthly_usd: 140.16
+          snapshot_age_hours: 6.0
+          source_result_index: 0
+        - provider: gcp
+          instance_type: n2-standard-4
+          monthly_usd: 148.92
+          snapshot_age_hours: 7.0
+          source_result_index: 1
+        - provider: azure
+          instance_type: Standard_D4s_v5
+          monthly_usd: 154.20
+          snapshot_age_hours: 7.5
+          source_result_index: 2
     checks:
       - tool_call
       - price_provenance
@@ -149,7 +210,59 @@ cases:
       ranked_by: monthly_usd
       unmet_requirements: []
     final_answer: |
-      Full candidate listing: AWS considered t3.medium at $30.37/mo (snapshot 3h old) and m5.large; GCP considered e2-standard-2 at $48.91/mo (snapshot 4h old) and n2-standard-2. Cheapest representative is AWS t3.medium.
+      Cheapest is AWS t3.medium at $30.37/mo in us-east-1 (snapshot 3h old). Candidates considered: AWS considered t3.medium at $30.37/mo (snapshot 3h old) and m5.large; GCP considered e2-standard-2 at $48.91/mo (snapshot 4h old) and n2-standard-2.
+    answer_plan:
+      answer_type: ranking
+      price_claims:
+        - provider: aws
+          instance_type: t3.medium
+          region_native: us-east-1
+          monthly_usd: 30.37
+          hourly_usd: 0.0416
+          snapshot_age_hours: 3.0
+          source_result_index: 0
+          citation:
+            source_url: https://aws.example/prices
+            json_path: $.aws.t3
+            snapshot:
+              provider: aws
+              snapshot_iso: "2026-06-05T10-00-00Z"
+              filename: us-east-1.json
+        - provider: gcp
+          instance_type: e2-standard-2
+          region_native: us-east4
+          monthly_usd: 48.91
+          hourly_usd: 0.067
+          snapshot_age_hours: 4.0
+          source_result_index: 1
+          citation:
+            source_url: https://gcp.example/skus
+            json_path: $.gcp.e2
+            snapshot:
+              provider: gcp
+              snapshot_iso: "2026-06-05T09-00-00Z"
+              filename: skus.json
+      candidate_claims:
+        - provider: aws
+          instance_type: t3.medium
+          monthly_usd: 30.37
+          snapshot_age_hours: 3.0
+          source_result_index: 0
+          considered_index: 0
+        - provider: aws
+          instance_type: m5.large
+          source_result_index: 0
+          considered_index: 1
+        - provider: gcp
+          instance_type: e2-standard-2
+          monthly_usd: 48.91
+          snapshot_age_hours: 4.0
+          source_result_index: 1
+          considered_index: 0
+        - provider: gcp
+          instance_type: n2-standard-2
+          source_result_index: 1
+          considered_index: 1
     checks:
       - tool_call
       - price_provenance

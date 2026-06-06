@@ -27,7 +27,14 @@ cases:
         - region: antarctica
           reason: region_not_mapped
     final_answer: |
-      I do not have covered pricing data for Fly in antarctica, so I cannot quote a verified price for that request.
+      I do not have covered pricing data for fly and antarctica, so I cannot quote a verified price for that request.
+    answer_plan:
+      answer_type: missing_data
+      unmet_requirements:
+        - provider: fly
+          reason: provider_not_supported
+        - region: antarctica
+          reason: region_not_mapped
     checks:
       - tool_call
       - missing_data_refusal

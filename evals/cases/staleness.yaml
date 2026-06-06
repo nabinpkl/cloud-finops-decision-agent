@@ -37,7 +37,30 @@ cases:
       ranked_by: monthly_usd
       unmet_requirements: []
     final_answer: |
-      The cheapest stale result is AWS m5.xlarge at $138.24/mo in us-east-1 (snapshot 52h old). This snapshot is stale, so refetch before relying on it for a buying decision.
+      Cheapest is AWS m5.xlarge at $138.24/mo in us-east-1 (snapshot 52h old). Candidates considered: AWS considered m5.xlarge at $138.24/mo (snapshot 52h old). This snapshot is stale, so refetch before relying on it for a buying decision.
+    answer_plan:
+      answer_type: stale
+      price_claims:
+        - provider: aws
+          instance_type: m5.xlarge
+          region_native: us-east-1
+          monthly_usd: 138.24
+          hourly_usd: 0.192
+          snapshot_age_hours: 52.0
+          source_result_index: 0
+          citation:
+            source_url: https://aws.example/prices
+            json_path: $.aws.m5
+            snapshot:
+              provider: aws
+              snapshot_iso: "2026-06-03T10-00-00Z"
+              filename: us-east-1.json
+      candidate_claims:
+        - provider: aws
+          instance_type: m5.xlarge
+          monthly_usd: 138.24
+          snapshot_age_hours: 52.0
+          source_result_index: 0
     checks:
       - tool_call
       - price_provenance

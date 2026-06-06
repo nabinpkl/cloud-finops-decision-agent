@@ -56,9 +56,14 @@ class ReplayRuntime:
             args=args,
         )
         emit.tool_result(call_id, self._case.tool_result)
-        emit.text_delta(self._case.final_answer)
+        text = (
+            json.dumps(self._case.answer_plan)
+            if self._case.answer_plan is not None
+            else self._case.final_answer
+        )
+        emit.text_delta(text)
         usage.input_tokens = len(turns[-1].content.split())
-        usage.output_tokens = len(self._case.final_answer.split())
+        usage.output_tokens = len(text.split())
 
 
 @dataclass(frozen=True)
@@ -86,10 +91,13 @@ def _case_from_emitted(case: EvalCase, emitter: ReplayEmitter) -> EvalCase:
     result = emitter.tool_results[0]
     if call["id"] != result["id"]:
         raise ValueError(f"{case.id}: replay tool result id does not match call id")
-    return case.model_copy(
-        update={
-            "tool_call": {"name": call["name"], "args": call["args"]},
-            "tool_result": result["result"],
-            "final_answer": emitter.text,
-        }
-    )
+    updates: dict[str, Any] = {
+        "tool_call": {"name": call["name"], "args": call["args"]},
+        "tool_result": result["result"],
+    }
+    if case.answer_plan is not None:
+        updates["answer_plan"] = json.loads(emitter.text)
+        updates["final_answer"] = case.final_answer
+    else:
+        updates["final_answer"] = emitter.text
+    return case.model_copy(update=updates)

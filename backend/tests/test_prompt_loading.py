@@ -10,6 +10,8 @@ def test_agent_prompt_loads_from_root_prompts_directory():
 
     assert prompt_path.exists()
     assert INSTRUCTIONS == prompt_path.read_text(encoding="utf-8").strip()
-    assert "Every price you state must come from a tool result" in INSTRUCTIONS
-    assert "(snapshot Xh old)" in INSTRUCTIONS
-    assert "rather than guessing" in INSTRUCTIONS
+    assert "<trust_boundaries>" in INSTRUCTIONS
+    assert "<anti_prompt_injection>" in INSTRUCTIONS
+    assert "<answer_plan_contract>" in INSTRUCTIONS
+    assert "Do not write\nuser-facing prose yourself" in INSTRUCTIONS
+    assert "source_result_index" in INSTRUCTIONS

@@ -3,7 +3,7 @@
 Implements the `AgentRuntime` port over the LangChain stack. The harness is the
 lean `langchain.agents.create_agent` with exactly one tool (`compare`), mirroring
 the OpenAI Agents agent one-for-one so the two runtimes are a fair A/B: same
-single tool, same citation prompt, honest per-turn token accounting. The
+single tool, same citation prompt, honest per-turn token accounting.
 All LangChain types stay inside this module. Transport sees only `Turn`,
 `Emitter`, `RunUsage`, and `TurnTokenCapExceeded`.
 
@@ -33,7 +33,11 @@ from langchain_openai import ChatOpenAI
 from app_config import settings
 from agent.runtime.types import Emitter, RunUsage, Turn, TurnTokenCapExceeded
 from agent.runtime.prompt import INSTRUCTIONS
-from agent.tools.pricing import COMPARE_DESCRIPTION, run_compare
+from agent.tools.pricing import (
+    COMPARE_DESCRIPTION,
+    CompareToolArgs,
+    run_compare_for_model,
+)
 
 
 def _compare_tool() -> StructuredTool:
@@ -49,7 +53,7 @@ def _compare_tool() -> StructuredTool:
         providers: list[str] | None = None,
         expand: str = "cheapest",
     ) -> tuple[str, dict[str, Any]]:
-        result = run_compare(
+        return run_compare_for_model(
             vcpu=vcpu,
             ram_gb=ram_gb,
             region=region,
@@ -57,12 +61,12 @@ def _compare_tool() -> StructuredTool:
             providers=providers,
             expand=expand,
         )
-        return json.dumps(result), result
 
     return StructuredTool.from_function(
         compare,
         name="compare",
         description=COMPARE_DESCRIPTION,
+        args_schema=CompareToolArgs,
         response_format="content_and_artifact",
     )
 

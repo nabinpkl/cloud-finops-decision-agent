@@ -43,3 +43,19 @@ def test_compare_tool_strips_store_path_and_adds_snapshot(monkeypatch):
         "snapshot_iso": "2026-05-27T04-23-36Z",
         "filename":     "eu-central-1.json",
     }
+
+
+def test_compare_for_model_wraps_model_visible_json(monkeypatch):
+    monkeypatch.setattr(tools_core, "_normalize_compare", lambda **kw: CANNED_COMPARE)
+
+    model_text, artifact = tools_core.run_compare_for_model(
+        vcpu=4,
+        ram_gb=16,
+        region="eu-central",
+        family="general-purpose",
+    )
+
+    assert model_text.startswith('<trusted_tool_result tool="compare">')
+    assert "<json>" in model_text
+    assert "store_path" not in artifact["results"][0]["citation"]
+    assert artifact["results"][0]["citation"]["snapshot"]["provider"] == "aws"

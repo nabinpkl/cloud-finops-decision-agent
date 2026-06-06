@@ -6,6 +6,7 @@ from assistant_stream import RunController
 from opentelemetry.trace import Status, StatusCode
 
 from api.assistant_transport.emitter import StateEmitter
+from api.assistant_transport.policy_emitter import PolicyEmitter
 from api.assistant_transport.state import (
     append_assistant_message,
     append_session_limit_message,
@@ -36,7 +37,8 @@ async def run_agent_turn(
         return
 
     msg = append_assistant_message(controller.state)
-    emitter = StateEmitter(controller, msg)
+    state_emitter = StateEmitter(controller, msg)
+    emitter = PolicyEmitter(state_emitter)
 
     usage_before = (
         read_session_usage(session_id)
@@ -60,18 +62,28 @@ async def run_agent_turn(
         runtime = get_runtime()
         try:
             await runtime.run(turns, emitter, run_usage)
+            if not emitter.flush_checked():
+                turn_span.set_attribute("finops.policy.final_answer.blocked", True)
+                turn_span.set_attribute(
+                    "finops.policy.final_answer.violations",
+                    "; ".join(emitter.violations),
+                )
         except TurnTokenCapExceeded as exc:
             turn_span.record_exception(exc)
             turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
             turn_span.set_attribute("finops.budget.exhausted", True)
             turn_span.set_attribute("finops.budget.scope", "turn")
+            emitter.discard_text()
             emitter.text_delta(f"\n\n[turn stopped: {exc}]")
+            emitter.flush_unchecked()
         except Exception as exc:
             turn_span.record_exception(exc)
             turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
+            emitter.discard_text()
             emitter.text_delta(
                 "\n\nThe agent hit an internal error. Try again later."
             )
+            emitter.flush_unchecked()
         finally:
             if settings.budget_enabled and (run_usage.input_tokens or run_usage.output_tokens):
                 record_usage(

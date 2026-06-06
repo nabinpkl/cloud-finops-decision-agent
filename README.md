@@ -18,7 +18,7 @@ Three layers in one repo. SPEC.md owns the contracts between them.
 
 **Normalization layer** (`backend/src/normalize/`) is the deterministic baseline. A Python module + FastAPI wrapper + `python -m normalize` CLI. Reads the snapshots, applies a family + region taxonomy stored as JSON, and answers `compare(vcpu, ram_gb, region, family)` and `lookup(provider, instance_type, region)`. Match policy is closest-larger (≥vCPU and ≥RAM). Output is cheapest-per-provider ranked, each result carrying a full citation block.
 
-**Agent runtime** runs server-side in FastAPI behind a framework-neutral port (ADR-0012). The default adapter is the LangChain-backed `langchain` selector; the OpenAI Agents SDK remains an optional runtime. Both call the normalization layer in-process through the same tool body, on a model wired to an OpenAI-compatible base URL (the provider is a `.env` knob, not a fixed vendor). The agent's prose handles staleness (`(snapshot 6h old)`) and equivalence-dimension disclosure. **Frontend** (`frontend/`) is a frontend-only Next.js app using `assistant-ui` as the chat shell; it renders the agent's stream and holds no agent logic or model keys. The shipped custom component is `ComparisonTable`; single-instance `PriceCard` stays captured for v1.
+**Agent runtime** runs server-side in FastAPI behind a framework-neutral port (ADR-0012). The default adapter is the LangChain-backed `langchain` selector; the OpenAI Agents SDK remains an optional runtime. Both call the normalization layer in-process through the same strict tool body, on a model wired to an OpenAI-compatible base URL (the provider is a `.env` knob, not a fixed vendor). User and assistant text are XML-escaped into untrusted trust-zone tags before reaching the model; final prose is buffered until deterministic citation/leakage checks pass. **Frontend** (`frontend/`) is a frontend-only Next.js app using `assistant-ui` as the chat shell; it renders the agent's stream and holds no agent logic or model keys. The shipped custom component is `ComparisonTable`; single-instance `PriceCard` stays captured for v1.
 
 The citation contract is the only enforcement layer. Every price the agent quotes carries `source_url`, `store_path`, `json_path`, `fetched_at`, and `age_hours`. If the cited snapshot is over 24 hours old, the agent marks the answer stale and offers a refetch. AGENTS.md is the agent behavior contract; SPEC.md is the data shape contract.
 
@@ -80,6 +80,8 @@ The FastAPI query wrapper over `compare()`/`lookup()` (plus `/citation/excerpt` 
 This repo is experimental and pre-release. Security fixes land on the default branch until tagged releases exist; see `SECURITY.md` for reporting guidance.
 
 Local runtime artifacts are intentionally excluded from source control. Keep `.env`, Infisical state, `store/` snapshots, `var/` traces, and SQLite budget databases private. Snapshots can be re-fetched from provider APIs, while traces and budget state may contain sensitive operational data.
+
+The public assistant is unauthenticated and read-only. Hardening is layered: request/body/history limits, per-route rate limits, XML trust-zone wrapping for external text, strict compare-tool schemas, provider allowlists, private trace files, and deterministic final-answer checks. The prompt is not treated as a secret security boundary.
 
 ## License
 

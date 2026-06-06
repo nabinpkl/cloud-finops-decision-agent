@@ -9,6 +9,7 @@ from api.assistant_transport.models import (
     AddToolResultCommand,
     Command,
 )
+from agent.security.untrusted import wrap_assistant_history, wrap_user_request
 from agent.runtime import Turn
 from app_config import settings
 
@@ -47,8 +48,11 @@ def build_turns(state: dict[str, Any]) -> list[Turn]:
         if not isinstance(message, dict):
             continue
         text = _message_text(message)
-        if text and message.get("role") in ("user", "assistant"):
-            turns.append(Turn(role=message["role"], content=text))
+        role = message.get("role")
+        if text and role == "user":
+            turns.append(Turn(role="user", content=wrap_user_request(text)))
+        elif text and role == "assistant":
+            turns.append(Turn(role="assistant", content=wrap_assistant_history(text)))
     return turns
 
 
