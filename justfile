@@ -76,6 +76,11 @@ smoke:
 eval:
     just -f {{backend_just}} -d {{backend}} eval
 
+# Supply-chain review helper. Not part of `just check` because pnpm audit needs network access.
+audit:
+    just -f {{backend_just}} -d {{backend}} dep-tree
+    pnpm --dir frontend audit --prod
+
 # Lint backend Python.
 lint:
     just -f {{backend_just}} -d {{backend}} lint

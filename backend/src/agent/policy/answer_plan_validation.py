@@ -38,6 +38,10 @@ def validate_answer_plan(
                 f"{plan.answer_type} answer requires at least one price claim",
             )
         )
+    if plan.answer_type == "lookup" and len(plan.price_claims) > 1:
+        violations.append(
+            PolicyViolation("answer_plan_lookup_shape", "lookup answer must include exactly one price claim")
+        )
     if plan.answer_type == "missing_data" and not plan.unmet_requirements:
         violations.append(
             PolicyViolation(

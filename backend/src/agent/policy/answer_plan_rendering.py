@@ -10,9 +10,26 @@ def render_answer_plan(plan: AnswerPlan) -> str:
         return _render_refusal(plan.refusal_reason)
     if plan.answer_type == "missing_data":
         return _render_missing_data(plan)
+    if plan.answer_type == "lookup":
+        return _render_lookup_answer(plan)
     if plan.answer_type in {"ranking", "lookup", "stale"}:
         return _render_priced_answer(plan)
     return "I cannot answer that request with verified pricing data."
+
+
+def _render_lookup_answer(plan: AnswerPlan) -> str:
+    claims = plan.price_claims
+    if not claims:
+        return _render_missing_data(plan)
+    claim = claims[0]
+    answer = (
+        f"{_provider_label(claim.provider)} {claim.instance_type} is "
+        f"{_money(claim.monthly_usd)}/mo in {claim.region_native} "
+        f"(snapshot {_age(claim.snapshot_age_hours)}h old)."
+    )
+    if claim.snapshot_age_hours > 24:
+        answer += " This snapshot is stale, so refetch before relying on it for a buying decision."
+    return answer
 
 
 def _render_priced_answer(plan: AnswerPlan) -> str:

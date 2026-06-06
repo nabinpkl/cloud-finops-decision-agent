@@ -4,7 +4,7 @@
 
 ## Position
 
-The normalize layer, HTTP surface, server-side agent runtime, assistant transport bridge, and first rendered tool component are done. What remains in v0 is browser smoke verification, citation depth, agent prose tuning, and eval. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. ADR-0012 is now the current runtime contract: the loop is server-side in FastAPI behind `agent.runtime.AgentRuntime`; `deepagents` is the default adapter, OpenAI Agents SDK is optional, `frontend/` is a frontend-only client that renders the stream, and the model provider is an OpenAI-compatible base-URL knob (not a hardcoded vendor). Reasons:
+The normalize layer, HTTP surface, server-side agent runtime, assistant transport bridge, and first rendered tool component are done. What remains in v0 is browser smoke verification, citation depth, agent prose tuning, and eval. Per ADR-0008 we build one query type (`compare`) end-to-end through every layer before going wide, not FastAPI-then-Next.js as separate horizontal layers. ADR-0012 is now the current runtime contract: the loop is server-side in FastAPI behind `agent.runtime.AgentRuntime`; `langchain` is the default adapter, OpenAI Agents SDK is optional, `frontend/` is a frontend-only client that renders the stream, and the model provider is an OpenAI-compatible base-URL knob (not a hardcoded vendor). Reasons:
 
 - A thin end-to-end slice surfaces integration bugs (tool-call wiring, citation shape) on the first real query, not after both halves are built.
 - The eval lane replays scenarios through the rendered slice, so it cannot start until the slice renders.
@@ -33,7 +33,7 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 ## Phase 2: the vertical slice (compare end-to-end in a browser)
 
 - D7. Frontend scaffold and backend config landed. `app_config` central settings (`API_PORT`, `CORS_ALLOWED_ORIGINS`, `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`); CORS/port lifted out of `api/main.py`. `frontend/` scaffolded from the assistant-ui `with-assistant-transport` example, frontend-only (no `app/api/*`). `useAssistantTransportRuntime` POSTs to same-origin `/assistant`, which `next.config.js` rewrites to `BACKEND_ORIGIN` (env knob, no CORS round-trip, no backend URL in client). `just frontend` recipe added. [ADR-0009]
-- D8. `agent/tools/pricing.py`, `api/assistant_transport/`, and `agent/runtime/*`: compare tool body calls `normalize.compare()` in-process (no HTTP self-hop), drops `store_path` for `snapshot` refs through `normalize.wire.wire_response`, implements `POST /assistant` over assistant-stream, and routes model execution through `agent.runtime.AgentRuntime`. `deepagents` is the default adapter; OpenAI Agents SDK is optional. [ADR-0012]
+- D8. `agent/tools/pricing.py`, `api/assistant_transport/`, and `agent/runtime/*`: compare tool body calls `normalize.compare()` in-process (no HTTP self-hop), drops `store_path` for `snapshot` refs through `normalize.wire.wire_response`, implements `POST /assistant` over assistant-stream, and routes model execution through `agent.runtime.AgentRuntime`. `langchain` is the default adapter; OpenAI Agents SDK is optional. [ADR-0012]
 - D9. `frontend/components/tools/comparison-table.tsx`: assistant-ui Tool component renders ranked `compare` results streamed from FastAPI, including snapshot age and source link per row. Session-limit banner wiring also landed.
 - R10. Slice smoke test: in a browser, "cheapest 4 vCPU 8 GB general-purpose in EU" renders the ranked table with citations. State explicitly if the UI cannot be exercised; do not claim success otherwise.
 
@@ -52,7 +52,11 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 - R15. `evals/cases/*.yaml`: behavior-named scenarios across cheapest-ranking, full candidate listing, stale-data, provider scoping, and out-of-coverage refusal lanes. State the assertion per scenario.
 - R16. `backend/src/evals/` runner: replay scenarios through the slice, LLM judge scores citation correctness (excerpt resolves to quote) plus staleness and refusal behavior. Assert composite `contribution_usd` sum equals `hourly_usd` per ADR-0007.
 
-(R17 to R19 reserved so v1 cross-references survive.)
+## Phase 6: residual hardening register
+
+- D17. `architecture-decisions/0014-agent-hardening-threat-register.md`: map OWASP, OpenAI, NIST, and NSA/Five Eyes agent-hardening guidance to this repo; classify implemented, deferred, and not-applicable controls.
+- D18. `evals/cases/prompt_injection.yaml`, `backend/tests/test_answer_plan.py`: expand adversarial coverage for poisoned tool metadata, fake citations, source-result-index manipulation, and multi-turn injection.
+- D19. `SECURITY.md`, `CONTRIBUTING.md`, `justfile`, `backend/justfile`: add public deployment abuse runbook, dependency review checklist, and explicit audit helpers.
 
 ---
 
@@ -87,4 +91,7 @@ R13  pending     pending     staleness banner + refetch
 R14  pending     pending     agent prose tuning
 R15  pending     pending     behavior-named eval YAML suites
 R16  pending     pending     eval runner + LLM judge
+D17  2026-06-06  committed   agent hardening threat register
+D18  2026-06-06  committed   adversarial eval and AnswerPlan binding coverage
+D19  2026-06-06  committed   public abuse runbook and dependency audit helpers
 ```

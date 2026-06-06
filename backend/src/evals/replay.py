@@ -77,7 +77,12 @@ def replay_case(case: EvalCase) -> ReplayResult:
     emitter = ReplayEmitter()
     usage = RunUsage()
     runtime = ReplayRuntime(case)
-    asyncio.run(runtime.run([Turn("user", case.user)], emitter, usage))
+    turns = [
+        Turn(role=str(item.get("role", "")), content=str(item.get("content", "")))
+        for item in case.history
+    ]
+    turns.append(Turn("user", case.user))
+    asyncio.run(runtime.run(turns, emitter, usage))
     replayed = _case_from_emitted(case, emitter)
     return ReplayResult(case=replayed, usage=usage, checks=grade_case(replayed))
 

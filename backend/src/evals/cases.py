@@ -16,6 +16,7 @@ class EvalCase(BaseModel):
 
     id: str
     user: str
+    history: list[dict[str, str]] = Field(default_factory=list)
     tool_call: dict[str, Any]
     tool_result: dict[str, Any]
     answer_plan: dict[str, Any] | None = None

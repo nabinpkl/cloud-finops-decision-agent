@@ -47,7 +47,7 @@ def _base_case(final_answer: str) -> EvalCase:
 def test_eval_case_suites_all_pass():
     cases = load_cases()
 
-    assert len(cases) == 11
+    assert len(cases) == 14
     for case in cases:
         failures = [result for result in grade_case(case) if not result.passed]
         assert failures == []

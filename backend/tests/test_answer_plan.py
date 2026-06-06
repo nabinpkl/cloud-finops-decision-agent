@@ -84,6 +84,16 @@ def test_valid_answer_plan_renders_verified_prose():
     )
 
 
+def test_lookup_answer_plan_renders_lookup_template():
+    data = _answer_plan(answer_type="lookup", candidate_claims=[])
+    plan = AnswerPlan.model_validate(data)
+
+    assert validate_answer_plan(plan, [_tool_result()]) == []
+    assert render_answer_plan(plan) == (
+        "AWS m5.xlarge is $138.24/mo in us-east-1 (snapshot 4h old)."
+    )
+
+
 def test_render_checked_answer_plan_accepts_json_fence():
     text = "```json\n" + json.dumps(_answer_plan()) + "\n```"
 
@@ -102,6 +112,36 @@ def test_fabricated_price_claim_fails_binding():
     violations = validate_answer_plan(plan, [_tool_result()])
 
     assert any(violation.name == "answer_plan_price_binding" for violation in violations)
+
+
+def test_fabricated_citation_fails_binding():
+    data = _answer_plan()
+    data["price_claims"][0]["citation"]["json_path"] = "$.evil.price"  # type: ignore[index]
+    plan = AnswerPlan.model_validate(data)
+
+    violations = validate_answer_plan(plan, [_tool_result()])
+
+    assert any(violation.name == "answer_plan_citation_binding" for violation in violations)
+
+
+def test_missing_source_result_index_fails_binding():
+    data = _answer_plan()
+    data["price_claims"][0]["source_result_index"] = 4  # type: ignore[index]
+    plan = AnswerPlan.model_validate(data)
+
+    violations = validate_answer_plan(plan, [_tool_result()])
+
+    assert any(violation.name == "answer_plan_source_result" for violation in violations)
+
+
+def test_lookup_answer_rejects_multiple_price_claims():
+    data = _answer_plan(answer_type="lookup", candidate_claims=[])
+    data["price_claims"].append(data["price_claims"][0])  # type: ignore[union-attr]
+    plan = AnswerPlan.model_validate(data)
+
+    violations = validate_answer_plan(plan, [_tool_result()])
+
+    assert any(violation.name == "answer_plan_lookup_shape" for violation in violations)
 
 
 def test_candidate_price_requires_verified_snapshot_age():

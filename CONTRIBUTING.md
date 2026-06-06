@@ -80,6 +80,32 @@ Prefer focused tests that cover the changed contract. Mocked tests should not re
 
 For bug fixes, add a regression test when the bug is observable through a public function, CLI command, API route, or provider builder.
 
+## Dependency Review
+
+Before adding or upgrading a runtime, model, agent, frontend, or build
+dependency, record the review in the PR description. Check:
+
+- Latest stable release date and whether the project is actively maintained by
+  humans, not only dependency bots.
+- Public security advisories, recent supply-chain incidents, and deprecation
+  notices.
+- Whether the dependency runs code at build time, handles secrets, receives
+  model/tool output, or changes the unauthenticated `/assistant` surface.
+- Whether an existing dependency already solves the same problem.
+- Whether the dependency should be optional, adapter-local, or isolated behind a
+  small interface.
+
+Run available audits before public release or before a dependency-heavy PR:
+
+```sh
+uv tree --project backend
+pnpm --dir frontend audit --prod
+```
+
+If a dependency is necessary but fails the usual maintenance bar, document it in
+`docs/dependency-exceptions.md` with the accepted risk and the trigger for
+revisiting.
+
 ## Pull Requests
 
 Before opening a PR:
