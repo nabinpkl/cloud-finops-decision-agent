@@ -52,6 +52,10 @@ smoke:
 eval:
     uv run python -m evals
 
+# Render the canonical runtime system prompt from prompts/system/manifest.yaml.
+render-prompt:
+    uv run python -m scripts.render_prompt
+
 # Print the Python dependency tree for supply-chain review.
 dep-tree:
     uv tree

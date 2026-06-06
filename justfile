@@ -76,6 +76,10 @@ smoke:
 eval:
     just -f {{backend_just}} -d {{backend}} eval
 
+# Render the canonical runtime system prompt from prompts/system/manifest.yaml.
+render-prompt:
+    just -f {{backend_just}} -d {{backend}} render-prompt
+
 # Supply-chain review helper. Not part of `just check` because pnpm audit needs network access.
 audit:
     just -f {{backend_just}} -d {{backend}} dep-tree

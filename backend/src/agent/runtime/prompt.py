@@ -1,22 +1,13 @@
 """The agent's citation system prompt (ADR-0009, ADR-0012).
 
 Both runtime adapters import ``INSTRUCTIONS`` from this neutral module. The text
-lives in the repo-root ``prompts/`` directory so prompt changes are reviewable as
-prompt assets rather than hidden in Python code.
+lives in the repo-root ``prompts/rendered`` directory so runtime behavior reads
+one canonical assembled prompt rather than fragmented prompt sources.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+from agent.runtime.prompt_assembly import RENDERED_PROMPT_PATH
 
 
-def _repo_root() -> Path:
-    for candidate in Path(__file__).resolve().parents:
-        if (candidate / "prompts" / "finops_agent.md").is_file():
-            return candidate
-    raise RuntimeError("could not find repo root containing prompts/finops_agent.md")
-
-
-INSTRUCTIONS = (_repo_root() / "prompts" / "finops_agent.md").read_text(
-    encoding="utf-8"
-).strip()
+INSTRUCTIONS = RENDERED_PROMPT_PATH.read_text(encoding="utf-8").strip()

@@ -1,0 +1,186 @@
+"""Prompt manifest loading, rendering, and coverage checks."""
+
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import BaseModel, Field
+from project_paths import PROJECT_ROOT
+
+
+PROMPT_MANIFEST_PATH = PROJECT_ROOT / "prompts" / "system" / "manifest.yaml"
+RENDERED_PROMPT_PATH = PROJECT_ROOT / "prompts" / "rendered" / "finops-agent.system.md"
+
+_BEGIN_RE = re.compile(
+    r"<!-- BEGIN (?P<kind>prompt_(?:part|example)): (?P<path>[^ ]+) "
+    r"sha256:(?P<sha256>[0-9a-f]{64}) -->\n"
+    r"(?P<content>.*?)"
+    r"<!-- END (?P=kind): (?P=path) -->",
+    re.DOTALL,
+)
+
+
+class PromptManifest(BaseModel):
+    """Prompt composition manifest."""
+
+    version: int
+    name: str
+    description: str
+    parts: list[str] = Field(min_length=1)
+    examples: list[str] = Field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PromptSource:
+    """One source file included in the rendered prompt."""
+
+    kind: Literal["prompt_part", "prompt_example"]
+    path: Path
+    rendered_path: str
+    content: str
+    sha256: str
+
+
+@dataclass(frozen=True)
+class RenderedBlock:
+    """One marked block in the rendered prompt."""
+
+    kind: str
+    rendered_path: str
+    content: str
+    sha256: str
+
+
+def load_manifest(path: Path = PROMPT_MANIFEST_PATH) -> PromptManifest:
+    """Load and validate the prompt manifest."""
+
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return PromptManifest.model_validate(loaded)
+
+
+def manifest_sources(path: Path = PROMPT_MANIFEST_PATH) -> list[PromptSource]:
+    """Return manifest sources in runtime render order."""
+
+    manifest = load_manifest(path)
+    manifest_dir = path.parent
+    sources: list[PromptSource] = []
+    for relative_path in manifest.parts:
+        sources.append(_source_from_path("prompt_part", manifest_dir / relative_path))
+    for relative_path in manifest.examples:
+        sources.append(_source_from_path("prompt_example", manifest_dir / relative_path))
+    return sources
+
+
+def render_prompt(path: Path = PROMPT_MANIFEST_PATH) -> str:
+    """Render the manifest into one canonical system prompt."""
+
+    manifest = load_manifest(path)
+    sections = [
+        "<!-- Rendered from prompts/system/manifest.yaml. Do not edit directly. -->",
+        f"<!-- prompt_name: {manifest.name} version: {manifest.version} -->",
+        f"<!-- description: {manifest.description} -->",
+    ]
+    sections.extend(_render_source(source) for source in manifest_sources(path))
+    return "\n\n".join(sections).rstrip() + "\n"
+
+
+def write_rendered_prompt(
+    manifest_path: Path = PROMPT_MANIFEST_PATH,
+    rendered_path: Path = RENDERED_PROMPT_PATH,
+) -> Path:
+    """Write the canonical rendered system prompt."""
+
+    rendered_path.parent.mkdir(parents=True, exist_ok=True)
+    rendered_path.write_text(render_prompt(manifest_path), encoding="utf-8")
+    return rendered_path
+
+
+def parse_rendered_blocks(rendered: str) -> list[RenderedBlock]:
+    """Parse coverage markers from a rendered prompt."""
+
+    return [
+        RenderedBlock(
+            kind=match.group("kind"),
+            rendered_path=match.group("path"),
+            content=match.group("content"),
+            sha256=match.group("sha256"),
+        )
+        for match in _BEGIN_RE.finditer(rendered)
+    ]
+
+
+def validate_rendered_prompt(
+    manifest_path: Path = PROMPT_MANIFEST_PATH,
+    rendered_path: Path = RENDERED_PROMPT_PATH,
+) -> list[str]:
+    """Return prompt coverage and drift violations."""
+
+    violations: list[str] = []
+    sources = manifest_sources(manifest_path)
+    rendered = rendered_path.read_text(encoding="utf-8")
+    blocks = parse_rendered_blocks(rendered)
+    if len(blocks) != len(sources):
+        violations.append(
+            f"rendered prompt has {len(blocks)} marked blocks but manifest has {len(sources)} sources"
+        )
+
+    for index, source in enumerate(sources):
+        if index >= len(blocks):
+            violations.append(f"missing rendered block for {source.rendered_path}")
+            continue
+        block = blocks[index]
+        if block.kind != source.kind:
+            violations.append(f"{source.rendered_path} rendered as {block.kind}, expected {source.kind}")
+        if block.rendered_path != source.rendered_path:
+            violations.append(
+                f"rendered block {index} is {block.rendered_path}, expected {source.rendered_path}"
+            )
+        if block.sha256 != source.sha256:
+            violations.append(f"{source.rendered_path} sha256 marker is stale")
+        if block.content != _content_for_marker(source.content):
+            violations.append(f"{source.rendered_path} rendered content does not match source")
+
+    return violations
+
+
+def orphan_prompt_sources(manifest_path: Path = PROMPT_MANIFEST_PATH) -> list[Path]:
+    """Return editable prompt source files not listed in the manifest."""
+
+    listed = {source.path.resolve() for source in manifest_sources(manifest_path)}
+    prompts_dir = manifest_path.parents[1]
+    candidates = [
+        path
+        for path in prompts_dir.rglob("*.md")
+        if "rendered" not in path.parts and path.name != "README.md"
+    ]
+    return sorted(path for path in candidates if path.resolve() not in listed)
+
+
+def _source_from_path(kind: Literal["prompt_part", "prompt_example"], path: Path) -> PromptSource:
+    resolved_path = path.resolve()
+    content = path.read_text(encoding="utf-8")
+    rendered_path = resolved_path.relative_to(PROJECT_ROOT / "prompts").as_posix()
+    return PromptSource(
+        kind=kind,
+        path=resolved_path,
+        rendered_path=rendered_path,
+        content=content,
+        sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+    )
+
+
+def _render_source(source: PromptSource) -> str:
+    return (
+        f"<!-- BEGIN {source.kind}: {source.rendered_path} sha256:{source.sha256} -->\n"
+        f"{_content_for_marker(source.content)}"
+        f"<!-- END {source.kind}: {source.rendered_path} -->"
+    )
+
+
+def _content_for_marker(content: str) -> str:
+    return content if content.endswith("\n") else content + "\n"

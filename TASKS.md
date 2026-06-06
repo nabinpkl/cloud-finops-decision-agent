@@ -57,6 +57,7 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 - D17. `architecture-decisions/0014-agent-hardening-threat-register.md`: map OWASP, OpenAI, NIST, and NSA/Five Eyes agent-hardening guidance to this repo; classify implemented, deferred, and not-applicable controls.
 - D18. `evals/cases/prompt_injection.yaml`, `backend/tests/test_answer_plan.py`: expand adversarial coverage for poisoned tool metadata, fake citations, source-result-index manipulation, and multi-turn injection.
 - D19. `SECURITY.md`, `CONTRIBUTING.md`, `justfile`, `backend/justfile`: add public deployment abuse runbook, dependency review checklist, and explicit audit helpers.
+- D25. `prompts/system/manifest.yaml`, `prompts/rendered/finops-agent.system.md`, `agent/runtime/prompt_assembly.py`, `backend/tests/test_prompt_loading.py`: split prompt sources while preserving one rendered runtime prompt with manifest, SHA, ordering, freshness, and orphan-file checks.
 
 ---
 
@@ -94,4 +95,5 @@ R16  pending     pending     eval runner + LLM judge
 D17  2026-06-06  committed   agent hardening threat register
 D18  2026-06-06  committed   adversarial eval and AnswerPlan binding coverage
 D19  2026-06-06  committed   public abuse runbook and dependency audit helpers
+D25  2026-06-06  committed   prompt manifest and rendered-runtime coverage checks
 ```

@@ -1,0 +1,11 @@
+version: 1
+name: cloud-finops-price-agent
+description: Citation-backed cloud pricing agent system prompt.
+parts:
+  - parts/00-agent-contract.md
+  - parts/10-security-policy.md
+  - parts/20-pricing-domain-policy.md
+  - parts/30-tool-policy.md
+  - parts/40-answer-plan-policy.md
+examples:
+  - ../examples/pricing-behavior.md
