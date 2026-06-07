@@ -2,6 +2,17 @@
 
 Citation-backed cloud pricing where the agent draws the UI from a deterministic normalization layer. Ask it "cheapest 4 vCPU 8 GB box across the big 3 in EU" and the agent renders a comparison table whose every row links to the snapshot file the number came from, the JSON path inside that snapshot, and the upstream URL. You verify by clicking through. No trust required.
 
+> [!WARNING]
+> **⚠️ Work in progress, experimental, not for production.**
+>
+> This is an actively developed learning and research project. It is
+> experimental, the design and APIs change without notice, and there is no
+> stable release. Do not use this for production FinOps governance, purchasing
+> decisions, compliance, or security controls. It provides no guarantees. The
+> agent hardening here is defense in depth around a narrow read-only pricing
+> tool, not a security boundary for general autonomous agents. See `SECURITY.md`
+> and ADR-0014 for the current threat register and residual risks.
+
 ## Why this exists
 
 Cloud pricing comparison is a solved problem for humans (CloudPrice, getdeploying, VPSBenchmarks). It is not a solved problem for agents. Existing comparison sites are static, ad-supported, and read with eyes. Existing FinOps tooling (OpenCost, Kubecost, Vantage, CloudZero, Infracost) targets the post-deployment spend question, not the greenfield "where should I deploy" decision. The empty quadrant is pre-purchase, agent-callable, and open. That is the space this repo lives in.
