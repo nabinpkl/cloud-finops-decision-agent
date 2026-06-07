@@ -149,12 +149,16 @@ class LangChainRuntime:
             system_prompt=INSTRUCTIONS,
             middleware=middleware,
         )
-        agent_input = {
+        # LangChain's create_agent returns a graph whose `astream(input=...)`
+        # type references a private `_InputAgentState`. The runtime contract is
+        # the public messages-state shape below; keep the private type out of
+        # our app code and type this adapter boundary as Any.
+        agent_input: Any = {
             "messages": [{"role": t.role, "content": t.content} for t in turns]
         }
         try:
             async for mode, chunk in agent.astream(
-                agent_input, stream_mode=["messages", "updates"]
+                input=agent_input, stream_mode=["messages", "updates"]
             ):
                 if mode == "messages":
                     message, _meta = chunk
