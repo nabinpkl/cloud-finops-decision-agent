@@ -11,6 +11,7 @@ from agent.policy.answer_plan_models import AnswerPlan
 from agent.policy.answer_plan_rendering import render_answer_plan
 from agent.policy.answer_plan_validation import validate_answer_plan
 from agent.policy.final_answer import PolicyViolation
+from agent.security.untrusted import unwrap_tool_result_json
 
 
 def parse_answer_plan(text: str) -> tuple[AnswerPlan | None, list[PolicyViolation]]:
@@ -42,6 +43,9 @@ def _coerce_tool_result(result: object) -> dict[str, Any]:
     if isinstance(result, dict):
         return cast(dict[str, Any], result)
     if isinstance(result, str):
+        wrapped = unwrap_tool_result_json(result)
+        if wrapped is not None:
+            return wrapped
         try:
             parsed = json.loads(result)
         except json.JSONDecodeError:

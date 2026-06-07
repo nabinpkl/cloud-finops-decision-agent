@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import threading
 from typing import Any
 
@@ -22,9 +21,9 @@ from agents.tracing.span_data import (
 from opentelemetry import trace as otel_trace
 from opentelemetry.semconv._incubating.attributes import gen_ai_attributes as g
 from opentelemetry.trace import Span as OtelSpan
-from opentelemetry.trace import Status, StatusCode
 
 from api.observability.cost import compute_cost_usd
+from api.observability.redaction import set_sdk_error
 
 
 def _set_genai_attrs(
@@ -136,10 +135,13 @@ class AgentsSdkOtelProcessor(TracingProcessor):
         try:
             _set_genai_attrs(otel_span, span.span_data, self._provider_name, self._model_name)
             if span.error is not None:
-                otel_span.set_status(Status(StatusCode.ERROR, span.error.get("message") or ""))
-                err_data = span.error.get("data")
-                if err_data:
-                    otel_span.set_attribute("finops.error.data", json.dumps(err_data, default=str))
+                set_sdk_error(
+                    otel_span,
+                    {
+                        "message": span.error.get("message"),
+                        "data": span.error.get("data"),
+                    },
+                )
         finally:
             otel_span.end()
 
@@ -166,4 +168,3 @@ def register_agents_bridge(
             model_name=model_name,
         )
     )
-

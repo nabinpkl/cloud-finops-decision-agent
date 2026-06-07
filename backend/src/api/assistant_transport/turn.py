@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from assistant_stream import RunController
-from opentelemetry.trace import Status, StatusCode
 
 from api.assistant_transport.emitter import StateEmitter
 from api.assistant_transport.policy_emitter import PolicyEmitter
@@ -13,11 +12,11 @@ from api.assistant_transport.state import (
     build_turns,
 )
 from api.budget.identity import session_id_fingerprint
-from api.budget.models import SessionUsage
 from api.budget.policy import check_session_cap
 from api.budget.store import read_session_usage, record_usage
 from app_config import settings
 from api.observability import get_tracer
+from api.observability.redaction import record_exception, set_error_status
 from agent.runtime import RunUsage, TurnTokenCapExceeded, get_runtime
 
 
@@ -27,7 +26,7 @@ async def run_agent_turn(
     session_id: str,
     hashed_id: str,
 ) -> None:
-    block = check_session_cap(session_id) if settings.budget_enabled else None
+    block = check_session_cap(session_id)
     if block is not None:
         append_session_limit_message(controller.state)
         return
@@ -40,11 +39,7 @@ async def run_agent_turn(
     state_emitter = StateEmitter(controller, msg)
     emitter = PolicyEmitter(state_emitter)
 
-    usage_before = (
-        read_session_usage(session_id)
-        if settings.budget_enabled
-        else SessionUsage(session_id=session_id, input_tokens=0, output_tokens=0)
-    )
+    usage_before = read_session_usage(session_id)
     run_usage = RunUsage()
 
     tracer = get_tracer()
@@ -69,23 +64,23 @@ async def run_agent_turn(
                     "; ".join(emitter.violations),
                 )
         except TurnTokenCapExceeded as exc:
-            turn_span.record_exception(exc)
-            turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
+            record_exception(turn_span, exc)
+            set_error_status(turn_span, exc)
             turn_span.set_attribute("finops.budget.exhausted", True)
             turn_span.set_attribute("finops.budget.scope", "turn")
             emitter.discard_text()
             emitter.text_delta(f"\n\n[turn stopped: {exc}]")
             emitter.flush_unchecked()
         except Exception as exc:
-            turn_span.record_exception(exc)
-            turn_span.set_status(Status(StatusCode.ERROR, str(exc)))
+            record_exception(turn_span, exc)
+            set_error_status(turn_span, exc)
             emitter.discard_text()
             emitter.text_delta(
                 "\n\nThe agent hit an internal error. Try again later."
             )
             emitter.flush_unchecked()
         finally:
-            if settings.budget_enabled and (run_usage.input_tokens or run_usage.output_tokens):
+            if run_usage.input_tokens or run_usage.output_tokens:
                 record_usage(
                     session_id=session_id,
                     hashed_id=hashed_id,

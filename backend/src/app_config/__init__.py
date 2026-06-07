@@ -67,12 +67,12 @@ class Settings(BaseSettings):
     # default to keep user prompts and assistant prose out of on-disk traces.
     otel_capture_content: bool = False
 
-    # Budget enforcement (ADR-0011). All limits are tokens; USD is a derived
-    # view via api.observability.PRICE_TABLE.
-    budget_enabled: bool = True
+    # Budget enforcement (ADR-0011). This platform is always treated as a public
+    # unauthenticated deployment, so budget enforcement is not a behavior knob.
+    # All limits are tokens; USD is a derived view via
+    # api.observability.PRICE_TABLE.
     budget_db_path: str = "var/budgets.db"
-    # Required when budget_enabled=True; the model_validator below enforces
-    # presence at process start so we never silently run with a constant key.
+    # Required at process start so we never silently run with a constant key.
     budget_ip_hash_salt_secret: str = ""
     global_daily_token_cap: int = 10_000_000
     client_rate_requests_per_minute: int = 30
@@ -85,12 +85,12 @@ class Settings(BaseSettings):
     max_turns_per_run: int = 3
     trusted_proxy_count: int = 0
     trusted_proxy_cidrs: Annotated[list[str], NoDecode] = []
-    public_deployment: bool = False
 
     # Deterministic public route limits. These routes do not spend model tokens,
     # but they still read local indexes/snapshot excerpts.
     public_rate_requests_per_minute: int = 120
     excerpt_rate_requests_per_minute: int = 30
+    public_max_body_bytes: int = 65_536
     citation_excerpt_max_file_bytes: int = 250_000_000
 
     # Public assistant transport limits. These fire before runtime/model work
@@ -141,23 +141,19 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def _require_salt_when_budget_enabled(self) -> Settings:
+    def _require_budget_salt(self) -> Settings:
         # Fail-fast: an empty salt with enforcement on means yesterday's
         # hashed-IPs would be valid forever, undefeating ADR-0011's daily
         # rotation. Better to refuse to boot than to ship a fixed key.
-        if self.budget_enabled and not self.budget_ip_hash_salt_secret:
+        if not self.budget_ip_hash_salt_secret:
             raise ValueError(
-                "BUDGET_IP_HASH_SALT_SECRET must be set when BUDGET_ENABLED=true; "
-                "set a 32+ byte random value in .env or disable enforcement."
+                "BUDGET_IP_HASH_SALT_SECRET must be set; "
+                "set a 32+ byte random value in .env."
             )
         if self.trusted_proxy_count > 0 and not self.trusted_proxy_cidrs:
             raise ValueError(
                 "TRUSTED_PROXY_CIDRS must be set when TRUSTED_PROXY_COUNT is non-zero; "
                 "otherwise X-Forwarded-For is client-controlled."
-            )
-        if self.public_deployment and not self.session_cookie_secure:
-            raise ValueError(
-                "SESSION_COOKIE_SECURE must be true when PUBLIC_DEPLOYMENT=true."
             )
         return self
 

@@ -66,7 +66,7 @@ def resolve_db_path(raw: str) -> Path:
 
 def init_budgets() -> None:
     """Open the SQLite store and bootstrap schema. Idempotent."""
-    if _Init.done or not settings.budget_enabled:
+    if _Init.done:
         return
     db_path = resolve_db_path(settings.budget_db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)

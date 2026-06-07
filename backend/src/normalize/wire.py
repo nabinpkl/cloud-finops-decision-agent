@@ -21,6 +21,8 @@ def wire_response(result: dict[str, Any]) -> dict[str, Any]:
         out["results"] = [_wire_result(r) for r in out["results"]]
     if out.get("result") is not None:
         out["result"] = _wire_result(out["result"])
+    if "data_quality" in out:
+        out["data_quality"] = _wire_data_quality(out["data_quality"])
     return out
 
 
@@ -45,6 +47,32 @@ def _wire_entry(e: dict[str, Any]) -> dict[str, Any]:
     ref = store_path_to_ref(e.get("store_path", ""))
     if ref is not None:
         out["snapshot"] = ref
+    return out
+
+
+def _wire_data_quality(data_quality: object) -> object:
+    if not isinstance(data_quality, dict):
+        return data_quality
+    out = dict(data_quality)
+    per_provider = out.get("per_provider")
+    if not isinstance(per_provider, dict):
+        return out
+    out["per_provider"] = {
+        provider: _wire_provider_quality(quality)
+        for provider, quality in per_provider.items()
+    }
+    return out
+
+
+def _wire_provider_quality(quality: object) -> object:
+    if not isinstance(quality, dict):
+        return quality
+    out = dict(quality)
+    report_path = out.pop("report_path", None)
+    if isinstance(report_path, str):
+        ref = store_path_to_ref(report_path)
+        if ref is not None:
+            out["report"] = ref
     return out
 
 

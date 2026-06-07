@@ -12,11 +12,8 @@ from __future__ import annotations
 
 import os
 
-# Budget enforcement (ADR-0011) is off by default in tests; tests that need
-# it on flip settings.budget_enabled at the instance level via monkeypatch.
-# Setting the salt belt-and-braces in case a test enables budgets without
-# providing one explicitly.
-os.environ.setdefault("BUDGET_ENABLED", "false")
+# Budget enforcement is always enabled. Tests use a non-secret salt so settings
+# import does not depend on a developer's local .env.
 os.environ.setdefault(
     "BUDGET_IP_HASH_SALT_SECRET", "test-salt-not-a-real-secret-32-bytes"
 )

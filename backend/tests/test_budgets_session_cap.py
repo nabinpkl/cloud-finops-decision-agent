@@ -17,7 +17,6 @@ from app_config import settings
 
 @pytest.fixture
 def caps_low(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "budget_enabled", True)
     monkeypatch.setattr(settings, "budget_db_path", str(tmp_path / "b.db"))
     monkeypatch.setattr(settings, "budget_ip_hash_salt_secret", "test-salt-XX")
     monkeypatch.setattr(settings, "session_token_cap", 100)

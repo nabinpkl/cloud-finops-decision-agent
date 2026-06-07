@@ -1,5 +1,5 @@
 """BudgetMiddleware: global cap -> 503, client rate -> 429, /assistant
-scoping, off-switch."""
+scoping."""
 
 from __future__ import annotations
 
@@ -35,7 +35,6 @@ def _build_app() -> FastAPI:
 
 @pytest.fixture
 def budgets_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "budget_enabled", True)
     monkeypatch.setattr(settings, "budget_db_path", str(tmp_path / "b.db"))
     monkeypatch.setattr(settings, "budget_ip_hash_salt_secret", "test-salt-XX")
     monkeypatch.setattr(settings, "global_daily_token_cap", 1_000_000)
@@ -91,13 +90,6 @@ def test_client_rate_returns_429_after_burst(budgets_on):
     assert int(r.headers["Retry-After"]) > 0
 
 
-def test_off_switch_passes_everything_through(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "budget_enabled", False)
-    client = TestClient(_build_app())
-    for _ in range(20):
-        assert client.post("/assistant", json={}).status_code == 200
-
-
 def test_public_route_rate_returns_429_after_burst(budgets_on):
     client = TestClient(_build_app())
     for _ in range(2):
@@ -132,3 +124,17 @@ def test_trusted_peer_uses_xff_client_for_rate_identity(
 
     assert client.get("/lookup", headers={"x-forwarded-for": "198.51.100.1"}).status_code == 200
     assert client.get("/lookup", headers={"x-forwarded-for": "198.51.100.2"}).status_code == 200
+
+
+def test_trusted_peer_falls_back_to_peer_on_malformed_xff(
+    budgets_on,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(settings, "public_rate_requests_per_minute", 1)
+    monkeypatch.setattr(settings, "trusted_proxy_count", 1)
+    monkeypatch.setattr(settings, "trusted_proxy_cidrs", ["203.0.113.0/24"])
+    client = TestClient(_build_app(), client=("203.0.113.10", 12345))
+
+    assert client.get("/lookup", headers={"x-forwarded-for": "198.51.100.1, nope"}).status_code == 200
+    r = client.get("/lookup", headers={"x-forwarded-for": "198.51.100.2, still-nope"})
+    assert r.status_code == 429

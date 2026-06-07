@@ -15,7 +15,6 @@ this via the `rendering` field.
 from __future__ import annotations
 
 import json
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +48,7 @@ def build_excerpt(*, abs_path: Path, json_path: str, context: int = 4) -> dict[s
     On failure returns the same shape with an "error" key and empty "lines".
     """
     try:
-        doc = _load_doc(str(abs_path), abs_path.stat().st_mtime_ns)
+        doc = _load_doc(abs_path)
     except FileNotFoundError:
         return _error(json_path, "snapshot file not found")
     except Exception as exc:  # malformed JSON, permissions, etc.
@@ -93,11 +92,14 @@ def build_excerpt(*, abs_path: Path, json_path: str, context: int = 4) -> dict[s
     }
 
 
-@lru_cache(maxsize=8)
-def _load_doc(path: str, _mtime_ns: int) -> Any:
-    """Parse a snapshot file. Cached by (path, mtime) so a rebuilt snapshot
-    invalidates the entry. mtime is part of the key, not used in the body."""
-    return orjson.loads(Path(path).read_bytes())
+def _load_doc(path: Path) -> Any:
+    """Parse a snapshot file for one request-local citation window peek.
+
+    Do not cache parsed snapshot documents here. Provider catalogs can be
+    hundreds of MB, and this public endpoint should not keep whole parsed
+    source files resident after serving a small verification window.
+    """
+    return orjson.loads(path.read_bytes())
 
 
 def _leaf_key(m: Any) -> str | int | None:

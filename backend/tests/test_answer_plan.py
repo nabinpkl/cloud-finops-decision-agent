@@ -134,6 +134,38 @@ def test_missing_source_result_index_fails_binding():
     assert any(violation.name == "answer_plan_source_result" for violation in violations)
 
 
+def test_price_claim_binds_to_latest_tool_result_only():
+    stale_prior_result = _tool_result()
+    latest_result = {
+        "results": [
+            {
+                "provider": "gcp",
+                "instance_type": "n2-standard-4",
+                "region_native": "europe-west3",
+                "monthly_usd": 148.92,
+                "hourly_usd": 0.204,
+                "citation": {
+                    "source_url": "https://gcp.example/prices",
+                    "json_path": "$.gcp.n2",
+                    "fetched_at": "2026-06-05T10:00:00Z",
+                    "age_hours": 4.0,
+                    "snapshot": {
+                        "provider": "gcp",
+                        "snapshot_iso": "2026-06-05T10-00-00Z",
+                        "filename": "skus.json",
+                    },
+                },
+            }
+        ],
+        "unmet_requirements": [],
+    }
+    plan = AnswerPlan.model_validate(_answer_plan())
+
+    violations = validate_answer_plan(plan, [stale_prior_result, latest_result])
+
+    assert any(violation.name == "answer_plan_claim_binding" for violation in violations)
+
+
 def test_lookup_answer_rejects_multiple_price_claims():
     data = _answer_plan(answer_type="lookup", candidate_claims=[])
     data["price_claims"].append(data["price_claims"][0])  # type: ignore[union-attr]

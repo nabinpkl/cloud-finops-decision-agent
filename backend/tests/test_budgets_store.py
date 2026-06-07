@@ -20,7 +20,6 @@ def _conn() -> sqlite3.Connection:
 @pytest.fixture
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Reset the module latch and point the store at a fresh tmp file."""
-    monkeypatch.setattr(settings, "budget_enabled", True)
     monkeypatch.setattr(settings, "budget_db_path", str(tmp_path / "b.db"))
     monkeypatch.setattr(settings, "budget_ip_hash_salt_secret", "test-salt-XX")
     monkeypatch.setattr(budget_store._Init, "done", False)

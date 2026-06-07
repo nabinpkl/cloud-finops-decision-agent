@@ -77,13 +77,18 @@ line numbers, like a diff hunk. The user sees the price surrounded by its
 sibling keys without downloading a 200 MB file.
 
 The excerpt is computed **at serve time, on demand**, for only the citations a
-user actually opens. It is **not** precomputed into the parquet at build time.
+user actually opens. It is **not** precomputed into the parquet at build time,
+and it is not cached by user question. The durable artifact is the citation
+pointer (`snapshot` ref + `json_path`); the excerpt is an ephemeral window peek
+over that pointer.
 
 Why not build time: the AWS region file is ~200 MB with hundreds of thousands of
 priced rows. Computing and storing an excerpt for every row would balloon build
 cost and either double `store/` size (a canonical pretty copy per snapshot) or
 freeze the context window at build. Both lose to a lazy endpoint that pays the
-cost only when a human clicks, and the cost is bounded by an LRU file cache.
+cost only when a human clicks. Because this endpoint is public and
+unauthenticated, it must not keep whole parsed source documents resident after
+serving a small preview.
 
 The excerpt endpoint:
 
@@ -114,7 +119,8 @@ returns a hunk:
 
 Implementation (`normalize/citation_excerpt.py`):
 
-1. Load the snapshot file (LRU cache keyed by path + mtime; orjson parse).
+1. Load the snapshot file request-locally with `orjson`; do not cache the
+   parsed whole document.
 2. Resolve `json_path` with `jsonpath_ng.ext`. Take the first match.
 3. Pretty-print the matched value's **immediate parent container** with
    `indent=2`. Across all seven providers the leaf is a dict field (`USD`,
@@ -137,7 +143,8 @@ own line numbers.
 ### Positive
 
 - `compare()` / `lookup()` stay parquet-only and fast. The expensive raw-file
-  read happens only on an explicit excerpt request, LRU-cached thereafter.
+  read happens only on an explicit excerpt request and the parsed document is
+  released after the request.
 - No parquet schema change, no verifier change. The excerpt feature is purely
   additive: one new module, one new endpoint.
 - The browser never sees a filesystem path. The audit story survives: snapshot
@@ -147,9 +154,10 @@ own line numbers.
 
 ### Negative
 
-- First excerpt request into the AWS region file pays a ~1 s orjson parse of
-  ~200 MB and holds it resident in the LRU. Acceptable for a v0 local demo; a v1
-  byte-offset index or precomputed excerpt store can remove it if needed.
+- Each excerpt request into a large AWS/GCP/Azure file can pay an orjson parse
+  of a large source file. That is acceptable for v0 because the route is
+  file-size-bounded and rate-limited; a v1 byte-offset index or provider-aware
+  streaming peek can remove it if needed.
 - The excerpt's line numbers are not the upstream file's line numbers. Mitigated
   by labeling the rendering explicitly. For minified sources there is no
   alternative.

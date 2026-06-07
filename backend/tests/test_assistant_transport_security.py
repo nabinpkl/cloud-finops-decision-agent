@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+import api.budget.store as budget_store
 from agent.runtime import Emitter, RunUsage, Turn
 from app_config import settings
 
@@ -26,14 +28,22 @@ class RecordingRuntime:
 
 
 @pytest.fixture(autouse=True)
-def assistant_limits(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "budget_enabled", False)
+def assistant_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "budget_db_path", str(tmp_path / "b.db"))
+    monkeypatch.setattr(settings, "budget_ip_hash_salt_secret", "test-salt-XX")
+    monkeypatch.setattr(budget_store._Init, "done", False)
+    monkeypatch.setattr(budget_store._Init, "conn", None)
     monkeypatch.setattr(settings, "assistant_max_body_bytes", 1024)
     monkeypatch.setattr(settings, "assistant_max_commands", 8)
     monkeypatch.setattr(settings, "assistant_max_state_messages", 24)
     monkeypatch.setattr(settings, "assistant_max_message_parts", 16)
     monkeypatch.setattr(settings, "assistant_max_text_chars", 8_000)
     monkeypatch.setattr(settings, "assistant_max_history_chars", 32_000)
+    yield
+    if budget_store._Init.conn is not None:
+        budget_store._Init.conn.close()
+        budget_store._Init.conn = None
+        budget_store._Init.done = False
 
 
 def test_client_supplied_system_state_is_not_forwarded(

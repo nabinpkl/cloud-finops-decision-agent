@@ -11,6 +11,7 @@ payloads as test_integration_api.py.
 from __future__ import annotations
 
 import agent.tools.pricing as tools_core
+from agent.security.untrusted import unwrap_tool_result_json
 from test_integration_api import CANNED_COMPARE
 
 
@@ -59,3 +60,22 @@ def test_compare_for_model_wraps_model_visible_json(monkeypatch):
     assert "<json>" in model_text
     assert "store_path" not in artifact["results"][0]["citation"]
     assert artifact["results"][0]["citation"]["snapshot"]["provider"] == "aws"
+
+
+def test_openai_agents_compare_returns_wrapped_model_visible_json(monkeypatch):
+    import pytest
+
+    pytest.importorskip("agents")
+    import agent.runtime.openai_agents.tools as openai_tools
+
+    monkeypatch.setattr(openai_tools, "_run_compare", lambda **kw: CANNED_COMPARE)
+
+    model_text = openai_tools._compare_for_model(
+        vcpu=4,
+        ram_gb=16,
+        region="eu-central",
+        family="general-purpose",
+    )
+
+    assert model_text.startswith('<trusted_tool_result tool="compare">')
+    assert unwrap_tool_result_json(model_text) == CANNED_COMPARE

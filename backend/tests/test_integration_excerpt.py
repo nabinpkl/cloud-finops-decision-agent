@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from normalize.citations.excerpt import PARENT_ENTRY_CAP, build_excerpt
+from normalize.citations import excerpt as excerpt_module
 
 
 def _write(tmp_path: Path, name: str, obj) -> Path:
@@ -75,3 +76,19 @@ def test_missing_file_is_error(tmp_path):
 
     assert "error" in out
     assert out["lines"] == []
+
+
+def test_excerpt_reads_current_file_not_cached_document(tmp_path):
+    p = _write(tmp_path, "mutable.json", {"price": 1})
+
+    first = build_excerpt(abs_path=p, json_path="$.price", context=1)
+    p.write_bytes(json.dumps({"price": 2}).encode())
+    second = build_excerpt(abs_path=p, json_path="$.price", context=1)
+
+    assert first["matched_value"] == "1"
+    assert second["matched_value"] == "2"
+
+
+def test_load_doc_is_not_lru_cached():
+    assert not hasattr(excerpt_module._load_doc, "cache_info")
+    assert not hasattr(excerpt_module._load_doc, "cache_clear")

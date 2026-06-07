@@ -152,8 +152,8 @@ When no candidate satisfies the request (e.g. user asked 256 vCPU but no provide
   "data_quality": {
     "overall_status": "ok",
     "per_provider": {
-      "aws":   {"status": "ok", "snapshot_age_hours": 8.4,  "flags": [], "human_summary": "aws index built clean: 2880 rows.", "report_path": "store/aws/2026-05-25T04-23-36Z/index_report.json", "snapshot_iso": "2026-05-25T04-23-36Z"},
-      "vultr": {"status": "ok", "snapshot_age_hours": 6.2,  "flags": [], "human_summary": "vultr index built clean: 271 rows.", "report_path": "store/vultr/2026-05-25T21-00-46Z/index_report.json", "snapshot_iso": "2026-05-25T21-00-46Z"}
+      "aws":   {"status": "ok", "snapshot_age_hours": 8.4,  "flags": [], "human_summary": "aws index built clean: 2880 rows.", "report": {"provider": "aws", "snapshot_iso": "2026-05-25T04-23-36Z", "filename": "index_report.json"}, "snapshot_iso": "2026-05-25T04-23-36Z"},
+      "vultr": {"status": "ok", "snapshot_age_hours": 6.2,  "flags": [], "human_summary": "vultr index built clean: 271 rows.", "report": {"provider": "vultr", "snapshot_iso": "2026-05-25T21-00-46Z", "filename": "index_report.json"}, "snapshot_iso": "2026-05-25T21-00-46Z"}
     }
   }
 }
@@ -229,7 +229,7 @@ Every response carries a `data_quality` block per ADR 0005. The shape:
       "snapshot_age_hours": 8.4,
       "flags":              [],
       "human_summary":      "aws index built clean: 2880 rows.",
-      "report_path":        "store/aws/<ISO>/index_report.json",
+      "report":             {"provider": "aws", "snapshot_iso": "<ISO>", "filename": "index_report.json"},
       "snapshot_iso":       "<ISO>",
       "evidence":           {"...": "..."}
     }
@@ -237,7 +237,7 @@ Every response carries a `data_quality` block per ADR 0005. The shape:
 }
 ```
 
-`overall_status` is the worst of the per-provider statuses on the ordering `ok < warn < stale < broken`. `flags` carries the drift identifiers from ADR 0004's enum. `human_summary` is pre-composed prose the agent paraphrases. `report_path` points at the on-disk artifact for drill-down. `snapshot_stale` is appended automatically whenever `snapshot_age_hours > 24`.
+`overall_status` is the worst of the per-provider statuses on the ordering `ok < warn < stale < broken`. `flags` carries the drift identifiers from ADR 0004's enum. `human_summary` is pre-composed prose the agent paraphrases. Public API/tool responses expose report drill-downs as a logical `report` ref, not the internal `report_path`; `normalize.wire` performs that translation at process boundaries. `snapshot_stale` is appended automatically whenever `snapshot_age_hours > 24`.
 
 ## Taxonomies
 

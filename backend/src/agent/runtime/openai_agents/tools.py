@@ -13,10 +13,9 @@ going through the SDK's `FunctionTool` invoke wrapper.
 
 from __future__ import annotations
 
-from typing import Any
-
 from agents import function_tool
 
+from agent.security.untrusted import wrap_tool_result_json
 from agent.tools.pricing import (
     ExpandMode,
     FamilyName,
@@ -24,7 +23,27 @@ from agent.tools.pricing import (
     run_compare as _run_compare,
 )
 
-__all__ = ["compare", "_run_compare"]
+__all__ = ["compare", "_compare_for_model", "_run_compare"]
+
+
+def _compare_for_model(
+    *,
+    vcpu: int,
+    ram_gb: float,
+    region: str,
+    family: FamilyName = "any",
+    providers: list[ProviderName] | None = None,
+    expand: ExpandMode = "cheapest",
+) -> str:
+    result = _run_compare(
+        vcpu=vcpu,
+        ram_gb=ram_gb,
+        region=region,
+        family=family,
+        providers=providers,
+        expand=expand,
+    )
+    return wrap_tool_result_json("compare", result)
 
 
 @function_tool
@@ -35,7 +54,7 @@ def compare(
     family: FamilyName = "any",
     providers: list[ProviderName] | None = None,
     expand: ExpandMode = "cheapest",
-) -> dict[str, Any]:
+) -> str:
     """Rank cloud providers by cheapest instance matching a vCPU/RAM spec.
 
     Match policy from SPEC.md: the chosen candidate satisfies
@@ -55,7 +74,7 @@ def compare(
         expand: "cheapest" returns one result per provider; "full" also includes
             the per-provider ranked candidate list under `considered`.
     """
-    return _run_compare(
+    return _compare_for_model(
         vcpu=vcpu,
         ram_gb=ram_gb,
         region=region,

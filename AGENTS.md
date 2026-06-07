@@ -26,6 +26,7 @@ Coding rules:
 - Do not commit local runtime artifacts: `.env`, `.env.*`, `.infisical.json`, `store/`, `var/`, `.venv/`, caches, frontend build output, or `node_modules`.
 - Do not put provider credentials, API keys, traces, local database files, or fetched pricing snapshots in git.
 - Keep docs split by ownership: `README.md` for users, `PRD.md` for intent, `SPEC.md` for technical contracts, `AGENTS.md` for agent behavior.
+- Write tests only for desired behavior of the current architecture; do not write tests that assert the absence of previous architectural patterns; add/refer to ADRs for historical context.”
 
 
 ## Price / cloud agent mode

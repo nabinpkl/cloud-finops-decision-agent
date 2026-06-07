@@ -6,6 +6,7 @@ hard boundary remains schema validation, allowlists, and deterministic checks.
 
 from __future__ import annotations
 
+import html
 import json
 from typing import Any
 
@@ -35,6 +36,19 @@ def wrap_tool_result_json(tool: str, payload: dict[str, Any]) -> str:
         f"<json>{escaped}</json>\n"
         "</trusted_tool_result>"
     )
+
+
+def unwrap_tool_result_json(text: str) -> dict[str, Any] | None:
+    start = text.find("<json>")
+    end = text.rfind("</json>")
+    if not text.startswith("<trusted_tool_result ") or start == -1 or end <= start:
+        return None
+    try:
+        decoded = html.unescape(text[start + len("<json>"):end])
+        payload = json.loads(decoded)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _wrap(tag: str, text: str) -> str:

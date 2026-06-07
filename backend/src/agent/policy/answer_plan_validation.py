@@ -21,8 +21,9 @@ def validate_answer_plan(
     tool_results: list[dict[str, Any]],
 ) -> list[PolicyViolation]:
     violations: list[PolicyViolation] = []
-    results = _all_results(tool_results)
-    unmet = _all_unmet(tool_results)
+    latest_tool_result = _latest_pricing_tool_result(tool_results)
+    results = _result_rows(latest_tool_result)
+    unmet = _unmet_rows(latest_tool_result)
 
     if plan.answer_type in {"missing_data", "refusal"} and plan.price_claims:
         violations.append(
@@ -199,24 +200,35 @@ def _citation_age(citation: Any) -> float | None:
     return None
 
 
-def _all_results(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _latest_pricing_tool_result(tool_results: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for result in reversed(tool_results):
+        if not isinstance(result, dict):
+            continue
+        if any(key in result for key in ("results", "result", "unmet_requirements")):
+            return result
+    return None
+
+
+def _result_rows(tool_result: dict[str, Any] | None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for result in tool_results:
-        rows = result.get("results")
-        if isinstance(rows, list):
-            out.extend(row for row in rows if isinstance(row, dict))
-        single = result.get("result")
-        if isinstance(single, dict):
-            out.append(single)
+    if tool_result is None:
+        return out
+    rows = tool_result.get("results")
+    if isinstance(rows, list):
+        out.extend(row for row in rows if isinstance(row, dict))
+    single = tool_result.get("result")
+    if isinstance(single, dict):
+        out.append(single)
     return out
 
 
-def _all_unmet(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _unmet_rows(tool_result: dict[str, Any] | None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for result in tool_results:
-        rows = result.get("unmet_requirements")
-        if isinstance(rows, list):
-            out.extend(row for row in rows if isinstance(row, dict))
+    if tool_result is None:
+        return out
+    rows = tool_result.get("unmet_requirements")
+    if isinstance(rows, list):
+        out.extend(row for row in rows if isinstance(row, dict))
     return out
 
 

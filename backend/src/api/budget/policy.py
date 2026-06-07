@@ -18,8 +18,6 @@ def seconds_to_next_utc_midnight() -> int:
 
 
 def check_global_daily() -> BudgetBlock | None:
-    if not settings.budget_enabled:
-        return None
     today = utc_date_str()
     with _LOCK:
         row = conn().execute(
@@ -38,8 +36,6 @@ def check_global_daily() -> BudgetBlock | None:
 
 def check_client_rate(hashed_id: str) -> BudgetBlock | None:
     """Increment request counter and enforce request/token rate caps."""
-    if not settings.budget_enabled:
-        return None
     now = int(time.time())
     with _LOCK:
         db = conn()
@@ -94,8 +90,6 @@ def check_public_route_rate(
     requests_per_minute: int,
 ) -> BudgetBlock | None:
     """Increment and enforce a request cap for deterministic public routes."""
-    if not settings.budget_enabled:
-        return None
     now = int(time.time())
     with _LOCK:
         db = conn()
@@ -133,8 +127,6 @@ def check_public_route_rate(
 
 def check_session_cap(session_id: str) -> BudgetBlock | None:
     """Return a block if the cumulative session token total is at the cap."""
-    if not settings.budget_enabled:
-        return None
     usage = read_session_usage(session_id)
     if usage.total >= settings.session_token_cap:
         return BudgetBlock(

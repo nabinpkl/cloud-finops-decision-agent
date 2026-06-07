@@ -25,7 +25,7 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 ## Phase 1: HTTP surface and test spine [done]
 
 - D2. `api/main.py`: `POST /compare`, `GET /lookup`, `GET /citation/excerpt`, `GET /health`. CORS for localhost:3000; `store_path` to snapshot-ref translation; excerpt path-traversal guards.
-- D3. `normalize/citation_excerpt.py`: serve-time hunk builder (LRU load by path+mtime, jsonpath resolve, pretty-print the matched value's parent container, windowed line numbers, minimal fallback for oversized parents).
+- D3. `normalize/citation_excerpt.py`: serve-time window-peek hunk builder (request-local JSON load, jsonpath resolve, pretty-print the matched value's parent container, windowed line numbers, minimal fallback for oversized parents).
 - D4. `tests/` two lanes. Mocked integration: `compare` synthesis math against the real `flex_rules.gcp.n2`, closest-larger ranking, `data_quality` 24h boundary, excerpt branches, the `store_path`-leak guard. Real-file e2e: closes the citation loop, the excerpt's `matched_value` must equal the quoted price.
 - D5. `just check` = ruff + ty + pytest; `just test-e2e` separate (needs a store). Cleared the ty and ruff debt the gate surfaced (`emit` to `NoReturn`, IBM id narrowing, schema annotation).
 - D6. `/health` carries the `data_quality` envelope: per-provider freshness plus a `broken` rollup when a provider has no usable snapshot.
@@ -58,6 +58,19 @@ Config note: the API's CORS origins and port are literals in `api/main.py` today
 - D18. `evals/cases/prompt_injection.yaml`, `backend/tests/test_answer_plan.py`: expand adversarial coverage for poisoned tool metadata, fake citations, source-result-index manipulation, and multi-turn injection.
 - D19. `SECURITY.md`, `CONTRIBUTING.md`, `justfile`, `backend/justfile`: add public deployment abuse runbook, dependency review checklist, and explicit audit helpers.
 - D25. `prompts/system/manifest.yaml`, `prompts/rendered/finops-agent.system.md`, `agent/runtime/prompt_assembly.py`, `backend/tests/test_prompt_loading.py`: split prompt sources while preserving one rendered runtime prompt with manifest, SHA, ordering, freshness, and orphan-file checks.
+
+## Phase 7: review-found hardening backlog
+
+- R26. Fix `backend/justfile` `api` and `smoke` recipes so they preserve `.env` model configuration instead of unsetting `PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, and `MODEL_NAME`; verify a configured `/assistant` startup path still works.
+- D27. Remove `PUBLIC_DEPLOYMENT` and `BUDGET_ENABLED` behavior knobs from `app_config/__init__.py`, `.env.example`, and `.env`; make budget enforcement unconditional because this is always a public unauthenticated deployment.
+- D28. Align public pricing route validation in `api/routes/pricing.py` with the model-facing compare/lookup bounds in `agent/tools/pricing.py`, and add a body-size guard for deterministic POST routes.
+- D29. Resolve the `data_quality.report_path` wire contract conflict by stripping or translating path-shaped report metadata before public API and assistant tool artifacts leave the backend; update ADR-0005 or ADR-0008 if the chosen public shape changes.
+- D30. Make `agent/runtime/openai_agents/tools.py` use the same escaped model-visible tool-result wrapper as the LangChain runtime, or document and test why raw dict tool output is safe for that adapter.
+- D31. Tighten `agent/policy/answer_plan_validation.py` so price and candidate claims bind to the latest compare tool result, not any tool result collected earlier in the same run; add a regression test with two tool results.
+- D32. Enforce `OTEL_CAPTURE_CONTENT` in observability paths by redacting provider/SDK error payloads and raw exception details unless content capture is explicitly enabled; add tests for redacted span attributes.
+- D33. Validate trusted-proxy `X-Forwarded-For` values in `api/budget/middleware.py` as real IP addresses before using them for budget identity, and fall back to the peer IP on malformed input.
+- D34. Reduce `/citation/excerpt` memory pressure by removing whole parsed-document caching; keep citation peeks request-local and add regressions proving source files are reread instead of held in cache.
+- R35. Refresh `EVALS.md` and the Phase 5 entries in `TASKS.md` to reflect the prompt split, current `just eval` command, implemented replay runner, and any still-missing live/LLM-judge eval scope.
 
 ---
 
@@ -96,4 +109,14 @@ D17  2026-06-06  committed   agent hardening threat register
 D18  2026-06-06  committed   adversarial eval and AnswerPlan binding coverage
 D19  2026-06-06  committed   public abuse runbook and dependency audit helpers
 D25  2026-06-06  committed   prompt manifest and rendered-runtime coverage checks
+R26  pending     pending     preserve model env in api and smoke recipes
+D27  2026-06-06  committed   remove deployment/budget off-switches
+D28  2026-06-06  committed   harden deterministic pricing route validation and body limits
+D29  2026-06-06  committed   translate public data_quality report_path to report refs
+D30  2026-06-06  committed   align OpenAI Agents tool-result escaping
+D31  2026-06-06  committed   bind AnswerPlan claims to latest tool result
+D32  2026-06-06  committed   enforce OTel content-capture redaction
+D33  2026-06-06  committed   validate trusted X-Forwarded-For identities
+D34  2026-06-06  committed   remove citation excerpt parsed-document cache
+R35  pending     pending     refresh eval docs and phase status
 ```

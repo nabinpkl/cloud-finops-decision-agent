@@ -28,6 +28,7 @@ from agents.items import TResponseInputItem
 from openai.types.responses import ResponseTextDeltaEvent
 
 from app_config import settings
+from agent.security.untrusted import unwrap_tool_result_json
 from agent.runtime.types import Emitter, RunUsage, Turn
 from agent.runtime.openai_agents.agent import build_agent
 from agent.runtime.openai_agents.hooks import BudgetHooks
@@ -40,6 +41,14 @@ def _raw_field(raw_item: Any, name: str) -> str:
     else:
         value = getattr(raw_item, name, None)
     return value or ""
+
+
+def _tool_output_artifact(output: object) -> object:
+    if isinstance(output, str):
+        parsed = unwrap_tool_result_json(output)
+        if parsed is not None:
+            return parsed
+    return output
 
 
 class OpenAIAgentsRuntime:
@@ -85,7 +94,7 @@ class OpenAIAgentsRuntime:
                     ):
                         call_id = item.call_id
                         if call_id and call_id in tool_call_ids:
-                            emit.tool_result(call_id, item.output)
+                            emit.tool_result(call_id, _tool_output_artifact(item.output))
         finally:
             # Mirror partial usage out even when stream_events() raised (the
             # cap exception or any other), so transport's finally can persist

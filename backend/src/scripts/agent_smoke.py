@@ -113,16 +113,15 @@ async def _drive() -> int:
         {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens},
     )
 
-    # Persist to the budget store the same way the assistant turn runner does, so the smoke
-    # also writes a session/global row a human can inspect.
-    if settings.budget_enabled:
-        init_budgets()
-        record_usage(
-            session_id="smoke-session",
-            hashed_id="smoke-client",
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-        )
+    # Persist to the budget store the same way the assistant turn runner does,
+    # so the smoke also writes a session/global row a human can inspect.
+    init_budgets()
+    record_usage(
+        session_id="smoke-session",
+        hashed_id="smoke-client",
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+    )
 
     _emit(
         "done",

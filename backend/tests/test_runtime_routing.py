@@ -27,6 +27,16 @@ def test_openai_agents_selector_returns_openai_runtime(monkeypatch: pytest.Monke
     assert type(rt).__name__ == "OpenAIAgentsRuntime"
 
 
+def test_openai_agents_runtime_recovers_wrapped_tool_artifact():
+    pytest.importorskip("agents")
+    from agent.runtime.openai_agents.runtime import _tool_output_artifact
+    from agent.security.untrusted import wrap_tool_result_json
+
+    payload = {"results": [{"provider": "aws"}]}
+
+    assert _tool_output_artifact(wrap_tool_result_json("compare", payload)) == payload
+
+
 def test_failed_adapter_import_propagates_not_silent_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ):

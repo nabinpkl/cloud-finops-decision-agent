@@ -70,7 +70,19 @@ CANNED_COMPARE = {
     "results": [ATOMIC_RESULT, COMPOSITE_RESULT],
     "ranked_by": "monthly_usd",
     "unmet_requirements": [],
-    "data_quality": {"overall_status": "ok", "per_provider": {}},
+    "data_quality": {
+        "overall_status": "ok",
+        "per_provider": {
+            "aws": {
+                "status": "ok",
+                "snapshot_age_hours": 6.2,
+                "flags": [],
+                "human_summary": "aws index ready.",
+                "report_path": "store/aws/2026-05-27T04-23-36Z/index_report.json",
+                "snapshot_iso": "2026-05-27T04-23-36Z",
+            }
+        },
+    },
 }
 
 
@@ -101,6 +113,7 @@ def test_compare_strips_store_path_and_adds_ref(monkeypatch):
 
     # the contract: store_path must not appear anywhere in the wire response
     assert _find_keys(data, "store_path") == []
+    assert _find_keys(data, "report_path") == []
 
     # every citation (atomic + each composite constituent) carries a snapshot ref
     refs = _find_keys(data, "snapshot")
@@ -113,6 +126,11 @@ def test_compare_strips_store_path_and_adds_ref(monkeypatch):
     }
     gcp_ref = data["results"][1]["citation"]["composite"][0]["snapshot"]
     assert gcp_ref["provider"] == "gcp" and gcp_ref["filename"] == "skus.json"
+    assert data["data_quality"]["per_provider"]["aws"]["report"] == {
+        "provider": "aws",
+        "snapshot_iso": "2026-05-27T04-23-36Z",
+        "filename": "index_report.json",
+    }
 
 
 def test_lookup_strips_store_path(monkeypatch):

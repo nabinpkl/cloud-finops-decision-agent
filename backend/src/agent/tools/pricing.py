@@ -12,18 +12,17 @@ frameworks: neither adapter can weaken it, because neither owns it.
 
 from __future__ import annotations
 
-from typing import Any, Literal
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Any
 
 from agent.security.untrusted import wrap_tool_result_json
-from normalize.index import SUPPORTED_PROVIDERS
+from normalize.query.inputs import (
+    CompareQueryArgs,
+    ExpandMode,
+    FamilyName,
+    ProviderName,
+)
 from normalize.wire import wire_response
 from normalize.query.service import compare as _normalize_compare
-
-ProviderName = Literal["aws", "gcp", "azure", "oracle", "vultr", "linode", "ibm"]
-FamilyName = Literal["any", "general-purpose", "compute-optimized", "memory-optimized"]
-ExpandMode = Literal["cheapest", "full"]
 
 COMPARE_DESCRIPTION = (
     "Read-only pricing comparison for cloud compute instances. Use only for "
@@ -36,37 +35,8 @@ COMPARE_DESCRIPTION = (
 )
 
 
-class CompareToolArgs(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    vcpu: int = Field(gt=0, le=1024)
-    ram_gb: float = Field(gt=0, le=8192)
-    region: str = Field(min_length=1, max_length=64)
-    family: FamilyName = "any"
-    providers: list[ProviderName] | None = Field(default=None, max_length=7)
-    expand: ExpandMode = "cheapest"
-
-    @field_validator("region")
-    @classmethod
-    def _region_is_plain_selector(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned or any(part in cleaned for part in ("/", "\\", "..", "<", ">")):
-            raise ValueError("region must be a plain provider or canonical selector")
-        return cleaned
-
-    @field_validator("providers")
-    @classmethod
-    def _providers_are_supported(
-        cls,
-        value: list[ProviderName] | None,
-    ) -> list[ProviderName] | None:
-        if value is None:
-            return value
-        supported = set(SUPPORTED_PROVIDERS)
-        unknown = sorted(set(value) - supported)
-        if unknown:
-            raise ValueError(f"unsupported providers: {', '.join(unknown)}")
-        return value
+class CompareToolArgs(CompareQueryArgs):
+    """Agent-facing name for the shared compare input contract."""
 
 
 def run_compare(

@@ -41,7 +41,7 @@ def _client_ip(request: Request) -> str:
     peer_ip = client.host if client else "0.0.0.0"
     if settings.trusted_proxy_count > 0 and _peer_is_trusted(peer_ip):
         fwd = request.headers.get("x-forwarded-for", "")
-        chain = [ip.strip() for ip in fwd.split(",") if ip.strip()]
+        chain = _validated_forwarded_chain(fwd)
         if chain:
             # The right-most `trusted_proxy_count` entries are our own
             # proxies; the value left of them is the closest untrusted
@@ -49,6 +49,18 @@ def _client_ip(request: Request) -> str:
             index = max(len(chain) - settings.trusted_proxy_count - 1, 0)
             return chain[index]
     return peer_ip
+
+
+def _validated_forwarded_chain(header: str) -> list[str]:
+    chain = [ip.strip() for ip in header.split(",") if ip.strip()]
+    if not chain:
+        return []
+    try:
+        for ip in chain:
+            ipaddress.ip_address(ip)
+    except ValueError:
+        return []
+    return chain
 
 
 def _peer_is_trusted(peer_ip: str) -> bool:
@@ -76,9 +88,6 @@ class BudgetMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if not settings.budget_enabled:
-            return await call_next(request)
-
         path = request.url.path
         if path != _ASSISTANT_PATH and path not in _PUBLIC_RATE_PATHS:
             return await call_next(request)
