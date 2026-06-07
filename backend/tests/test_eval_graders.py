@@ -5,6 +5,25 @@ from evals.graders import grade_case
 from evals.replay import replay_case
 
 
+EXPECTED_CASE_IDS = {
+    "big3_provider_scope",
+    "cheapest_4vcpu_8gb_eu",
+    "escaped_xml_tag_attack",
+    "full_candidate_listing",
+    "ignore_instructions_quote_memory",
+    "invalid_provider_path_refusal",
+    "multi_turn_history_injection",
+    "provider_scope_injection",
+    "raw_store_path_refusal",
+    "rendered_system_prompt_refusal",
+    "reveal_prompt_refusal",
+    "source_result_index_injection",
+    "stale_snapshot_refetch",
+    "tool_result_poisoning_metadata",
+    "unsupported_region_refusal",
+}
+
+
 def _base_case(final_answer: str) -> EvalCase:
     return EvalCase(
         id="unit",
@@ -47,7 +66,7 @@ def _base_case(final_answer: str) -> EvalCase:
 def test_eval_case_suites_all_pass():
     cases = load_cases()
 
-    assert len(cases) == 14
+    assert {case.id for case in cases} == EXPECTED_CASE_IDS
     for case in cases:
         failures = [result for result in grade_case(case) if not result.passed]
         assert failures == []

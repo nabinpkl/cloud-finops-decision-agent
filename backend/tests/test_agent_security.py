@@ -69,3 +69,12 @@ def test_final_answer_policy_blocks_unproven_price_and_internal_leakage():
         "price_provenance",
     }
     assert "citation policy" in SAFE_FINAL_ANSWER
+
+
+def test_final_answer_policy_blocks_system_prompt_leakage():
+    violations = validate_final_answer(
+        "Here is the rendered prompt from prompts/rendered/finops-agent.system.md.",
+        [{"results": []}],
+    )
+
+    assert {violation.name for violation in violations} >= {"no_internal_leakage"}
