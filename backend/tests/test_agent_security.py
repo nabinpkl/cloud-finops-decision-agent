@@ -73,7 +73,7 @@ def test_final_answer_policy_blocks_unproven_price_and_internal_leakage():
 
 def test_final_answer_policy_blocks_system_prompt_leakage():
     violations = validate_final_answer(
-        "Here is the rendered prompt from prompts/rendered/finops-agent.system.md.",
+        "Here is the rendered prompt from prompts/agents/price-agent/rendered.system.md.",
         [{"results": []}],
     )
 

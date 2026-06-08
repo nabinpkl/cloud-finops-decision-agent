@@ -15,7 +15,10 @@ import api.budget.store as budget_store
 from agent.guardrails.models import GuardDecision
 from agent.guardrails.receipts import result_from_decision
 from agent.runtime import Emitter, RunUsage, Turn
-from agent.runtime.prompt_assembly import prompt_identity
+from agent.runtime.prompt_assembly import (
+    input_judge_prompt_identity,
+    price_agent_prompt_identity,
+)
 from app_config import settings
 
 
@@ -177,14 +180,19 @@ def test_agent_turn_span_records_prompt_identity_without_prompt_text(
     response = client.post("/assistant", json={"commands": [_user_msg("hello")]})
     provider.shutdown()
 
-    identity = prompt_identity()
+    identity = price_agent_prompt_identity()
+    judge_identity = input_judge_prompt_identity()
     assert response.status_code == 200
     span = next(span for span in exporter.get_finished_spans() if span.name == "agent.turn")
     attrs = _attrs(span)
     assert attrs["finops.prompt.name"] == identity.name
     assert attrs["finops.prompt.version"] == identity.version
     assert attrs["finops.prompt.rendered_sha256"] == identity.rendered_sha256
+    assert attrs["finops.judge_prompt.name"] == judge_identity.name
+    assert attrs["finops.judge_prompt.version"] == judge_identity.version
+    assert attrs["finops.judge_prompt.rendered_sha256"] == judge_identity.rendered_sha256
     assert "Agent Contract" not in str(attrs)
+    assert "security classifier" not in str(attrs)
     assert "prompt_release_notes" not in str(attrs)
 
 

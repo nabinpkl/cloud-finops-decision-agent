@@ -1,0 +1,9 @@
+version: 1
+name: cloud-finops-input-judge
+description: Mandatory input classifier for the public pricing assistant.
+release_notes: Initial versioned input-rail judge prompt with binary allow/block output.
+parts:
+  - parts/00-role.md
+  - parts/10-block-policy.md
+  - parts/20-allow-policy.md
+  - parts/30-output-schema.md

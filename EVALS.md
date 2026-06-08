@@ -28,7 +28,7 @@ The eval suite should verify that full loop, not just whether a model sounds hel
 
 6. Runtime parity.
 
-   `AGENT_RUNTIME=langchain` and `AGENT_RUNTIME=openai_agents` should receive the same prompt, expose the same tool shape, and produce equivalent tool calls, structured tool-result events, and `AnswerPlan` output.
+   `AGENT_RUNTIME=langchain` and `AGENT_RUNTIME=openai_agents` should receive the same price-agent prompt, expose the same tool shape, and produce equivalent tool calls, structured tool-result events, and `AnswerPlan` output.
 
 7. Transport behavior.
 
@@ -44,7 +44,8 @@ The eval suite should verify that full loop, not just whether a model sounds hel
 
 These run in normal CI with no model and no provider snapshots. They should assert the stable contracts below:
 
-- `prompts/finops_agent.md` is the source of `agent.runtime.prompt.INSTRUCTIONS`.
+- `prompts/agents/price-agent/rendered.system.md` is the source of `agent.runtime.prompt.INSTRUCTIONS`.
+- `prompts/agents/input-judge/rendered.system.md` is the source of the mandatory input-judge system prompt.
 - Both runtime adapters import the same `INSTRUCTIONS`.
 - `run_compare` returns the frontend-safe wire shape.
 - Tool descriptions mention closest-larger match policy and citations.
@@ -84,32 +85,36 @@ These are opt-in because they need model credentials and may need populated snap
 - `just eval-smoke`: one or two live questions against the configured runtime.
 - `just eval-live`: the v0 prompt suite against a real model, recording transcripts under ignored `var/evals/`.
 
-Live evals should save enough evidence to debug regressions: prompt version, runtime, model name, turns, tool calls, tool results, final text, token usage, latency, tool-call count, and failure labels.
+Live evals should save enough evidence to debug regressions: price-agent prompt version, input-judge prompt version, runtime, model name, turns, tool calls, tool results, final text, token usage, latency, tool-call count, and failure labels.
 
 ## Prompt Versioning
 
-`prompts/system/manifest.yaml` owns the human prompt release version. Bump
-`version` and update `release_notes` for intentional prompt behavior changes:
-security policy, tool-use rules, citation/answer-plan rules, or examples that
-can steer model behavior.
+Each prompt bundle under `prompts/agents/<role>/manifest.yaml` owns a human
+prompt release version. Bump `version` and update `release_notes` for
+intentional prompt behavior changes: input-judge classification policy, price
+agent security policy, tool-use rules, citation/answer-plan rules, or examples
+that can steer model behavior.
 
 Eval reports use schema `version: 2` and record both human and machine prompt
-identity: manifest name/version/release notes, manifest hash, rendered prompt
-hash, and source file hashes. The rendered prompt hash is the immutable identity
-for comparing eval runs; the prompt version is the human release label.
+identity for the price-agent and input-judge bundles: manifest
+name/version/release notes, manifest hash, rendered prompt hash, and source
+file hashes. The rendered prompt hash is the immutable identity for comparing
+eval runs; the prompt version is the human release label.
 
 Reports also record model config hash, cases hash, and git commit when
 available. They do not include prompt text or provider secrets.
 
 ## Proposed Files
 
-- `prompts/finops_agent.md`: canonical production system prompt.
+- `prompts/agents/price-agent/`: canonical price-agent prompt bundle.
+- `prompts/agents/input-judge/`: mandatory input-judge prompt bundle.
 - `evals/README.md`: how to run evals and read results.
 - `evals/cases/ranking_and_candidates.yaml`: cheapest and full-candidate scenarios.
 - `evals/cases/staleness.yaml`: stale snapshot scenarios.
 - `evals/cases/missing_data_refusal.yaml`: unsupported provider or region scenarios.
 - `evals/cases/provider_scope.yaml`: provider boundary scenarios.
-- `evals/cases/prompt_injection.yaml`: prompt-injection and XML/tag attack scenarios.
+- `evals/cases/untrusted_content_injection.yaml`: prompt-injection and XML/tag attack scenarios.
+- `evals/cases/judge_classifier.yaml`: input-judge classifier cases.
 - `backend/src/evals/`: Python eval runner and graders.
 - `backend/tests/test_prompt_loading.py`: prompt source-of-truth test.
 - `backend/tests/test_eval_graders.py`: deterministic grader tests.
@@ -118,7 +123,7 @@ available. They do not include prompt text or provider secrets.
 
 ## Implemented Slice
 
-1. Root `prompts/` directory and loader test.
+1. Role-grouped `prompts/agents/` bundles and loader tests.
 2. YAML eval suite schema with behavior-split cases:
    - required `kind`, `source`, `rail`, and canonical `turns`.
    - cheapest 4 vCPU 8 GB general-purpose in EU.
@@ -134,4 +139,4 @@ available. They do not include prompt text or provider secrets.
    validation/rendering, and final-answer policy checks before runtime text reaches the UI.
 7. Optional live smoke command writes transcripts to `var/evals/`.
 8. Failure labels, replay operational gates, pass^k trials, and optional compact JSON reports.
-9. Prompt release versioning and eval report identity for prompt/config/case hashes.
+9. Prompt release versioning and eval report identity for price-agent prompt, input-judge prompt, config, and case hashes.

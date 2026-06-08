@@ -18,7 +18,10 @@ from app_config import settings
 from api.observability import get_tracer
 from api.observability.redaction import record_exception, set_error_status
 from agent.runtime import RunUsage, TurnTokenCapExceeded, get_runtime
-from agent.runtime.prompt_assembly import prompt_identity
+from agent.runtime.prompt_assembly import (
+    input_judge_prompt_identity,
+    price_agent_prompt_identity,
+)
 from agent.guardrails.input import run_input_guardrail
 
 
@@ -44,7 +47,8 @@ async def run_agent_turn(
     history_text_length = sum(len(turn.content) for turn in turns)
     last_user_length = len(turns[-1].content) if turns else 0
     with tracer.start_as_current_span("agent.turn") as turn_span:
-        prompt = prompt_identity()
+        prompt = price_agent_prompt_identity()
+        judge_prompt = input_judge_prompt_identity()
         turn_span.set_attribute("finops.user_message.length", last_user_length)
         turn_span.set_attribute("finops.cross_turn_history.message_count", len(turns))
         turn_span.set_attribute("finops.cross_turn_history.text_length", history_text_length)
@@ -55,6 +59,12 @@ async def run_agent_turn(
         turn_span.set_attribute("finops.prompt.name", prompt.name)
         turn_span.set_attribute("finops.prompt.version", prompt.version)
         turn_span.set_attribute("finops.prompt.rendered_sha256", prompt.rendered_sha256)
+        turn_span.set_attribute("finops.judge_prompt.name", judge_prompt.name)
+        turn_span.set_attribute("finops.judge_prompt.version", judge_prompt.version)
+        turn_span.set_attribute(
+            "finops.judge_prompt.rendered_sha256",
+            judge_prompt.rendered_sha256,
+        )
 
         try:
             guardrail = await run_input_guardrail(turns)

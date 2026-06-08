@@ -9,4 +9,4 @@ parts:
   - parts/30-tool-policy.md
   - parts/40-answer-plan-policy.md
 examples:
-  - ../examples/pricing-behavior.md
+  - examples/pricing-behavior.md

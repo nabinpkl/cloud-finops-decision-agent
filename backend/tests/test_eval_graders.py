@@ -238,8 +238,11 @@ def test_runner_writes_report_with_trials(tmp_path):
     payload = json.loads(report_path.read_text())
     assert status == 0
     assert payload["version"] == 2
-    assert payload["identity"]["prompt"]["version"] > 0
-    assert payload["identity"]["prompt"]["rendered_sha256"]
+    prompts = payload["identity"]["prompts"]
+    assert prompts["price_agent"]["version"] > 0
+    assert prompts["price_agent"]["rendered_sha256"]
+    assert prompts["input_judge"]["version"] > 0
+    assert prompts["input_judge"]["rendered_sha256"]
     assert payload["identity"]["model_config"]["sha256"]
     assert payload["identity"]["cases"]["sha256"]
     assert payload["trial_runs"]

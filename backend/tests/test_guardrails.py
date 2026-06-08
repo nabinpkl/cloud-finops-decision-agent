@@ -6,7 +6,12 @@ from typing import Any, cast
 import pytest
 
 from agent.guardrails.input import classify_deterministic, run_input_guardrail
-from agent.guardrails.judge import JUDGE_DECISION_SCHEMA, JudgeUnavailable, _judge_payload
+from agent.guardrails.judge import (
+    JUDGE_DECISION_SCHEMA,
+    JUDGE_INSTRUCTIONS,
+    JudgeUnavailable,
+    _judge_payload,
+)
 from agent.guardrails.models import GuardDecision
 from agent.guardrails.receipts import result_from_decision
 from agent.runtime import Turn
@@ -121,6 +126,7 @@ def test_judge_payload_uses_strict_binary_schema_with_reasoning():
     assert payload["model"] == "openai/gpt-oss-120b"
     assert payload["provider"] == {"require_parameters": True}
     assert payload["reasoning"] == {"effort": "low"}
+    assert payload["messages"][0] == {"role": "system", "content": JUDGE_INSTRUCTIONS}
     response_format = cast(dict[str, Any], payload["response_format"])
     assert response_format["type"] == "json_schema"
     json_schema = cast(dict[str, Any], response_format["json_schema"])

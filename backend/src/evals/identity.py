@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agent.runtime.prompt_assembly import prompt_identity
+from agent.runtime.prompt_assembly import (
+    input_judge_prompt_identity,
+    price_agent_prompt_identity,
+)
 from project_paths import PROJECT_ROOT
 
 
@@ -15,14 +18,14 @@ MODEL_CONFIG_PATH = PROJECT_ROOT / "config" / "models.yaml"
 
 @dataclass(frozen=True)
 class EvalRunIdentity:
-    prompt: dict[str, Any]
+    prompts: dict[str, dict[str, Any]]
     model_config: dict[str, str]
     cases: dict[str, str]
     git: dict[str, str | None]
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "prompt": self.prompt,
+            "prompts": self.prompts,
             "model_config": self.model_config,
             "cases": self.cases,
             "git": self.git,
@@ -32,7 +35,10 @@ class EvalRunIdentity:
 def build_eval_identity(cases_path: Path) -> EvalRunIdentity:
     resolved_cases_path = _project_path(cases_path)
     return EvalRunIdentity(
-        prompt=prompt_identity().to_dict(),
+        prompts={
+            "price_agent": price_agent_prompt_identity().to_dict(),
+            "input_judge": input_judge_prompt_identity().to_dict(),
+        },
         model_config={
             "path": _relative_project_path(MODEL_CONFIG_PATH),
             "sha256": _sha256_file(MODEL_CONFIG_PATH),

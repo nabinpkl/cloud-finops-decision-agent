@@ -13,8 +13,28 @@ from pydantic import BaseModel, ConfigDict, Field
 from project_paths import PROJECT_ROOT
 
 
-PROMPT_MANIFEST_PATH = PROJECT_ROOT / "prompts" / "system" / "manifest.yaml"
-RENDERED_PROMPT_PATH = PROJECT_ROOT / "prompts" / "rendered" / "finops-agent.system.md"
+PROMPTS_ROOT = PROJECT_ROOT / "prompts" / "agents"
+PRICE_AGENT_PROMPT_BUNDLE = "price-agent"
+INPUT_JUDGE_PROMPT_BUNDLE = "input-judge"
+RENDERED_PROMPT_FILENAME = "rendered.system.md"
+
+
+def prompt_manifest_path(bundle: str) -> Path:
+    """Return the manifest path for a named prompt bundle."""
+
+    return PROMPTS_ROOT / bundle / "manifest.yaml"
+
+
+def prompt_rendered_path(bundle: str) -> Path:
+    """Return the rendered runtime prompt path for a named prompt bundle."""
+
+    return PROMPTS_ROOT / bundle / RENDERED_PROMPT_FILENAME
+
+
+PRICE_AGENT_MANIFEST_PATH = prompt_manifest_path(PRICE_AGENT_PROMPT_BUNDLE)
+PRICE_AGENT_RENDERED_PROMPT_PATH = prompt_rendered_path(PRICE_AGENT_PROMPT_BUNDLE)
+INPUT_JUDGE_MANIFEST_PATH = prompt_manifest_path(INPUT_JUDGE_PROMPT_BUNDLE)
+INPUT_JUDGE_RENDERED_PROMPT_PATH = prompt_rendered_path(INPUT_JUDGE_PROMPT_BUNDLE)
 
 _BEGIN_RE = re.compile(
     r"<!-- BEGIN (?P<kind>prompt_(?:part|example)): (?P<path>[^ ]+) "
@@ -85,7 +105,7 @@ class PromptIdentity:
         }
 
 
-def load_manifest(path: Path = PROMPT_MANIFEST_PATH) -> PromptManifest:
+def load_manifest(path: Path = PRICE_AGENT_MANIFEST_PATH) -> PromptManifest:
     """Load and validate the prompt manifest."""
 
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -94,7 +114,7 @@ def load_manifest(path: Path = PROMPT_MANIFEST_PATH) -> PromptManifest:
     return PromptManifest.model_validate(loaded)
 
 
-def manifest_sources(path: Path = PROMPT_MANIFEST_PATH) -> list[PromptSource]:
+def manifest_sources(path: Path = PRICE_AGENT_MANIFEST_PATH) -> list[PromptSource]:
     """Return manifest sources in runtime render order."""
 
     manifest = load_manifest(path)
@@ -107,12 +127,12 @@ def manifest_sources(path: Path = PROMPT_MANIFEST_PATH) -> list[PromptSource]:
     return sources
 
 
-def render_prompt(path: Path = PROMPT_MANIFEST_PATH) -> str:
+def render_prompt(path: Path = PRICE_AGENT_MANIFEST_PATH) -> str:
     """Render the manifest into one canonical system prompt."""
 
     manifest = load_manifest(path)
     sections = [
-        "<!-- Rendered from prompts/system/manifest.yaml. Do not edit directly. -->",
+        f"<!-- Rendered from {_relative_project_path(path)}. Do not edit directly. -->",
         f"<!-- prompt_name: {manifest.name} -->",
         f"<!-- prompt_version: {manifest.version} -->",
         f"<!-- prompt_release_notes: {manifest.release_notes} -->",
@@ -122,15 +142,30 @@ def render_prompt(path: Path = PROMPT_MANIFEST_PATH) -> str:
     return "\n\n".join(sections).rstrip() + "\n"
 
 
+def render_prompt_bundle(bundle: str) -> str:
+    """Render a named prompt bundle."""
+
+    return render_prompt(prompt_manifest_path(bundle))
+
+
 def write_rendered_prompt(
-    manifest_path: Path = PROMPT_MANIFEST_PATH,
-    rendered_path: Path = RENDERED_PROMPT_PATH,
+    manifest_path: Path = PRICE_AGENT_MANIFEST_PATH,
+    rendered_path: Path = PRICE_AGENT_RENDERED_PROMPT_PATH,
 ) -> Path:
     """Write the canonical rendered system prompt."""
 
     rendered_path.parent.mkdir(parents=True, exist_ok=True)
     rendered_path.write_text(render_prompt(manifest_path), encoding="utf-8")
     return rendered_path
+
+
+def write_rendered_prompt_bundle(bundle: str) -> Path:
+    """Write the rendered artifact for a named prompt bundle."""
+
+    return write_rendered_prompt(
+        manifest_path=prompt_manifest_path(bundle),
+        rendered_path=prompt_rendered_path(bundle),
+    )
 
 
 def parse_rendered_blocks(rendered: str) -> list[RenderedBlock]:
@@ -148,8 +183,8 @@ def parse_rendered_blocks(rendered: str) -> list[RenderedBlock]:
 
 
 def validate_rendered_prompt(
-    manifest_path: Path = PROMPT_MANIFEST_PATH,
-    rendered_path: Path = RENDERED_PROMPT_PATH,
+    manifest_path: Path = PRICE_AGENT_MANIFEST_PATH,
+    rendered_path: Path = PRICE_AGENT_RENDERED_PROMPT_PATH,
 ) -> list[str]:
     """Return prompt coverage and drift violations."""
 
@@ -181,22 +216,37 @@ def validate_rendered_prompt(
     return violations
 
 
-def orphan_prompt_sources(manifest_path: Path = PROMPT_MANIFEST_PATH) -> list[Path]:
+def validate_rendered_prompt_bundle(bundle: str) -> list[str]:
+    """Return drift violations for a named prompt bundle."""
+
+    return validate_rendered_prompt(
+        manifest_path=prompt_manifest_path(bundle),
+        rendered_path=prompt_rendered_path(bundle),
+    )
+
+
+def orphan_prompt_sources(manifest_path: Path = PRICE_AGENT_MANIFEST_PATH) -> list[Path]:
     """Return editable prompt source files not listed in the manifest."""
 
     listed = {source.path.resolve() for source in manifest_sources(manifest_path)}
-    prompts_dir = manifest_path.parents[1]
+    prompts_dir = manifest_path.parent
     candidates = [
         path
         for path in prompts_dir.rglob("*.md")
-        if "rendered" not in path.parts and path.name != "README.md"
+        if not path.name.startswith("rendered.") and path.name != "README.md"
     ]
     return sorted(path for path in candidates if path.resolve() not in listed)
 
 
+def orphan_prompt_sources_bundle(bundle: str) -> list[Path]:
+    """Return editable prompt source files not listed in a named bundle manifest."""
+
+    return orphan_prompt_sources(prompt_manifest_path(bundle))
+
+
 def prompt_identity(
-    manifest_path: Path = PROMPT_MANIFEST_PATH,
-    rendered_path: Path = RENDERED_PROMPT_PATH,
+    manifest_path: Path = PRICE_AGENT_MANIFEST_PATH,
+    rendered_path: Path = PRICE_AGENT_RENDERED_PROMPT_PATH,
 ) -> PromptIdentity:
     """Return the prompt release metadata and immutable rendered artifact hash."""
 
@@ -219,6 +269,27 @@ def prompt_identity(
             for source in sources
         ],
     )
+
+
+def prompt_identity_bundle(bundle: str) -> PromptIdentity:
+    """Return immutable identity for a named prompt bundle."""
+
+    return prompt_identity(
+        manifest_path=prompt_manifest_path(bundle),
+        rendered_path=prompt_rendered_path(bundle),
+    )
+
+
+def price_agent_prompt_identity() -> PromptIdentity:
+    """Return immutable identity for the main pricing agent prompt."""
+
+    return prompt_identity_bundle(PRICE_AGENT_PROMPT_BUNDLE)
+
+
+def input_judge_prompt_identity() -> PromptIdentity:
+    """Return immutable identity for the mandatory input judge prompt."""
+
+    return prompt_identity_bundle(INPUT_JUDGE_PROMPT_BUNDLE)
 
 
 def _source_from_path(kind: Literal["prompt_part", "prompt_example"], path: Path) -> PromptSource:

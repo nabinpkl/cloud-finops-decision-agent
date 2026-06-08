@@ -112,3 +112,28 @@ Agent response opens with:
 Followed by one public citation entry per result in the tool result / UI Source primitive. Each public citation carries `source_url`, `json_path`, `age_hours`, and a logical `snapshot` ref. Internal verification resolves that snapshot ref back to the specific `store/<provider>/<ISO>/<file>` path.
 
 Verification path for the user: open the Source primitive or citation excerpt for each result, confirm the `json_path` resolves to the quoted number, and compare against `source_url` if a live check is needed.
+
+
+### Commit Hygiene (agentic era)
+- **Atomic commits:** one logical change each. Split sweeping agent output into focused commits — keeps review, `bisect`, and rollback sane.
+- **Subject = Conventional Commits**, body = the "why". Format: `type(scope): summary` (imperative, ≤72 chars, lowercase, no trailing period).
+  - Types: `feat` (new capability), `fix` (bug), `refactor` (no behavior change), `test`, `docs`, `chore` (tooling/deps), `perf`, `style` (formatting), `build`, `ci`, `revert`.
+  - Scope = the literal concept touched: `feat(action_classifier): add correction detection`, `fix(decision_log): handle missing file on load`.
+  - Breaking change → `feat(action_classifier)!: ...` or a `BREAKING CHANGE:` footer.
+- **Body captures the Decision Shadow:** why this change, constraints, rejected alternatives — the reasoning the diff can't show. Note what you verified ("tested manually with valid + invalid input").
+- **Provenance in trailers, never the subject.** Attribution must be accurate, granular, and intentional — never auto-blanket. A wrong/false trailer is worse than none. This repo's `Co-Authored-By` trailer is the consensual, intentional kind — keep it.
+- **Explore-many, commit-one:** scratch/exploration paths stay out of main history; land only the cleaned, chosen path.
+- **Commit at the arc boundary, not the moment work looks done.** The commit unit is a logical *arc* (one fix, or one feature), not a turn or an instruction. Hold the change in the working tree; don't fire the instant it compiles — an immediate commit bakes in agentic bugs before any human has reacted.
+  - **An arc spans as many turns as it needs:** the opening instruction plus the corrections that settle it. It stays uncommitted while open.
+  - **On each new human instruction, classify it.** *Correction/refinement of an open arc* ("that's wrong", "also handle X there") → don't commit; fold it in, the arc stays open. *Forward/distinct work* → the arc the human just moved on from has cleared the strongest signal available (they saw enough to leave it); if it's coherent and the pre-commit hook passes, **autocommit + push that arc alone**, then start the new one.
+  - **One instruction can span multiple arcs** ("fix X and start Y") → split into separate atomic commits; never merge a fix and a feature. **Multiple arcs can close in one turn** → multiple commits land that turn.
+  - **Never commit half-done or hook-failing work**, even at a boundary — commit only the part that stands alone, or keep waiting. When unsure whether an instruction touches an open arc, **bias to holding** (a wrongful commit costs more to unwind than a delayed one).
+  - **Surface, never silent:** report open/uncommitted arcs at session end or on any explicit stop/done signal, so nothing is lost. "Human moved on" is acceptance-by-proxy, not real review — this cuts premature commits, it does not guarantee correctness.
+  - Explicit overrides win: "commit now" / "don't commit yet" is obeyed immediately, no classification.
+- **Pushing to `main` is pre-approved (v0, single dev).** No branch or review gate yet — commit and `git push` directly. Don't ask permission each time. Revisit this rule the moment a second contributor joins.
+
+### Output & Next Directions
+- Be direct: state what was found, what's missing, and what change is needed. Don't narrate internal deliberation.
+- After a substantive answer or change, append a short numbered list (`1.` / `2.` / `3.`) of plausible next directions so the user can reply by number.
+- Offer real alternatives, not one padded path: at least the top next step in the current arc **plus** one genuine pivot. 2–3 entries, each one line naming a concrete surface.
+- Never pad to a fixed count; never fill with housekeeping ("make the next commit", "open an issue"). If you can only think of one direction, think harder about the real alternatives.

@@ -35,7 +35,9 @@ LEAKAGE_RE = re.compile(
     r"(store_path|PROVIDER_API_KEY|BUDGET_IP_HASH_SALT_SECRET|"
     r"-----BEGIN|\.env|traceback|/Users/|/private/|system prompt|"
     r"rendered prompt|hidden prompt|developer instructions|developer message|"
-    r"prompts/system|prompts/rendered|finops-agent\.system\.md|manifest\.yaml|"
+    r"prompts/system|prompts/rendered|prompts/agents|"
+    r"finops-agent\.system\.md|rendered\.system\.md|"
+    r"price-agent|input-judge|manifest\.yaml|"
     r"<system>|</system>|<developer>|</developer>)",
     re.I,
 )

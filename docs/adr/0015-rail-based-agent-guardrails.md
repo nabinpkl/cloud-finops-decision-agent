@@ -42,6 +42,11 @@ is unavailable, times out, returns invalid JSON, returns invalid schema, or
 returns anything other than `allow` with reason `safe`, the main model is not
 called and the user receives a safe refusal.
 
+The judge prompt is a first-class prompt bundle under
+`prompts/agents/input-judge/`. Runtime reads its rendered artifact, tests enforce
+manifest/render freshness, and eval reports/traces carry its rendered hash and
+version alongside the main price-agent prompt.
+
 Deterministic rails remain authoritative. The judge cannot allow a request or
 answer that deterministic checks blocked, and it cannot approve prices,
 citations, tool arguments, or claim binding.

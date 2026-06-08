@@ -152,12 +152,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.report is not None:
         identity = build_eval_identity(args.cases)
         _write_report(args.report, runs, identity.to_dict())
-        prompt = identity.prompt
+        prompts = identity.prompts
         model_config = identity.model_config
         cases_identity = identity.cases
         print(
             "report identity: "
-            f"prompt={prompt['rendered_sha256']} "
+            f"price_agent_prompt={prompts['price_agent']['rendered_sha256']} "
+            f"input_judge_prompt={prompts['input_judge']['rendered_sha256']} "
             f"model_config={model_config['sha256']} "
             f"cases={cases_identity['sha256']}"
         )

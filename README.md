@@ -217,7 +217,7 @@ public. Set `GCP_API_KEY` in `.env` per `.env.example`.
 - `backend/src/api/`: FastAPI app, middleware, deterministic routes, and assistant transport.
 - `backend/src/agent/`: runtime port, LangChain/OpenAI adapters, prompts, policies, and tool bodies.
 - `frontend/`: frontend-only Next.js + `assistant-ui` client.
-- `prompts/`: prompt source files and rendered runtime prompt.
+- `prompts/agents/`: role-grouped prompt bundles for the price agent and input judge, each with source parts, manifest metadata, and a rendered runtime prompt.
 - `EVALS.md`: eval plan and current eval coverage.
 - `cloud-providers.json`: provider registry.
 - `AGENTS.md`: agent behavior contract.

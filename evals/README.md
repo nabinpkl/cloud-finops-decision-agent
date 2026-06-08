@@ -19,8 +19,9 @@ token usage. The runner supports repeated trials and reports `pass^k`, meaning
 all trials for a case/lane must pass.
 
 When `--report` is provided, the report uses schema `version: 2` and includes
-the prompt release version, rendered prompt hash, model config hash, eval case
-hash, and git commit. Prompt text is never written to eval reports.
+the price-agent prompt release/hash, input-judge prompt release/hash, model
+config hash, eval case hash, and git commit. Prompt text is never written to
+eval reports.
 
 Suites are split by what they protect:
 
