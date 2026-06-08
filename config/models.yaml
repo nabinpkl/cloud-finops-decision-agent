@@ -8,6 +8,7 @@ main:
     disable_streaming: true
     stream_usage: true
     use_responses_api: false
+    max_tokens: 1200
     extra_body:
       provider:
         require_parameters: true

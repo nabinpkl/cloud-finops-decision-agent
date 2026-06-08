@@ -33,7 +33,8 @@ from agents.lifecycle import RunHooksBase
 from agents.run_context import RunContextWrapper
 
 from app_config import settings
-from agent.runtime.types import TurnTokenCapExceeded
+from agent.runtime.types import RunUsage, TurnTokenCapExceeded
+from agent.runtime.usage import usage_delta
 
 __all__ = ["BudgetHooks", "TurnTokenCapExceeded"]
 
@@ -47,13 +48,23 @@ class BudgetHooks(RunHooksBase[Any, Any]):
 
     def __init__(self) -> None:
         super().__init__()
-        self.turn_input_tokens:  int = 0
-        self.turn_output_tokens: int = 0
-        self.llm_calls:          int = 0
+        self.usage = RunUsage()
 
     @property
     def turn_total_tokens(self) -> int:
-        return self.turn_input_tokens + self.turn_output_tokens
+        return self.usage.total
+
+    @property
+    def turn_input_tokens(self) -> int:
+        return self.usage.input_tokens
+
+    @property
+    def turn_output_tokens(self) -> int:
+        return self.usage.output_tokens
+
+    @property
+    def llm_calls(self) -> int:
+        return self.usage.llm_calls
 
     async def on_llm_end(
         self,
@@ -61,13 +72,19 @@ class BudgetHooks(RunHooksBase[Any, Any]):
         agent: Any,
         response: ModelResponse,
     ) -> None:
-        usage = response.usage
-        self.turn_input_tokens  += int(usage.input_tokens  or 0)
-        self.turn_output_tokens += int(usage.output_tokens or 0)
-        self.llm_calls          += 1
+        delta = usage_delta(response.usage)
+        self.usage.add_call(
+            input_tokens=delta.input_tokens,
+            output_tokens=delta.output_tokens,
+            total_tokens=delta.total_tokens,
+            reasoning_tokens=delta.reasoning_tokens,
+            cached_input_tokens=delta.cached_input_tokens,
+        )
         if self.turn_total_tokens >= settings.turn_token_cap:
             raise TurnTokenCapExceeded(
-                input_tokens=self.turn_input_tokens,
-                output_tokens=self.turn_output_tokens,
+                input_tokens=self.usage.input_tokens,
+                output_tokens=self.usage.output_tokens,
+                total_tokens=self.usage.total,
+                reasoning_tokens=self.usage.reasoning_tokens,
                 cap=settings.turn_token_cap,
             )

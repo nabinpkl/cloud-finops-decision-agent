@@ -64,8 +64,10 @@ class ReplayRuntime:
             else self._case.final_answer
         )
         emit.text_delta(text)
-        usage.input_tokens = sum(len(turn.content.split()) for turn in turns)
-        usage.output_tokens = len(text.split())
+        usage.add_call(
+            input_tokens=sum(len(turn.content.split()) for turn in turns),
+            output_tokens=len(text.split()),
+        )
 
 
 @dataclass(frozen=True)

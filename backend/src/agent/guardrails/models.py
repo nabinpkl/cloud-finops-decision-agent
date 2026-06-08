@@ -35,10 +35,13 @@ class GuardrailUsage(BaseModel):
 
     input_tokens: int = 0
     output_tokens: int = 0
+    total_tokens: int = 0
+    reasoning_tokens: int = 0
+    cached_input_tokens: int = 0
 
     @property
     def total(self) -> int:
-        return self.input_tokens + self.output_tokens
+        return self.total_tokens or (self.input_tokens + self.output_tokens)
 
 
 class GuardrailResult(BaseModel):

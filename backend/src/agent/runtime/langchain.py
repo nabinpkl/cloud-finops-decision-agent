@@ -35,6 +35,7 @@ from app_config import settings
 from app_config.model_config import model_config as llm_model_config
 from agent.policy.answer_plan import AnswerPlan
 from agent.runtime.types import Emitter, RunUsage, Turn, TurnTokenCapExceeded
+from agent.runtime.usage import usage_delta
 from agent.runtime.prompt import INSTRUCTIONS
 from agent.tools.pricing import (
     COMPARE_DESCRIPTION,
@@ -98,6 +99,7 @@ def _build_model() -> ChatOpenAI:
         disable_streaming=llm_model_config.main.request.disable_streaming,
         stream_usage=llm_model_config.main.request.stream_usage,
         use_responses_api=llm_model_config.main.request.use_responses_api,
+        max_tokens=llm_model_config.main.request.max_tokens,
         extra_body=llm_model_config.main.request.extra_body.as_request_body(),
     )
     return ChatOpenAI(**kwargs)
@@ -112,20 +114,27 @@ class CapMiddleware(AgentMiddleware):
     def __init__(self, cap: int) -> None:
         super().__init__()
         self.cap = cap
-        self.input_tokens = 0
-        self.output_tokens = 0
+        self.usage = RunUsage()
 
     def after_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         messages = state.get("messages") if isinstance(state, dict) else None
         last = messages[-1] if messages else None
         usage = getattr(last, "usage_metadata", None)
         if usage:
-            self.input_tokens += int(usage.get("input_tokens") or 0)
-            self.output_tokens += int(usage.get("output_tokens") or 0)
-        if self.input_tokens + self.output_tokens >= self.cap:
+            delta = usage_delta(usage)
+            self.usage.add_call(
+                input_tokens=delta.input_tokens,
+                output_tokens=delta.output_tokens,
+                total_tokens=delta.total_tokens,
+                reasoning_tokens=delta.reasoning_tokens,
+                cached_input_tokens=delta.cached_input_tokens,
+            )
+        if self.usage.total >= self.cap:
             raise TurnTokenCapExceeded(
-                input_tokens=self.input_tokens,
-                output_tokens=self.output_tokens,
+                input_tokens=self.usage.input_tokens,
+                output_tokens=self.usage.output_tokens,
+                total_tokens=self.usage.total,
+                reasoning_tokens=self.usage.reasoning_tokens,
                 cap=self.cap,
             )
         return None
@@ -190,8 +199,7 @@ class LangChainRuntime:
                 if mode == "updates":
                     self._emit_updates(chunk, emit)
         finally:
-            usage.input_tokens = cap.input_tokens
-            usage.output_tokens = cap.output_tokens
+            usage.add(cap.usage)
 
     @staticmethod
     def _emit_updates(chunk: Any, emit: Emitter) -> None:

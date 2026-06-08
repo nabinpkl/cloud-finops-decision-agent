@@ -61,14 +61,24 @@ async def _run(monkeypatch) -> tuple[_RecordingEmitter, RunUsage]:
         tool_calls=[
             {"name": "compare", "args": {"vcpu": 4, "ram_gb": 8, "region": "eu"}, "id": "c1"}
         ],
-        usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+        usage_metadata={
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "output_token_details": {"reasoning": 3},
+        },
     )
     answer_turn = AIMessage(
         content=(
             '{"answer_type":"refusal","price_claims":[],"candidate_claims":[]'
             ',"unmet_requirements":[],"refusal_reason":"out_of_scope"}'
         ),
-        usage_metadata={"input_tokens": 20, "output_tokens": 12, "total_tokens": 32},
+        usage_metadata={
+            "input_tokens": 20,
+            "output_tokens": 12,
+            "total_tokens": 32,
+            "input_token_details": {"cache_read": 4},
+        },
     )
     monkeypatch.setattr(
         lc, "_build_model", lambda: _FakeToolModel(responses=[tool_turn, answer_turn])
@@ -109,6 +119,9 @@ def test_emits_tool_call_then_result_and_sums_usage(monkeypatch):
     # Usage sums both model steps: 10+20 in, 5+12 out.
     assert usage.input_tokens == 30
     assert usage.output_tokens == 17
+    assert usage.total == 47
+    assert usage.reasoning_tokens == 3
+    assert usage.cached_input_tokens == 4
 
 
 def test_model_uses_strict_openrouter_routing_with_reasoning(monkeypatch):
@@ -122,6 +135,7 @@ def test_model_uses_strict_openrouter_routing_with_reasoning(monkeypatch):
         "provider": {"require_parameters": True},
         "reasoning": {"effort": "low"},
     }
+    assert model.max_tokens == 1200
     assert model.reasoning is None
     assert model.use_responses_api is False
     assert model.disable_streaming is True

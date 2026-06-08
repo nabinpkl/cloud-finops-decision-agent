@@ -11,6 +11,7 @@ from agent.guardrails.judge import (
     JUDGE_INSTRUCTIONS,
     JudgeUnavailable,
     _judge_payload,
+    _usage,
 )
 from agent.guardrails.models import GuardDecision
 from agent.guardrails.receipts import result_from_decision
@@ -135,3 +136,23 @@ def test_judge_payload_uses_strict_binary_schema_with_reasoning():
     properties = cast(dict[str, Any], JUDGE_DECISION_SCHEMA["properties"])
     action_schema = cast(dict[str, Any], properties["action"])
     assert action_schema["enum"] == ["allow", "block"]
+
+
+def test_judge_usage_preserves_total_and_reasoning_details():
+    usage = _usage(
+        {
+            "usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 30,
+                "total_tokens": 50,
+                "prompt_tokens_details": {"cached_tokens": 7},
+                "completion_tokens_details": {"reasoning_tokens": 11},
+            }
+        }
+    )
+
+    assert usage.input_tokens == 20
+    assert usage.output_tokens == 30
+    assert usage.total == 50
+    assert usage.reasoning_tokens == 11
+    assert usage.cached_input_tokens == 7

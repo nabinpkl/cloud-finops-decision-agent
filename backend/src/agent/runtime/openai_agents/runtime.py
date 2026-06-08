@@ -99,5 +99,4 @@ class OpenAIAgentsRuntime:
             # Mirror partial usage out even when stream_events() raised (the
             # cap exception or any other), so transport's finally can persist
             # what the turn consumed.
-            usage.input_tokens  = hooks.turn_input_tokens
-            usage.output_tokens = hooks.turn_output_tokens
+            usage.add(hooks.usage)

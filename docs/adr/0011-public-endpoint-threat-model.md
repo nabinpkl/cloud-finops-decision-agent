@@ -129,8 +129,10 @@ Internet
   │
   ▼
 [5] `RunHooks` inside the agent loop.
-     - Per-turn token cap (sum of input + output across the turn's model
-       calls). On trip: stop the loop, surface a partial-answer warning.
+     - Per-turn token cap (provider-reported total tokens across the turn's
+       model calls, falling back to input + output when total is unavailable).
+       Reasoning tokens are recorded as an output-token detail, not added again.
+       On trip: stop the loop, surface a partial-answer warning.
      - Tool result size cap (truncate the model-bound payload, record
        `finops.tool.result_truncated=true`).
   │
@@ -146,13 +148,21 @@ the legitimate user who tripped a per-conversation limit.
 
 A single SQLite file at `var/budgets.db`, three tables:
 
-- `global_daily(utc_date PK, tokens_input, tokens_output, requests)` — one
-  row per UTC day. Read and written on every request.
-- `client_window(hashed_id PK, window_start, requests, tokens_input,
-  tokens_output)` — sliding window per hashed client id. Rows age out by
-  TTL; salt rotation makes any stale row unreferenceable next day anyway.
+- `global_daily(utc_date PK, tokens_input, tokens_output, tokens_total,
+  tokens_reasoning, tokens_cached_input, requests)` — one row per UTC day.
+  Read and written on every request.
+- `client_window(hashed_id PK, window_start, requests, hour_tokens)` —
+  sliding window per hashed client id. `hour_tokens` stores provider-reported
+  total tokens. Rows age out by TTL; salt rotation makes any stale row
+  unreferenceable next day anyway.
 - `session(session_id PK, created_at, last_seen, tokens_input,
-  tokens_output)` — per cookie session, server-authoritative.
+  tokens_output, tokens_total, tokens_reasoning, tokens_cached_input)` — per
+  cookie session, server-authoritative.
+
+`tokens_total` is the enforcement field. `tokens_reasoning` and
+`tokens_cached_input` are retained for observability and cost analysis. They are
+not added to `tokens_total`; OpenAI/OpenRouter-style providers already include
+reasoning tokens in output/total usage.
 
 SQLite suits the access pattern: small rows, no joins, single host. The
 seam for swapping to Redis or a managed store later is one module

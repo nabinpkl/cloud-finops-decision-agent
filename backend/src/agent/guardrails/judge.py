@@ -13,6 +13,7 @@ from app_config.model_config import model_config as llm_model_config
 from agent.guardrails.models import GuardDecision, GuardrailResult, GuardrailUsage
 from agent.guardrails.receipts import result_from_decision
 from agent.runtime.prompt_assembly import INPUT_JUDGE_RENDERED_PROMPT_PATH
+from agent.runtime.usage import usage_delta
 
 
 class JudgeUnavailable(Exception):
@@ -154,7 +155,11 @@ def _usage(payload: dict[str, Any]) -> GuardrailUsage:
     usage = payload.get("usage")
     if not isinstance(usage, dict):
         return GuardrailUsage()
+    delta = usage_delta(usage)
     return GuardrailUsage(
-        input_tokens=int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0),
-        output_tokens=int(usage.get("completion_tokens") or usage.get("output_tokens") or 0),
+        input_tokens=delta.input_tokens,
+        output_tokens=delta.output_tokens,
+        total_tokens=delta.budget_tokens,
+        reasoning_tokens=delta.reasoning_tokens,
+        cached_input_tokens=delta.cached_input_tokens,
     )

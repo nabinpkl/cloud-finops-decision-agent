@@ -38,8 +38,11 @@ coupled spots behind it.
 agent framework:
 
 - `Turn(role, content)` — one cross-turn message in (text-only in v0).
-- `RunUsage(input_tokens, output_tokens)` — a **mutable** token accumulator the
-  caller owns and passes in. The runtime writes into it as the run progresses.
+- `RunUsage(input_tokens, output_tokens, total_tokens, reasoning_tokens,
+  cached_input_tokens, llm_calls)` — a **mutable** token accumulator the caller
+  owns and passes in. The runtime writes into it as the run progresses. Budget
+  enforcement uses provider-reported `total_tokens` when available, falling back
+  to input + output.
 - `Emitter` — a protocol with three neutral verbs: `text_delta(text)`,
   `tool_call(call_id, name, args_text, args)`, `tool_result(call_id, result)`.
 - `TurnTokenCapExceeded` — the per-turn cap exception, neutral so transport

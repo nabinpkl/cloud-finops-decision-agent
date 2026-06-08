@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 import api.budget.store as budget_store
+from agent.runtime.types import RunUsage
 from app_config import settings
 
 
@@ -52,6 +53,9 @@ def test_read_session_usage_zeros_and_creates_row(fresh_db):
     usage = budget_store.read_session_usage("sess-A")
     assert usage.input_tokens == 0
     assert usage.output_tokens == 0
+    assert usage.total_tokens == 0
+    assert usage.reasoning_tokens == 0
+    assert usage.cached_input_tokens == 0
     assert usage.total == 0
     # Row now exists.
     row = _conn().execute(
@@ -66,19 +70,56 @@ def test_record_usage_sums_all_three_tables(fresh_db):
     budget_store.record_usage("sess-A", "client-X", input_tokens=20, output_tokens=30)
 
     sess = _conn().execute(
-        "SELECT tokens_input, tokens_output FROM session WHERE session_id=?", ("sess-A",)
+        """
+        SELECT tokens_input, tokens_output, tokens_total, tokens_reasoning,
+               tokens_cached_input
+        FROM session WHERE session_id=?
+        """,
+        ("sess-A",),
     ).fetchone()
-    assert sess == (120, 80)
+    assert sess == (120, 80, 200, 0, 0)
 
     daily = _conn().execute(
-        "SELECT tokens_input, tokens_output, requests FROM global_daily"
+        """
+        SELECT tokens_input, tokens_output, tokens_total, tokens_reasoning,
+               tokens_cached_input, requests
+        FROM global_daily
+        """
     ).fetchone()
-    assert daily == (120, 80, 2)
+    assert daily == (120, 80, 200, 0, 0, 2)
 
     client = _conn().execute(
         "SELECT hour_tokens FROM client_window WHERE hashed_id=?", ("client-X",)
     ).fetchone()
     assert client[0] == 200  # input+output across both calls
+
+
+def test_record_usage_uses_provider_total_and_reasoning_breakdown(fresh_db):
+    budget_store.init_budgets()
+    usage = RunUsage(
+        input_tokens=81,
+        output_tokens=1035,
+        total_tokens=1116,
+        reasoning_tokens=832,
+        cached_input_tokens=10,
+        llm_calls=1,
+    )
+    budget_store.record_usage("sess-A", "client-X", usage=usage)
+
+    sess = _conn().execute(
+        """
+        SELECT tokens_input, tokens_output, tokens_total, tokens_reasoning,
+               tokens_cached_input
+        FROM session WHERE session_id=?
+        """,
+        ("sess-A",),
+    ).fetchone()
+    assert sess == (81, 1035, 1116, 832, 10)
+
+    client = _conn().execute(
+        "SELECT hour_tokens FROM client_window WHERE hashed_id=?", ("client-X",)
+    ).fetchone()
+    assert client[0] == 1116
 
 
 def test_record_usage_zero_is_noop(fresh_db):
@@ -104,10 +145,11 @@ def test_concurrent_record_usage_serializes_cleanly(fresh_db):
     for t in threads:
         t.join()
 
-    total_in, total_out, total_req = _conn().execute(
-        "SELECT tokens_input, tokens_output, requests FROM global_daily"
+    total_in, total_out, total_total, total_req = _conn().execute(
+        "SELECT tokens_input, tokens_output, tokens_total, requests FROM global_daily"
     ).fetchone()
     expected = 4 * iterations
     assert total_in == expected
     assert total_out == expected
+    assert total_total == expected * 2
     assert total_req == expected

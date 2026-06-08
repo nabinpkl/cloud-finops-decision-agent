@@ -36,6 +36,7 @@ class MainRequestConfig(ModelConfigBase):
     disable_streaming: bool
     stream_usage: bool
     use_responses_api: bool
+    max_tokens: int = Field(gt=0)
     extra_body: MainExtraBodyConfig
 
 

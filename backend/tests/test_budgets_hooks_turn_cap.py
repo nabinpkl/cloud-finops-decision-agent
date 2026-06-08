@@ -21,14 +21,19 @@ from agent.runtime.openai_agents.hooks import (  # noqa: E402
 )
 
 
-def _fake_response(input_tokens: int, output_tokens: int) -> ModelResponse:
+def _fake_response(
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    total_tokens: int | None = None,
+    reasoning_tokens: int = 0,
+) -> ModelResponse:
     usage = SimpleNamespace(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        total_tokens=input_tokens + output_tokens,
+        total_tokens=total_tokens or input_tokens + output_tokens,
+        output_tokens_details=SimpleNamespace(reasoning_tokens=reasoning_tokens),
     )
-    # The hook only touches `.usage.input_tokens` and `.usage.output_tokens`;
-    # mocking the full ModelResponse dataclass is heavier than the test needs.
     return cast(ModelResponse, SimpleNamespace(usage=usage))
 
 
@@ -41,7 +46,22 @@ def test_under_cap_does_not_raise(monkeypatch: pytest.MonkeyPatch):
     asyncio.run(hooks.on_llm_end(context, agent, _fake_response( 50,  50)))
     assert hooks.turn_input_tokens  == 150
     assert hooks.turn_output_tokens == 250
+    assert hooks.turn_total_tokens  == 400
     assert hooks.llm_calls          == 2
+
+
+def test_provider_total_and_reasoning_are_counted(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "turn_token_cap", 2_000)
+    hooks = BudgetHooks()
+    asyncio.run(
+        hooks.on_llm_end(
+            MagicMock(),
+            MagicMock(),
+            _fake_response(81, 1035, total_tokens=1116, reasoning_tokens=832),
+        )
+    )
+    assert hooks.turn_total_tokens == 1116
+    assert hooks.usage.reasoning_tokens == 832
 
 
 def test_first_call_over_cap_raises(monkeypatch: pytest.MonkeyPatch):
@@ -52,6 +72,7 @@ def test_first_call_over_cap_raises(monkeypatch: pytest.MonkeyPatch):
     assert exc_info.value.cap == 100
     assert exc_info.value.input_tokens  == 60
     assert exc_info.value.output_tokens == 60
+    assert exc_info.value.total_tokens == 120
 
 
 def test_cumulative_crossing_raises_on_the_second_call(monkeypatch: pytest.MonkeyPatch):

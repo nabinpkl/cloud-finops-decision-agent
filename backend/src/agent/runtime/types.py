@@ -40,10 +40,41 @@ class RunUsage:
 
     input_tokens: int = 0
     output_tokens: int = 0
+    total_tokens: int = 0
+    reasoning_tokens: int = 0
+    cached_input_tokens: int = 0
+    llm_calls: int = 0
 
     @property
     def total(self) -> int:
-        return self.input_tokens + self.output_tokens
+        return self.total_tokens or (self.input_tokens + self.output_tokens)
+
+    def add(self, other: "RunUsage") -> None:
+        """Merge another usage accumulator into this one."""
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        self.total_tokens += other.total
+        self.reasoning_tokens += other.reasoning_tokens
+        self.cached_input_tokens += other.cached_input_tokens
+        self.llm_calls += other.llm_calls
+
+    def add_call(
+        self,
+        *,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        total_tokens: int = 0,
+        reasoning_tokens: int = 0,
+        cached_input_tokens: int = 0,
+    ) -> None:
+        """Add one model call using provider total when available."""
+        self.input_tokens += input_tokens
+        self.output_tokens += output_tokens
+        self.total_tokens += total_tokens or (input_tokens + output_tokens)
+        self.reasoning_tokens += reasoning_tokens
+        self.cached_input_tokens += cached_input_tokens
+        if input_tokens or output_tokens or total_tokens:
+            self.llm_calls += 1
 
 
 @runtime_checkable
@@ -76,14 +107,26 @@ class TurnTokenCapExceeded(Exception):
     `[turn stopped: ...]` part on the assistant message.
     """
 
-    def __init__(self, input_tokens: int, output_tokens: int, cap: int) -> None:
+    def __init__(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cap: int,
+        *,
+        total_tokens: int = 0,
+        reasoning_tokens: int = 0,
+    ) -> None:
+        total = total_tokens or (input_tokens + output_tokens)
         super().__init__(
-            f"turn token cap reached: {input_tokens + output_tokens} > {cap} "
-            f"(input={input_tokens}, output={output_tokens})"
+            f"turn token cap reached: {total} > {cap} "
+            f"(input={input_tokens}, output={output_tokens}, "
+            f"reasoning={reasoning_tokens})"
         )
-        self.input_tokens  = input_tokens
-        self.output_tokens = output_tokens
-        self.cap           = cap
+        self.input_tokens     = input_tokens
+        self.output_tokens    = output_tokens
+        self.total_tokens     = total
+        self.reasoning_tokens = reasoning_tokens
+        self.cap              = cap
 
 
 class AgentRuntime(Protocol):

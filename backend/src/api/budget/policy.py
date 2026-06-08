@@ -21,10 +21,10 @@ def check_global_daily() -> BudgetBlock | None:
     today = utc_date_str()
     with _LOCK:
         row = conn().execute(
-            "SELECT tokens_input, tokens_output FROM global_daily WHERE utc_date=?",
+            "SELECT tokens_total, tokens_input, tokens_output FROM global_daily WHERE utc_date=?",
             (today,),
         ).fetchone()
-    used = (int(row[0]) + int(row[1])) if row else 0
+    used = (int(row[0]) or (int(row[1]) + int(row[2]))) if row else 0
     if used >= settings.global_daily_token_cap:
         return BudgetBlock(
             reason="global_daily",

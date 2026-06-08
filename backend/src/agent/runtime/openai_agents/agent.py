@@ -13,10 +13,11 @@ endpoint that drives this agent is `api/assistant_transport/routes.py`.
 
 from __future__ import annotations
 
-from agents import Agent, OpenAIChatCompletionsModel
+from agents import Agent, ModelSettings, OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 
 from app_config import settings
+from app_config.model_config import model_config as llm_model_config
 from agent.runtime.prompt import INSTRUCTIONS
 from agent.runtime.openai_agents.tools import compare as compare_tool
 
@@ -50,5 +51,10 @@ def build_agent() -> Agent:
         name="finops",
         instructions=INSTRUCTIONS,
         model=build_model(),
+        model_settings=ModelSettings(
+            max_tokens=llm_model_config.main.request.max_tokens,
+            include_usage=llm_model_config.main.request.stream_usage,
+            extra_body=llm_model_config.main.request.extra_body.as_request_body(),
+        ),
         tools=[compare_tool],
     )

@@ -68,8 +68,13 @@ async def run_agent_turn(
 
         try:
             guardrail = await run_input_guardrail(turns)
-            run_usage.input_tokens += guardrail.usage.input_tokens
-            run_usage.output_tokens += guardrail.usage.output_tokens
+            run_usage.add_call(
+                input_tokens=guardrail.usage.input_tokens,
+                output_tokens=guardrail.usage.output_tokens,
+                total_tokens=guardrail.usage.total,
+                reasoning_tokens=guardrail.usage.reasoning_tokens,
+                cached_input_tokens=guardrail.usage.cached_input_tokens,
+            )
             turn_span.set_attribute("finops.guardrail.input.action", guardrail.decision.action)
             turn_span.set_attribute("finops.guardrail.input.reason", guardrail.decision.reason)
             turn_span.set_attribute(
@@ -117,14 +122,25 @@ async def run_agent_turn(
             )
             emitter.flush_unchecked()
         finally:
-            if run_usage.input_tokens or run_usage.output_tokens:
+            if run_usage.total:
                 record_usage(
                     session_id=session_id,
                     hashed_id=hashed_id,
-                    input_tokens=run_usage.input_tokens,
-                    output_tokens=run_usage.output_tokens,
+                    usage=run_usage,
                 )
                 turn_span.set_attribute(
                     "finops.session.tokens_after",
                     usage_before.total + run_usage.total,
                 )
+                turn_span.set_attribute("finops.usage.input_tokens", run_usage.input_tokens)
+                turn_span.set_attribute("finops.usage.output_tokens", run_usage.output_tokens)
+                turn_span.set_attribute("finops.usage.total_tokens", run_usage.total)
+                turn_span.set_attribute(
+                    "finops.usage.reasoning_tokens",
+                    run_usage.reasoning_tokens,
+                )
+                turn_span.set_attribute(
+                    "finops.usage.cached_input_tokens",
+                    run_usage.cached_input_tokens,
+                )
+                turn_span.set_attribute("finops.usage.llm_calls", run_usage.llm_calls)

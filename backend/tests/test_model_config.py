@@ -13,6 +13,7 @@ def test_model_config_exposes_main_request_shape():
     }
     assert main.request.use_responses_api is False
     assert main.request.disable_streaming is True
+    assert main.request.max_tokens == 1200
     assert main.structured_output.schema_name == "AnswerPlan"
     assert main.structured_output.strict is True
 

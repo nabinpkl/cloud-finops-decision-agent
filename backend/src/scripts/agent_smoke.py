@@ -118,8 +118,7 @@ async def _drive() -> int:
     record_usage(
         session_id="smoke-session",
         hashed_id="smoke-client",
-        input_tokens=usage.input_tokens,
-        output_tokens=usage.output_tokens,
+        usage=usage,
     )
 
     _emit(
@@ -128,6 +127,9 @@ async def _drive() -> int:
         tool_calls=emitter.tool_calls,
         input_total=usage.input_tokens,
         output_total=usage.output_tokens,
+        total_tokens=usage.total,
+        reasoning_tokens=usage.reasoning_tokens,
+        cached_input_tokens=usage.cached_input_tokens,
         cost_usd=f"{cost:.6f}",
         elapsed_ms=elapsed_ms,
     )
