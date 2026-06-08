@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, cast
 
 import pytest
 
@@ -120,9 +121,11 @@ def test_judge_payload_uses_strict_binary_schema_with_reasoning():
     assert payload["model"] == "openai/gpt-oss-120b"
     assert payload["provider"] == {"require_parameters": True}
     assert payload["reasoning"] == {"effort": "low"}
-    response_format = payload["response_format"]
+    response_format = cast(dict[str, Any], payload["response_format"])
     assert response_format["type"] == "json_schema"
-    json_schema = response_format["json_schema"]
+    json_schema = cast(dict[str, Any], response_format["json_schema"])
     assert json_schema["strict"] is True
     assert json_schema["schema"] == JUDGE_DECISION_SCHEMA
-    assert JUDGE_DECISION_SCHEMA["properties"]["action"]["enum"] == ["allow", "block"]
+    properties = cast(dict[str, Any], JUDGE_DECISION_SCHEMA["properties"])
+    action_schema = cast(dict[str, Any], properties["action"])
+    assert action_schema["enum"] == ["allow", "block"]

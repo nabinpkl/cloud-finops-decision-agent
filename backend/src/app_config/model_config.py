@@ -87,6 +87,8 @@ class ModelConfig(ModelConfigBase):
 def load_model_config(path: str | None = None) -> ModelConfig:
     config_path = MODEL_CONFIG_PATH if path is None else PROJECT_ROOT / path
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"model config must be a YAML mapping: {config_path}")
     return ModelConfig.model_validate(raw)
 
 

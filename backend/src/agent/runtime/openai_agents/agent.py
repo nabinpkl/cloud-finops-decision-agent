@@ -13,7 +13,8 @@ endpoint that drives this agent is `api/assistant_transport/routes.py`.
 
 from __future__ import annotations
 
-from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel
+from agents import Agent, OpenAIChatCompletionsModel
+from openai import AsyncOpenAI
 
 from app_config import settings
 from agent.runtime.prompt import INSTRUCTIONS

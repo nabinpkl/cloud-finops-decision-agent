@@ -60,6 +60,8 @@ def load_manifest(path: Path = PROMPT_MANIFEST_PATH) -> PromptManifest:
     """Load and validate the prompt manifest."""
 
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, dict):
+        raise ValueError(f"prompt manifest must be a YAML mapping: {path}")
     return PromptManifest.model_validate(loaded)
 
 

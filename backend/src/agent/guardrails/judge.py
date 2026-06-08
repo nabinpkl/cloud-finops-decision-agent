@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from pydantic import ValidationError
@@ -84,7 +84,10 @@ async def judge_user_request(
     except httpx.HTTPError as exc:
         raise JudgeUnavailable("judge request failed") from exc
 
-    raw = response.json()
+    raw_body = response.json()
+    if not isinstance(raw_body, dict):
+        raise JudgeUnavailable("judge response must be a JSON object")
+    raw = cast(dict[str, Any], raw_body)
     content = _message_content(raw)
     try:
         parsed = json.loads(content)
