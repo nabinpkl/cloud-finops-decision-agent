@@ -54,15 +54,17 @@ These run in normal CI with no model and no provider snapshots. They should asse
 
 These use fake runtime/model behavior and fixture tool results. They should not call a live LLM. Their job is to test the neutral agent event contract:
 
-- A user turn can drive `tool_call` with parsed args.
+- Canonical `turns` can drive `tool_call` with parsed args.
 - The runtime emits structured `tool_result`.
 - Final model JSON is reconstructed from `text_delta`, validated as an `AnswerPlan`, and rendered into final text by policy.
 - Usage accounting is present for the replayed turn.
 - Transcript graders run against the emitted events, not only the raw YAML.
+- Optional operational gates cover latency, tool-call count, and token usage.
+- Repeated runs report `pass^k`: every trial must pass.
 
 ### Layer 3: Transcript Compliance Evals
 
-Create behavior-named YAML suites under `evals/cases/` with inputs, fake tool results, expected `answer_plan`, and expected rendered answer. A local grader should inspect the plan and final answer with deterministic rules first:
+Create behavior-named YAML suites under `evals/cases/` with required `kind`, `source`, `rail`, canonical `turns`, fake tool results, expected `answer_plan`, and expected rendered answer. A local grader should inspect the plan and final answer with deterministic rules first:
 
 - Plan price claims must match prices in the supplied tool result.
 - Rendered price mentions must match prices in the supplied tool result.
@@ -73,7 +75,7 @@ Create behavior-named YAML suites under `evals/cases/` with inputs, fake tool re
 - Prompt-injection cases must not leak internals, must not obey fake control
   tags, and must not quote fake user-supplied prices.
 
-Only use an LLM judge for semantic checks that deterministic rules cannot cover, such as whether the answer clearly explains dimensions matched and not normalized.
+Each failed deterministic check carries a failure taxonomy label so regressions are grouped by cause, not only by prose detail. Runtime guardrail judging remains separate from eval-quality judging. Only add an eval-quality LLM judge for semantic checks deterministic rules cannot cover, and keep it under the eval harness with separate environment variables.
 
 ### Layer 4: Live Smoke Evals
 
@@ -82,7 +84,22 @@ These are opt-in because they need model credentials and may need populated snap
 - `just eval-smoke`: one or two live questions against the configured runtime.
 - `just eval-live`: the v0 prompt suite against a real model, recording transcripts under ignored `var/evals/`.
 
-Live evals should save enough evidence to debug regressions: prompt version, runtime, model name, user input, tool calls, tool results, final text, token usage, and pass/fail reasons.
+Live evals should save enough evidence to debug regressions: prompt version, runtime, model name, turns, tool calls, tool results, final text, token usage, latency, tool-call count, and failure labels.
+
+## Prompt Versioning
+
+`prompts/system/manifest.yaml` owns the human prompt release version. Bump
+`version` and update `release_notes` for intentional prompt behavior changes:
+security policy, tool-use rules, citation/answer-plan rules, or examples that
+can steer model behavior.
+
+Eval reports use schema `version: 2` and record both human and machine prompt
+identity: manifest name/version/release notes, manifest hash, rendered prompt
+hash, and source file hashes. The rendered prompt hash is the immutable identity
+for comparing eval runs; the prompt version is the human release label.
+
+Reports also record model config hash, cases hash, and git commit when
+available. They do not include prompt text or provider secrets.
 
 ## Proposed Files
 
@@ -103,6 +120,7 @@ Live evals should save enough evidence to debug regressions: prompt version, run
 
 1. Root `prompts/` directory and loader test.
 2. YAML eval suite schema with behavior-split cases:
+   - required `kind`, `source`, `rail`, and canonical `turns`.
    - cheapest 4 vCPU 8 GB general-purpose in EU.
    - stale snapshot over 24 hours.
    - unsupported provider/region.
@@ -115,3 +133,5 @@ Live evals should save enough evidence to debug regressions: prompt version, run
 6. Strict tool args, XML trust-zone wrapping, deterministic AnswerPlan
    validation/rendering, and final-answer policy checks before runtime text reaches the UI.
 7. Optional live smoke command writes transcripts to `var/evals/`.
+8. Failure labels, replay operational gates, pass^k trials, and optional compact JSON reports.
+9. Prompt release versioning and eval report identity for prompt/config/case hashes.

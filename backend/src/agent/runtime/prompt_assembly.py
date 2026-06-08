@@ -6,10 +6,10 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from project_paths import PROJECT_ROOT
 
 
@@ -28,9 +28,12 @@ _BEGIN_RE = re.compile(
 class PromptManifest(BaseModel):
     """Prompt composition manifest."""
 
-    version: int
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: int = Field(gt=0)
     name: str
     description: str
+    release_notes: str = Field(min_length=1)
     parts: list[str] = Field(min_length=1)
     examples: list[str] = Field(default_factory=list)
 
@@ -54,6 +57,32 @@ class RenderedBlock:
     rendered_path: str
     content: str
     sha256: str
+
+
+@dataclass(frozen=True)
+class PromptIdentity:
+    """Immutable identity for the prompt artifact used by evals and traces."""
+
+    name: str
+    version: int
+    release_notes: str
+    manifest_path: str
+    manifest_sha256: str
+    rendered_path: str
+    rendered_sha256: str
+    sources: list[dict[str, str]]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "release_notes": self.release_notes,
+            "manifest_path": self.manifest_path,
+            "manifest_sha256": self.manifest_sha256,
+            "rendered_path": self.rendered_path,
+            "rendered_sha256": self.rendered_sha256,
+            "sources": self.sources,
+        }
 
 
 def load_manifest(path: Path = PROMPT_MANIFEST_PATH) -> PromptManifest:
@@ -84,7 +113,9 @@ def render_prompt(path: Path = PROMPT_MANIFEST_PATH) -> str:
     manifest = load_manifest(path)
     sections = [
         "<!-- Rendered from prompts/system/manifest.yaml. Do not edit directly. -->",
-        f"<!-- prompt_name: {manifest.name} version: {manifest.version} -->",
+        f"<!-- prompt_name: {manifest.name} -->",
+        f"<!-- prompt_version: {manifest.version} -->",
+        f"<!-- prompt_release_notes: {manifest.release_notes} -->",
         f"<!-- description: {manifest.description} -->",
     ]
     sections.extend(_render_source(source) for source in manifest_sources(path))
@@ -163,6 +194,33 @@ def orphan_prompt_sources(manifest_path: Path = PROMPT_MANIFEST_PATH) -> list[Pa
     return sorted(path for path in candidates if path.resolve() not in listed)
 
 
+def prompt_identity(
+    manifest_path: Path = PROMPT_MANIFEST_PATH,
+    rendered_path: Path = RENDERED_PROMPT_PATH,
+) -> PromptIdentity:
+    """Return the prompt release metadata and immutable rendered artifact hash."""
+
+    manifest = load_manifest(manifest_path)
+    sources = manifest_sources(manifest_path)
+    return PromptIdentity(
+        name=manifest.name,
+        version=manifest.version,
+        release_notes=manifest.release_notes,
+        manifest_path=_relative_project_path(manifest_path),
+        manifest_sha256=_sha256_file(manifest_path),
+        rendered_path=_relative_project_path(rendered_path),
+        rendered_sha256=_sha256_file(rendered_path),
+        sources=[
+            {
+                "kind": source.kind,
+                "path": _relative_project_path(source.path),
+                "sha256": source.sha256,
+            }
+            for source in sources
+        ],
+    )
+
+
 def _source_from_path(kind: Literal["prompt_part", "prompt_example"], path: Path) -> PromptSource:
     resolved_path = path.resolve()
     content = path.read_text(encoding="utf-8")
@@ -186,3 +244,11 @@ def _render_source(source: PromptSource) -> str:
 
 def _content_for_marker(content: str) -> str:
     return content if content.endswith("\n") else content + "\n"
+
+
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _relative_project_path(path: Path) -> str:
+    return path.resolve().relative_to(PROJECT_ROOT).as_posix()

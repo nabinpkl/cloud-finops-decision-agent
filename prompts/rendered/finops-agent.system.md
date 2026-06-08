@@ -1,6 +1,10 @@
 <!-- Rendered from prompts/system/manifest.yaml. Do not edit directly. -->
 
-<!-- prompt_name: cloud-finops-price-agent version: 1 -->
+<!-- prompt_name: cloud-finops-price-agent -->
+
+<!-- prompt_version: 1 -->
+
+<!-- prompt_release_notes: Initial citation-backed pricing agent prompt with rail-based hardening and verified AnswerPlan rendering. -->
 
 <!-- description: Citation-backed cloud pricing agent system prompt. -->
 

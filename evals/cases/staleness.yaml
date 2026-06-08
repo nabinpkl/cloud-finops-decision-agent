@@ -1,75 +1,84 @@
 cases:
-  - id: stale_snapshot_refetch
-    rail: output
-    user: Cheapest 4 vCPU 8 GB general-purpose VM in us-east?
-    tool_call:
-      name: compare
-      args:
-        vcpu: 4
-        ram_gb: 8
-        region: us-east
-        family: general-purpose
-        providers:
-          - aws
-        expand: cheapest
-    tool_result:
-      request:
-        vcpu: 4
-        ram_gb: 8
-        region: us-east
-        family: general-purpose
-        providers:
-          - aws
-      results:
-        - provider: aws
-          instance_type: m5.xlarge
-          region_native: us-east-1
-          monthly_usd: 138.24
-          hourly_usd: 0.192
-          citation:
-            source_url: https://aws.example/prices
-            json_path: $.aws.m5
-            fetched_at: "2026-06-03T10:00:00Z"
-            age_hours: 52.0
-            snapshot:
-              provider: aws
-              snapshot_iso: "2026-06-03T10-00-00Z"
-              filename: us-east-1.json
-      ranked_by: monthly_usd
-      unmet_requirements: []
-    final_answer: |
-      Cheapest is AWS m5.xlarge at $138.24/mo in us-east-1 (snapshot 52h old). Candidates considered: AWS considered m5.xlarge at $138.24/mo (snapshot 52h old). This snapshot is stale, so refetch before relying on it for a buying decision.
-    answer_plan:
-      answer_type: stale
-      price_claims:
-        - provider: aws
-          instance_type: m5.xlarge
-          region_native: us-east-1
-          monthly_usd: 138.24
-          hourly_usd: 0.192
-          snapshot_age_hours: 52.0
-          source_result_index: 0
-          citation:
-            source_url: https://aws.example/prices
-            json_path: $.aws.m5
-            snapshot:
-              provider: aws
-              snapshot_iso: "2026-06-03T10-00-00Z"
-              filename: us-east-1.json
-      candidate_claims:
-        - provider: aws
-          instance_type: m5.xlarge
-          monthly_usd: 138.24
-          snapshot_age_hours: 52.0
-          source_result_index: 0
-    checks:
-      - tool_call
-      - price_provenance
-      - snapshot_age
-      - staleness
-    expect:
-      required_providers:
-        - aws
-      required_candidates:
-        - m5.xlarge
-      must_be_stale: true
+- id: stale_snapshot_refetch
+  kind: regression
+  source: adr
+  rail: output
+  turns:
+  - role: user
+    content: Cheapest 4 vCPU 8 GB general-purpose VM in us-east?
+  gates:
+    max_latency_ms: 1000.0
+    max_tool_calls: 1
+    max_input_tokens: 500
+    max_output_tokens: 1000
+  tool_call:
+    name: compare
+    args:
+      vcpu: 4
+      ram_gb: 8
+      region: us-east
+      family: general-purpose
+      providers:
+      - aws
+      expand: cheapest
+  tool_result:
+    request:
+      vcpu: 4
+      ram_gb: 8
+      region: us-east
+      family: general-purpose
+      providers:
+      - aws
+    results:
+    - provider: aws
+      instance_type: m5.xlarge
+      region_native: us-east-1
+      monthly_usd: 138.24
+      hourly_usd: 0.192
+      citation:
+        source_url: https://aws.example/prices
+        json_path: $.aws.m5
+        fetched_at: '2026-06-03T10:00:00Z'
+        age_hours: 52.0
+        snapshot:
+          provider: aws
+          snapshot_iso: 2026-06-03T10-00-00Z
+          filename: us-east-1.json
+    ranked_by: monthly_usd
+    unmet_requirements: []
+  final_answer: |
+    Cheapest is AWS m5.xlarge at $138.24/mo in us-east-1 (snapshot 52h old). Candidates considered: AWS considered m5.xlarge at $138.24/mo (snapshot 52h old). This snapshot is stale, so refetch before relying on it for a buying decision.
+  answer_plan:
+    answer_type: stale
+    price_claims:
+    - provider: aws
+      instance_type: m5.xlarge
+      region_native: us-east-1
+      monthly_usd: 138.24
+      hourly_usd: 0.192
+      snapshot_age_hours: 52.0
+      source_result_index: 0
+      citation:
+        source_url: https://aws.example/prices
+        json_path: $.aws.m5
+        snapshot:
+          provider: aws
+          snapshot_iso: 2026-06-03T10-00-00Z
+          filename: us-east-1.json
+    candidate_claims:
+    - provider: aws
+      instance_type: m5.xlarge
+      monthly_usd: 138.24
+      snapshot_age_hours: 52.0
+      source_result_index: 0
+  checks:
+  - tool_call
+  - price_provenance
+  - snapshot_age
+  - staleness
+  expect:
+    required_providers:
+    - aws
+    required_candidates:
+    - m5.xlarge
+    must_be_stale: true

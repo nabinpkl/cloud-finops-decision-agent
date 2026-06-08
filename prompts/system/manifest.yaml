@@ -1,6 +1,7 @@
 version: 1
 name: cloud-finops-price-agent
 description: Citation-backed cloud pricing agent system prompt.
+release_notes: Initial citation-backed pricing agent prompt with rail-based hardening and verified AnswerPlan rendering.
 parts:
   - parts/00-agent-contract.md
   - parts/10-security-policy.md

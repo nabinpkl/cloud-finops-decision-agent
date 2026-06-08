@@ -10,20 +10,63 @@ from pydantic import BaseModel, ConfigDict, Field
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CASES_PATH = PROJECT_ROOT / "evals/cases"
 
+EvalKind = Literal["regression", "capability"]
+EvalSource = Literal["adr", "observed_failure", "product_requirement", "security_review"]
+EvalRail = Literal["input", "execution", "retrieval", "output", "eval"]
+EvalTurnRole = Literal["system", "user", "assistant", "tool"]
+FailureLabel = Literal[
+    "tool_args",
+    "tool_selection",
+    "citation_binding",
+    "price_provenance",
+    "snapshot_age",
+    "staleness",
+    "missing_data_refusal",
+    "provider_scope",
+    "prompt_injection",
+    "internal_leakage",
+    "guardrail_decision",
+    "schema_validation",
+    "rendering",
+    "operational_gate",
+    "replay_contract",
+    "unknown_check",
+]
+
+
+class EvalTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    role: EvalTurnRole
+    content: str
+
+
+class EvalGates(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_latency_ms: float | None = Field(default=None, gt=0)
+    max_tool_calls: int | None = Field(default=None, ge=0)
+    max_input_tokens: int | None = Field(default=None, ge=0)
+    max_output_tokens: int | None = Field(default=None, ge=0)
+
 
 class EvalCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: str
-    rail: Literal["input", "execution", "retrieval", "output", "eval"] | None = None
-    user: str
-    history: list[dict[str, str]] = Field(default_factory=list)
+    kind: EvalKind
+    source: EvalSource
+    rail: EvalRail
+    turns: list[EvalTurn] = Field(min_length=1)
     tool_call: dict[str, Any] = Field(default_factory=dict)
     tool_result: dict[str, Any] = Field(default_factory=dict)
     guardrail_decision: dict[str, Any] | None = None
     answer_plan: dict[str, Any] | None = None
     final_answer: str
-    checks: list[str]
+    checks: list[str] = Field(min_length=1)
+    expected_failures: list[FailureLabel] = Field(default_factory=list)
+    trial_count: int | None = Field(default=None, ge=1)
+    gates: EvalGates | None = None
     expect: dict[str, Any] = Field(default_factory=dict)
 
 

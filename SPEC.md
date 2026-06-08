@@ -318,7 +318,14 @@ The stream bridge runs over assistant-ui's assistant-transport protocol: the fro
 
 ## Eval
 
-`evals/cases/*.yaml` carries hand-written behavior suites. The offline `python -m evals` runner grades canned tool calls, tool results, model-emitted `AnswerPlan` JSON, and rendered final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask an LLM judge to score semantic behavior that deterministic checks cannot cover.
+`evals/cases/*.yaml` carries hand-written behavior suites using the v1 eval schema. Each case declares `kind`, `source`, `rail`, canonical `turns`, deterministic checks, optional gates, and optional trial count. The offline `python -m evals` runner grades canned tool calls, tool results, model-emitted `AnswerPlan` JSON, and rendered final answer transcripts with deterministic checks. Live evals can later replay scenarios through the deployed agent UI or runtime directly, capture the full transcript including tool calls and rendered components, and ask a separate eval-quality LLM judge to score semantic behavior that deterministic checks cannot cover.
+
+Prompt identity is part of the eval contract. `prompts/system/manifest.yaml`
+owns the human prompt release version and release notes. Eval report schema
+`version: 2` records manifest version, manifest hash, rendered prompt hash,
+ordered prompt source hashes, model config hash, cases hash, and git commit when
+available. Reports and traces record only hashes/versions/paths, never prompt
+text.
 
 ### Lane 1: citation correctness
 
@@ -342,7 +349,18 @@ The judge confirms:
 ```yaml
 cases:
   - id: cheapest_4vcpu_8gb_eu
-    user: Cheapest 4 vCPU 8 GB general-purpose VM across the big 3 in EU?
+    kind: regression
+    source: product_requirement
+    rail: output
+    turns:
+      - role: user
+        content: Cheapest 4 vCPU 8 GB general-purpose VM across the big 3 in EU?
+    trial_count: 2
+    gates:
+      max_latency_ms: 1000.0
+      max_tool_calls: 1
+      max_input_tokens: 500
+      max_output_tokens: 1000
     tool_call:
       name: compare
       args:
@@ -396,9 +414,11 @@ cases:
 
 ```
 python -m evals --cases evals/cases
+python -m evals --cases evals/cases --trials 2
+python -m evals --cases evals/cases --report var/evals/offline/latest.json
 ```
 
-Pass/fail per scenario per lane, plus a roll-up score. Reproducible across runs because scenarios are static; judge non-determinism is the only variance source and is tracked across runs in `var/evals/`.
+Pass/fail per scenario per lane, plus a roll-up score. Repeated runs report `pass^k`, where every trial must pass for the case/lane to pass. Optional compact JSON reports include prompt/config/case identity, case metadata, lane, trial index, check results, failure labels, usage, latency, and tool-call count. Offline scenarios are static and deterministic; live or eval-quality judge variance is tracked separately under ignored `var/evals/`.
 
 ## Build sequence
 

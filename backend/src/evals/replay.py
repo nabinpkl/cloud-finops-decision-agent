@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -63,7 +64,7 @@ class ReplayRuntime:
             else self._case.final_answer
         )
         emit.text_delta(text)
-        usage.input_tokens = len(turns[-1].content.split())
+        usage.input_tokens = sum(len(turn.content.split()) for turn in turns)
         usage.output_tokens = len(text.split())
 
 
@@ -72,20 +73,28 @@ class ReplayResult:
     case: EvalCase
     usage: RunUsage
     checks: list[CheckResult]
+    elapsed_ms: float
+    tool_call_count: int
 
 
 def replay_case(case: EvalCase) -> ReplayResult:
     emitter = ReplayEmitter()
     usage = RunUsage()
     runtime = ReplayRuntime(case)
-    turns = [
-        Turn(role=str(item.get("role", "")), content=str(item.get("content", "")))
-        for item in case.history
-    ]
-    turns.append(Turn("user", case.user))
+    turns = [Turn(role=turn.role, content=turn.content) for turn in case.turns]
+    started = time.perf_counter()
     asyncio.run(runtime.run(turns, emitter, usage))
+    elapsed_ms = (time.perf_counter() - started) * 1000
     replayed = _case_from_emitted(case, emitter)
-    return ReplayResult(case=replayed, usage=usage, checks=grade_case(replayed))
+    tool_call_count = len(emitter.tool_calls)
+    checks = [*grade_case(replayed), *_grade_gates(case, usage, elapsed_ms, tool_call_count)]
+    return ReplayResult(
+        case=replayed,
+        usage=usage,
+        checks=checks,
+        elapsed_ms=elapsed_ms,
+        tool_call_count=tool_call_count,
+    )
 
 
 def _case_from_emitted(case: EvalCase, emitter: ReplayEmitter) -> EvalCase:
@@ -118,3 +127,57 @@ def _case_from_emitted(case: EvalCase, emitter: ReplayEmitter) -> EvalCase:
     else:
         updates["final_answer"] = emitter.text
     return case.model_copy(update=updates)
+
+
+def _grade_gates(
+    case: EvalCase,
+    usage: RunUsage,
+    elapsed_ms: float,
+    tool_call_count: int,
+) -> list[CheckResult]:
+    gates = case.gates
+    if gates is None:
+        return []
+    results: list[CheckResult] = []
+    if gates.max_latency_ms is not None:
+        results.append(
+            _gate_result(
+                "gate_latency",
+                elapsed_ms <= gates.max_latency_ms,
+                f"latency {elapsed_ms:.2f}ms <= {gates.max_latency_ms:.2f}ms",
+            )
+        )
+    if gates.max_tool_calls is not None:
+        results.append(
+            _gate_result(
+                "gate_tool_calls",
+                tool_call_count <= gates.max_tool_calls,
+                f"tool calls {tool_call_count} <= {gates.max_tool_calls}",
+            )
+        )
+    if gates.max_input_tokens is not None:
+        results.append(
+            _gate_result(
+                "gate_input_tokens",
+                usage.input_tokens <= gates.max_input_tokens,
+                f"input tokens {usage.input_tokens} <= {gates.max_input_tokens}",
+            )
+        )
+    if gates.max_output_tokens is not None:
+        results.append(
+            _gate_result(
+                "gate_output_tokens",
+                usage.output_tokens <= gates.max_output_tokens,
+                f"output tokens {usage.output_tokens} <= {gates.max_output_tokens}",
+            )
+        )
+    return results
+
+
+def _gate_result(name: str, passed: bool, detail: str) -> CheckResult:
+    return CheckResult(
+        name=name,
+        passed=passed,
+        detail=detail,
+        failure_label=None if passed else "operational_gate",
+    )
