@@ -1,5 +1,6 @@
 cases:
   - id: unsupported_region_refusal
+    rail: output
     user: Cheapest 4 vCPU 8 GB VM on Fly in antarctica?
     tool_call:
       name: compare

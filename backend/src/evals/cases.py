@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,10 +15,12 @@ class EvalCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: str
+    rail: Literal["input", "execution", "retrieval", "output", "eval"] | None = None
     user: str
     history: list[dict[str, str]] = Field(default_factory=list)
-    tool_call: dict[str, Any]
-    tool_result: dict[str, Any]
+    tool_call: dict[str, Any] = Field(default_factory=dict)
+    tool_result: dict[str, Any] = Field(default_factory=dict)
+    guardrail_decision: dict[str, Any] | None = None
     answer_plan: dict[str, Any] | None = None
     final_answer: str
     checks: list[str]

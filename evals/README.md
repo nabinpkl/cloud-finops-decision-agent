@@ -18,6 +18,8 @@ Suites are split by what they protect:
 - `provider_scope.yaml`: user-requested provider boundaries.
 - `prompt_control_refusals.yaml`: role override, prompt reveal, and internal
   path refusal behavior.
+- `judge_classifier.yaml`: mandatory judge decisions for ambiguous input
+  classifier cases and judge-unavailable blocking.
 - `untrusted_content_injection.yaml`: XML/tag injection, tool-result poisoning,
   and multi-turn history poisoning.
 - `tool_contract_abuse.yaml`: attempts to manipulate structured answer-plan

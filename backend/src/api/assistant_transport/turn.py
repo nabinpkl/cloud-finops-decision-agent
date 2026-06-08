@@ -18,6 +18,7 @@ from app_config import settings
 from api.observability import get_tracer
 from api.observability.redaction import record_exception, set_error_status
 from agent.runtime import RunUsage, TurnTokenCapExceeded, get_runtime
+from agent.guardrails.input import run_input_guardrail
 
 
 async def run_agent_turn(
@@ -35,10 +36,6 @@ async def run_agent_turn(
     if not turns:
         return
 
-    msg = append_assistant_message(controller.state)
-    state_emitter = StateEmitter(controller, msg)
-    emitter = PolicyEmitter(state_emitter)
-
     usage_before = read_session_usage(session_id)
     run_usage = RunUsage()
 
@@ -54,8 +51,33 @@ async def run_agent_turn(
         turn_span.set_attribute("finops.session.budget_limit", settings.session_token_cap)
         turn_span.set_attribute("finops.agent.runtime", settings.agent_runtime)
 
-        runtime = get_runtime()
         try:
+            guardrail = await run_input_guardrail(turns)
+            run_usage.input_tokens += guardrail.usage.input_tokens
+            run_usage.output_tokens += guardrail.usage.output_tokens
+            turn_span.set_attribute("finops.guardrail.input.action", guardrail.decision.action)
+            turn_span.set_attribute("finops.guardrail.input.reason", guardrail.decision.reason)
+            turn_span.set_attribute(
+                "finops.guardrail.input.confidence",
+                guardrail.decision.confidence,
+            )
+            turn_span.set_attribute(
+                "finops.guardrail.input.main_model_skipped",
+                bool(guardrail.receipt["main_model_skipped"]),
+            )
+            if guardrail.decision.action != "allow":
+                msg = append_assistant_message(controller.state)
+                state_emitter = StateEmitter(controller, msg)
+                state_emitter.text_delta(
+                    guardrail.decision.public_message
+                    or "I cannot safely process that request in this public pricing agent."
+                )
+                return
+
+            msg = append_assistant_message(controller.state)
+            state_emitter = StateEmitter(controller, msg)
+            emitter = PolicyEmitter(state_emitter)
+            runtime = get_runtime()
             await runtime.run(turns, emitter, run_usage)
             if not emitter.flush_checked():
                 turn_span.set_attribute("finops.policy.final_answer.blocked", True)

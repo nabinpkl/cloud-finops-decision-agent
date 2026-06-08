@@ -4,7 +4,6 @@ Bypasses HTTP and the frontend so the output isolates the agent loop.
 
     uv run python -m scripts.agent_smoke
     AGENT_RUNTIME=langchain just smoke
-    AGENT_RUNTIME=langchain LANGCHAIN_REASONING_ROUNDTRIP=true just smoke
 
 Stdout shape (one line per event, parsed by Monitor or `tail -f`):
 

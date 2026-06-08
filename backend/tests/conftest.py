@@ -17,3 +17,4 @@ import os
 os.environ.setdefault(
     "BUDGET_IP_HASH_SALT_SECRET", "test-salt-not-a-real-secret-32-bytes"
 )
+os.environ["JUDGE_MODEL_NAME"] = "test-judge-model"

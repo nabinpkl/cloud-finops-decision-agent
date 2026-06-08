@@ -1,5 +1,6 @@
 cases:
   - id: cheapest_4vcpu_8gb_eu
+    rail: output
     user: Cheapest 4 vCPU 8 GB general-purpose VM across the big 3 in EU?
     tool_call:
       name: compare
@@ -147,6 +148,7 @@ cases:
         - Standard_D4s_v5
 
   - id: full_candidate_listing
+    rail: output
     user: Show full candidates for 2 vCPU 4 GB in us-east across AWS and GCP.
     tool_call:
       name: compare

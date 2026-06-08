@@ -26,11 +26,14 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langchain.agents.structured_output import ProviderStrategy
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 
 from app_config import settings
+from app_config.model_config import model_config as llm_model_config
+from agent.policy.answer_plan import AnswerPlan
 from agent.runtime.types import Emitter, RunUsage, Turn, TurnTokenCapExceeded
 from agent.runtime.prompt import INSTRUCTIONS
 from agent.tools.pricing import (
@@ -92,12 +95,11 @@ def _build_model() -> ChatOpenAI:
         base_url=settings.provider_base_url,
         api_key=settings.provider_api_key,
         model=settings.model_name,
-        stream_usage=True,
+        disable_streaming=llm_model_config.main.request.disable_streaming,
+        stream_usage=llm_model_config.main.request.stream_usage,
+        use_responses_api=llm_model_config.main.request.use_responses_api,
+        extra_body=llm_model_config.main.request.extra_body.as_request_body(),
     )
-    if settings.langchain_reasoning_roundtrip:
-        from agent.runtime.reasoning_model import ReasoningRoundTripChatOpenAI
-
-        return ReasoningRoundTripChatOpenAI(**kwargs)
     return ChatOpenAI(**kwargs)
 
 
@@ -129,6 +131,20 @@ class CapMiddleware(AgentMiddleware):
         return None
 
 
+class ToolFirstMiddleware(AgentMiddleware):
+    """Force the deterministic pricing tool before any structured final answer."""
+
+    async def awrap_model_call(self, request: Any, handler: Any) -> Any:
+        has_tool_result = any(isinstance(message, ToolMessage) for message in request.messages)
+        if has_tool_result:
+            return await handler(request)
+        tool_first_request = request.override(
+            response_format=None,
+            tool_choice="required",
+        )
+        return await handler(tool_first_request)
+
+
 class LangChainRuntime:
     """`AgentRuntime` implementation backed by langchain's `create_agent`."""
 
@@ -138,6 +154,7 @@ class LangChainRuntime:
         # but the two middlewares carry different generic params, which the type
         # checker will not unify. They are both AgentMiddleware at runtime.
         middleware: list[Any] = [
+            ToolFirstMiddleware(),
             cap,
             ModelCallLimitMiddleware(
                 run_limit=settings.max_turns_per_run, exit_behavior="end"
@@ -148,6 +165,10 @@ class LangChainRuntime:
             tools=[_compare_tool()],
             system_prompt=INSTRUCTIONS,
             middleware=middleware,
+            response_format=ProviderStrategy(
+                AnswerPlan,
+                strict=llm_model_config.main.structured_output.strict,
+            ),
         )
         # LangChain's create_agent returns a graph whose `astream(input=...)`
         # type references a private `_InputAgentState`. The runtime contract is
@@ -161,14 +182,12 @@ class LangChainRuntime:
                 input=agent_input, stream_mode=["messages", "updates"]
             ):
                 if mode == "messages":
-                    message, _meta = chunk
-                    if isinstance(message, AIMessageChunk):
-                        # `.text` is a property in langchain-core 1.x (the old
-                        # `.text()` method is deprecated).
-                        text = message.text or ""
-                        if text:
-                            emit.text_delta(text)
-                elif mode == "updates":
+                    # Provider-native structured output streams raw JSON chunks.
+                    # Transport must see only the validated structured_response
+                    # emitted from updates, otherwise the policy layer receives
+                    # duplicate partial JSON.
+                    continue
+                if mode == "updates":
                     self._emit_updates(chunk, emit)
         finally:
             usage.input_tokens = cap.input_tokens
@@ -198,3 +217,8 @@ class LangChainRuntime:
                             json.dumps(args),
                             args,
                         )
+            structured_response = (
+                update.get("structured_response") if isinstance(update, dict) else None
+            )
+            if isinstance(structured_response, AnswerPlan):
+                emit.text_delta(structured_response.model_dump_json())

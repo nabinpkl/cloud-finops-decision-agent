@@ -9,13 +9,11 @@
 ## Context
 
 ADR-0009 put the agent loop in-process on the OpenAI Agents SDK. Since then
-the SDK has shown a sharp edge: models that carry provider-specific reasoning
-state (DeepSeek V4 thinking mode via OpenRouter) need their `reasoning_content`
-round-tripped on every turn, and the SDK's Chat Completions adapter does not do
-it, producing empty completions. That is one symptom of a general fact: the
-framework choice is not free, and we want the ability to run the same agent on a
-different framework (LangChain next) to compare them on the same
-workload, behind one env var, without a rewrite.
+the SDK/provider pairing has shown sharp edges around OpenAI-compatible
+provider-specific request parameters and structured output enforcement. That is
+one symptom of a general fact: the framework choice is not free, and we want the
+ability to run the same agent on a different framework to compare them on the
+same workload, behind one env var, without a rewrite.
 
 The risk in adding a second framework is entanglement. The valuable, hard-won
 parts of this repo are framework-independent: the citation contract
@@ -110,9 +108,8 @@ cap and `record_usage` care about, is the same.
 
 **Good.** Adding a framework is one adapter file plus one `get_runtime` branch.
 Transport, budgets, and the citation layer are untouched by a framework swap.
-The DeepSeek `reasoning_content` fix (a custom chat model, or `ChatDeepSeek`
-direct) becomes an adapter-local concern: it ships inside whichever adapter
-needs it and cannot disturb the other.
+Provider-specific model request shape is adapter-local: it ships inside
+whichever adapter needs it and cannot disturb the other.
 
 **Cost.** One more indirection between transport and the SDK, and a small
 duplication: each adapter re-implements the stream-event-to-`Emitter` mapping for
@@ -134,9 +131,9 @@ per-call difference is not mistaken for a bug.
 
 ## Alternatives considered
 
-- **Keep one framework, patch the SDK.** Subclass `OpenAIChatCompletionsModel`
-  to round-trip `reasoning_content`. Fixes DeepSeek but leaves us single-framework
-  and unable to compare. The port does not preclude this; it just makes it one
+- **Keep one framework, patch the SDK.** Subclass provider clients to force
+  provider-specific request parameters. This leaves us single-framework and
+  unable to compare. The port does not preclude this; it just makes it one
   adapter's internal choice.
 - **Process-isolate each framework behind HTTP.** A separate service per runtime.
   Heavier than the problem: ADR-0009 deliberately runs the loop in-process for
@@ -155,20 +152,18 @@ green). A later amendment added the LangChain adapter and made it the default.
 The LangChain adapter (`agent/runtime/langchain.py`) is implemented: lean
 `langchain.agents.create_agent` with the single `compare` tool, the
 stream-to-`Emitter` mapping, a `CapMiddleware` enforcing the neutral per-turn
-cap, and `ReasoningRoundTripChatOpenAI` (gated by
-`langchain_reasoning_roundtrip`) for DeepSeek-style `reasoning_content`
-echo-back.
+cap, strict provider-native `AnswerPlan` structured output, and OpenRouter
+parameter-compatible routing via `provider.require_parameters`.
 
 Two decisions in this ADR are superseded:
 
 - **Default runtime is now `langchain`, not `openai_agents`.** The LangChain
-  runtime drives DeepSeek-via-OpenRouter correctly where the OpenAI Agents SDK
-  Chat Completions path returns empty completions, so it is the better default
-  for this deployment's provider. Verified live: a single-turn pricing question
-  returns a full cited answer on the langchain runtime, with and without the
-  reasoning round-trip (round-trip matters only when thinking mode is explicitly
-  enabled, since `create_agent` + `ChatOpenAI` does not emit the reasoning items
-  that tripped the OpenAI Agents SDK).
+  runtime drives DeepSeek-via-OpenRouter correctly and can request provider
+  native strict JSON Schema output for the final `AnswerPlan`. Verified live:
+  DeepSeek V4 Flash accepts strict `json_schema` with
+  `provider.require_parameters=true`; OpenRouter routes to a compatible provider
+  and returns valid JSON in `message.content`. Reasoning remains supported, but
+  it is not round-tripped through a custom model subclass.
 - **`langchain`/`langchain-openai` are now core dependencies; `openai-agents`
   is an optional extra.** A default runtime must work on a plain `uv sync`, so
   the langchain stack is core. The Agents-SDK -> OTel tracing bridge was the last

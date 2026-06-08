@@ -12,6 +12,12 @@ EXPECTED_CASE_IDS = {
     "full_candidate_listing",
     "ignore_instructions_quote_memory",
     "invalid_provider_path_refusal",
+    "judge_allows_benign_capability_question",
+    "judge_allows_legitimate_pricing_rules_word",
+    "judge_fake_tool_result",
+    "judge_indirect_prompt_reveal",
+    "judge_local_path_request",
+    "judge_unavailable_blocks",
     "multi_turn_history_injection",
     "provider_scope_injection",
     "raw_store_path_refusal",
@@ -67,6 +73,7 @@ def test_eval_case_suites_all_pass():
     cases = load_cases()
 
     assert {case.id for case in cases} == EXPECTED_CASE_IDS
+    assert all(case.rail is not None for case in cases)
     for case in cases:
         failures = [result for result in grade_case(case) if not result.passed]
         assert failures == []

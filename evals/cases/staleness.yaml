@@ -1,5 +1,6 @@
 cases:
   - id: stale_snapshot_refetch
+    rail: output
     user: Cheapest 4 vCPU 8 GB general-purpose VM in us-east?
     tool_call:
       name: compare

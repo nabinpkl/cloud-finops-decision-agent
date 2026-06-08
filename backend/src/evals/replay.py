@@ -46,16 +46,17 @@ class ReplayRuntime:
         if not turns or turns[-1].role != "user":
             raise ValueError("replay expects at least one user turn")
         call = self._case.tool_call
-        raw_args = call.get("args")
-        args: dict[str, Any] = raw_args if isinstance(raw_args, dict) else {}
-        call_id = f"eval-{self._case.id}"
-        emit.tool_call(
-            call_id=call_id,
-            name=str(call.get("name", "")),
-            args_text=json.dumps(args),
-            args=args,
-        )
-        emit.tool_result(call_id, self._case.tool_result)
+        if call:
+            raw_args = call.get("args")
+            args: dict[str, Any] = raw_args if isinstance(raw_args, dict) else {}
+            call_id = f"eval-{self._case.id}"
+            emit.tool_call(
+                call_id=call_id,
+                name=str(call.get("name", "")),
+                args_text=json.dumps(args),
+                args=args,
+            )
+            emit.tool_result(call_id, self._case.tool_result)
         text = (
             json.dumps(self._case.answer_plan)
             if self._case.answer_plan is not None
@@ -88,6 +89,17 @@ def replay_case(case: EvalCase) -> ReplayResult:
 
 
 def _case_from_emitted(case: EvalCase, emitter: ReplayEmitter) -> EvalCase:
+    if not case.tool_call:
+        if emitter.tool_calls or emitter.tool_results:
+            raise ValueError(f"{case.id}: replay emitted unexpected tool events")
+        updates: dict[str, Any] = {}
+        if case.answer_plan is not None:
+            updates["answer_plan"] = json.loads(emitter.text)
+            updates["final_answer"] = case.final_answer
+        else:
+            updates["final_answer"] = emitter.text
+        return case.model_copy(update=updates)
+
     if len(emitter.tool_calls) != 1:
         raise ValueError(f"{case.id}: replay emitted {len(emitter.tool_calls)} tool calls")
     if len(emitter.tool_results) != 1:

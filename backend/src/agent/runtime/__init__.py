@@ -12,7 +12,6 @@ need from `agent.runtime`.
 
 from __future__ import annotations
 
-from app_config import settings
 from agent.runtime.types import (
     AgentRuntime,
     Emitter,
@@ -32,6 +31,8 @@ __all__ = [
 
 
 def get_runtime() -> AgentRuntime:
+    from app_config import settings
+
     if settings.agent_runtime == "langchain":
         from agent.runtime.langchain import LangChainRuntime
 

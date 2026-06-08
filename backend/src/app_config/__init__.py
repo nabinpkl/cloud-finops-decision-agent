@@ -41,19 +41,16 @@ class Settings(BaseSettings):
     provider_base_url: str = ""
     provider_api_key: str = ""
     model_name: str = ""
+    judge_provider_base_url: str = ""
+    judge_provider_api_key: str = ""
+    judge_model_name: str = ""
+    judge_timeout_seconds: float = 10.0
 
     # Agent runtime selection (ADR-0012). Chooses which framework adapter
     # `agent.runtime.get_runtime()` returns. "langchain" (the default) routes to
     # the lean LangChain create_agent adapter; "openai_agents" routes to the
     # OpenAI Agents SDK adapter. Both stacks are core dependencies.
     agent_runtime: Literal["openai_agents", "langchain"] = "langchain"
-
-    # Opt-in for the langchain runtime (AGENT_RUNTIME=langchain): wrap the
-    # ChatOpenAI model in the subclass that round-trips `reasoning_content`
-    # (ADR-0012). Required for DeepSeek V4 thinking mode via OpenRouter, which
-    # returns empty completions when prior-turn reasoning is not echoed back.
-    # Off by default; non-thinking models do not need it.
-    langchain_reasoning_roundtrip: bool = False
 
     # Observability (ADR-0010): JSONL OTel traces are always enabled so the
     # agent surface is auditable in every runtime. Export destination and
@@ -128,6 +125,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "provider_base_url", "provider_api_key", "model_name",
+        "judge_provider_base_url", "judge_provider_api_key", "judge_model_name",
         "budget_ip_hash_salt_secret",
         mode="before",
     )
@@ -149,6 +147,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "BUDGET_IP_HASH_SALT_SECRET must be set; "
                 "set a 32+ byte random value in .env."
+            )
+        if not self.judge_model_name:
+            raise ValueError(
+                "JUDGE_MODEL_NAME must be set; "
+                "the mandatory input judge cannot be silently bypassed."
             )
         if self.trusted_proxy_count > 0 and not self.trusted_proxy_cidrs:
             raise ValueError(

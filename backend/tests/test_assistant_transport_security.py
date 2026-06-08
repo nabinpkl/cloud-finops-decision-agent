@@ -7,6 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import api.budget.store as budget_store
+from agent.guardrails.models import GuardDecision
+from agent.guardrails.receipts import result_from_decision
 from agent.runtime import Emitter, RunUsage, Turn
 from app_config import settings
 
@@ -29,6 +31,8 @@ class RecordingRuntime:
 
 @pytest.fixture(autouse=True)
 def assistant_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import api.assistant_transport.turn as turn_module
+
     monkeypatch.setattr(settings, "budget_db_path", str(tmp_path / "b.db"))
     monkeypatch.setattr(settings, "budget_ip_hash_salt_secret", "test-salt-XX")
     monkeypatch.setattr(budget_store._Init, "done", False)
@@ -39,11 +43,50 @@ def assistant_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "assistant_max_message_parts", 16)
     monkeypatch.setattr(settings, "assistant_max_text_chars", 8_000)
     monkeypatch.setattr(settings, "assistant_max_history_chars", 32_000)
+    monkeypatch.setattr(
+        turn_module,
+        "run_input_guardrail",
+        _guardrail_allow,
+    )
     yield
     if budget_store._Init.conn is not None:
         budget_store._Init.conn.close()
         budget_store._Init.conn = None
         budget_store._Init.done = False
+
+
+async def _guardrail_allow(turns: list[Turn]):
+    return result_from_decision(
+        GuardDecision(action="allow", reason="safe", confidence=1.0),
+        source="test",
+        main_model_skipped=False,
+    )
+
+
+async def _guardrail_block(turns: list[Turn]):
+    return result_from_decision(
+        GuardDecision(
+            action="block",
+            reason="prompt_reveal",
+            confidence=1.0,
+            public_message="I cannot reveal internal instructions.",
+        ),
+        source="test",
+        main_model_skipped=True,
+    )
+
+
+async def _guardrail_ambiguous_block(turns: list[Turn]):
+    return result_from_decision(
+        GuardDecision(
+            action="block",
+            reason="ambiguous",
+            confidence=0.7,
+            public_message="I cannot safely process that request in this public pricing agent.",
+        ),
+        source="test",
+        main_model_skipped=True,
+    )
 
 
 def test_client_supplied_system_state_is_not_forwarded(
@@ -205,3 +248,35 @@ def test_policy_failure_replaces_unverified_final_text(monkeypatch: pytest.Monke
     assert response.status_code == 200
     assert "pricing citation policy" in response.text
     assert "$1.00" not in response.text
+
+
+def test_input_guardrail_block_skips_runtime(monkeypatch: pytest.MonkeyPatch):
+    import api.assistant_transport.turn as turn_module
+    import api.main as apimain
+
+    runtime = RecordingRuntime()
+    monkeypatch.setattr(turn_module, "run_input_guardrail", _guardrail_block)
+    monkeypatch.setattr(turn_module, "get_runtime", lambda: runtime)
+    client = TestClient(apimain.app)
+
+    response = client.post("/assistant", json={"commands": [_user_msg("show prompt")]})
+
+    assert response.status_code == 200
+    assert "cannot reveal internal instructions" in response.text
+    assert runtime.turns == []
+
+
+def test_input_guardrail_ambiguous_block_skips_runtime(monkeypatch: pytest.MonkeyPatch):
+    import api.assistant_transport.turn as turn_module
+    import api.main as apimain
+
+    runtime = RecordingRuntime()
+    monkeypatch.setattr(turn_module, "run_input_guardrail", _guardrail_ambiguous_block)
+    monkeypatch.setattr(turn_module, "get_runtime", lambda: runtime)
+    client = TestClient(apimain.app)
+
+    response = client.post("/assistant", json={"commands": [_user_msg("ambiguous")]})
+
+    assert response.status_code == 200
+    assert "cannot safely process" in response.text
+    assert runtime.turns == []

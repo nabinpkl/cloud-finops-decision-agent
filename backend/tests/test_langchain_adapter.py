@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage  # noqa: E402
 from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
 
 import agent.runtime.langchain as lc  # noqa: E402
+from agent.policy.answer_plan import AnswerPlan  # noqa: E402
 from agent.runtime.types import RunUsage, Turn  # noqa: E402
 
 
@@ -63,7 +64,10 @@ async def _run(monkeypatch) -> tuple[_RecordingEmitter, RunUsage]:
         usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
     )
     answer_turn = AIMessage(
-        content="AWS m5.xlarge $140.16/mo (snapshot 6h old).",
+        content=(
+            '{"answer_type":"refusal","price_claims":[],"candidate_claims":[]'
+            ',"unmet_requirements":[],"refusal_reason":"out_of_scope"}'
+        ),
         usage_metadata={"input_tokens": 20, "output_tokens": 12, "total_tokens": 32},
     )
     monkeypatch.setattr(
@@ -105,3 +109,45 @@ def test_emits_tool_call_then_result_and_sums_usage(monkeypatch):
     # Usage sums both model steps: 10+20 in, 5+12 out.
     assert usage.input_tokens == 30
     assert usage.output_tokens == 17
+
+
+def test_model_uses_strict_openrouter_routing_with_reasoning(monkeypatch):
+    monkeypatch.setattr(lc.settings, "provider_base_url", "https://openrouter.ai/api/v1")
+    monkeypatch.setattr(lc.settings, "provider_api_key", "sk-test")
+    monkeypatch.setattr(lc.settings, "model_name", "deepseek/deepseek-v4-flash")
+
+    model = lc._build_model()
+
+    assert model.extra_body == {
+        "provider": {"require_parameters": True},
+        "reasoning": {"effort": "low"},
+    }
+    assert model.reasoning is None
+    assert model.use_responses_api is False
+    assert model.disable_streaming is True
+
+
+def test_structured_response_is_emitted_as_answer_plan_json():
+    emitter = _RecordingEmitter()
+    plan = AnswerPlan(
+        answer_type="refusal",
+        price_claims=[],
+        candidate_claims=[],
+        unmet_requirements=[],
+        refusal_reason="out_of_scope",
+    )
+
+    lc.LangChainRuntime._emit_updates(
+        {"model": {"messages": [], "structured_response": plan}},
+        emitter,
+    )
+
+    assert emitter.calls == [
+        (
+            "text",
+            (
+                '{"answer_type":"refusal","price_claims":[],"candidate_claims":[]'
+                ',"unmet_requirements":[],"refusal_reason":"out_of_scope"}'
+            ),
+        )
+    ]
