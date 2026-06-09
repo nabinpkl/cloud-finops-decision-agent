@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SessionLimitBanner } from "@/components/SessionLimitBanner";
 import { ComparisonTable } from "@/components/tools/comparison-table";
 import { Thread } from "@/components/assistant-ui/thread";
@@ -14,20 +14,26 @@ import { MyRuntimeProvider } from "./MyRuntimeProvider";
 // AuiProvider only wrapped the Thread, so those two threw
 // "...only be called when you are using useAssistantTransportRuntime".
 function AppShell() {
+  const suggestions = useMemo(
+    () =>
+      Suggestions([
+        {
+          title: "Cheapest 4 vCPU / 8 GB",
+          label: "general-purpose VM in the EU",
+          prompt: "Cheapest 4 vCPU 8 GB general-purpose VM in the EU?",
+        },
+        {
+          title: "Compare a spec",
+          label: "across AWS, GCP and Azure",
+          prompt:
+            "Compare a 2 vCPU 4 GB general-purpose VM across AWS, GCP and Azure.",
+        },
+      ]),
+    [],
+  );
+
   const aui = useAui({
-    suggestions: Suggestions([
-      {
-        title: "Cheapest 4 vCPU / 8 GB",
-        label: "general-purpose VM in the EU",
-        prompt: "Cheapest 4 vCPU 8 GB general-purpose VM in the EU?",
-      },
-      {
-        title: "Compare a spec",
-        label: "across AWS, GCP and Azure",
-        prompt:
-          "Compare a 2 vCPU 4 GB general-purpose VM across AWS, GCP and Azure.",
-      },
-    ]),
+    suggestions,
   });
   return (
     <AuiProvider value={aui}>

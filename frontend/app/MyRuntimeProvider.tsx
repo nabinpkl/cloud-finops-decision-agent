@@ -8,7 +8,7 @@ import {
   useAssistantTransportRuntime,
   useExternalMessageConverter,
 } from "@assistant-ui/react";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { publishSessionLimitReached } from "@/lib/session-limit";
 
@@ -72,6 +72,9 @@ const convertMessage: useExternalMessageConverter.Callback<NativeMessage> = (
 
 const MessageConverter = createMessageConverter(convertMessage);
 
+const INITIAL_STATE: State = { messages: [] };
+const EMPTY_HEADERS = {};
+
 const converter = (
   state: State,
   connectionMetadata: AssistantTransportConnectionMetadata,
@@ -97,15 +100,17 @@ const converter = (
 };
 
 export function MyRuntimeProvider({ children }: { children: ReactNode }) {
-  const runtime = useAssistantTransportRuntime({
-    initialState: {
-      messages: [],
-    },
-    // Same-origin path; next.config.js rewrites /assistant to the backend.
-    api: "/assistant",
-    headers: {},
-    converter,
-  });
+  const runtimeOptions = useMemo(
+    () => ({
+      initialState: INITIAL_STATE,
+      // Same-origin path; next.config.js rewrites /assistant to the backend.
+      api: "/assistant",
+      headers: EMPTY_HEADERS,
+      converter,
+    }),
+    [],
+  );
+  const runtime = useAssistantTransportRuntime(runtimeOptions);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>

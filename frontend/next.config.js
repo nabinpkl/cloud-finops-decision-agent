@@ -6,6 +6,7 @@
 const backendOrigin = process.env.BACKEND_ORIGIN || "http://localhost:8000";
 
 const nextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: {
     optimizePackageImports: ["@assistant-ui/react"],
   },
