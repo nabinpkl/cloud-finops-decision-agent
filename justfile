@@ -1,5 +1,3 @@
-set dotenv-load := true
-
 backend := "backend"
 backend_just := "backend/justfile"
 

@@ -39,13 +39,11 @@ lookup provider instance_type region:
 # Run the FastAPI app (compare/lookup/citation excerpt + agent). Port from API_PORT (.env), default 8000.
 api:
     #!/usr/bin/env bash
-    unset PROVIDER_BASE_URL PROVIDER_API_KEY MODEL_NAME
     uv run uvicorn api.main:app --reload --port ${API_PORT:-8000}
 
 # Drive one live agent turn and print token deltas. Runtime from AGENT_RUNTIME. Expects creds in env.
 smoke:
     #!/usr/bin/env bash
-    unset PROVIDER_BASE_URL PROVIDER_API_KEY MODEL_NAME
     uv run python -m scripts.agent_smoke
 
 # Run offline prompt/tool/citation evals. No model credentials or snapshots required.
