@@ -56,15 +56,110 @@ infcl-dev:
 dev:
     #!/usr/bin/env bash
     set -uo pipefail
-    for port in "${API_PORT:-8000}" 3000; do
-      pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
-      if [ -n "$pids" ]; then echo "freeing port $port (pids: $pids)"; kill $pids 2>/dev/null || true; fi
-    done
-    sleep 1
-    trap 'kill $(jobs -p) 2>/dev/null' INT TERM EXIT
+    free_port() {
+      local port="$1"
+      local pids
+
+      pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+      if [ -z "$pids" ]; then
+        return 0
+      fi
+
+      echo "freeing port $port (pids: $pids)"
+      kill $pids 2>/dev/null || true
+
+      for attempt in {1..50}; do
+        pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+        if [ -z "$pids" ]; then
+          return 0
+        fi
+
+        if [ "$attempt" -eq 20 ]; then
+          echo "port $port still busy; force killing pids: $pids"
+          kill -KILL $pids 2>/dev/null || true
+        fi
+
+        sleep 0.1
+      done
+
+      pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+      echo "port $port is still busy after cleanup (pids: $pids)" >&2
+      return 1
+    }
+
+    free_port "${API_PORT:-8000}"
+    free_port 3000
+
+    child_pids=()
+
+    collect_process_tree() {
+      local pid="$1"
+      local child
+
+      if ! kill -0 "$pid" 2>/dev/null; then
+        return 0
+      fi
+
+      echo "$pid"
+      while read -r child; do
+        if [ -n "$child" ]; then
+          collect_process_tree "$child"
+        fi
+      done < <(pgrep -P "$pid" 2>/dev/null || true)
+    }
+
+    live_child_pids() {
+      local pid
+
+      for pid in "${child_pids[@]}"; do
+        collect_process_tree "$pid"
+      done | awk 'NF' | sort -rn | uniq
+    }
+
+    cleanup() {
+      local pids
+      trap - INT TERM EXIT
+
+      pids=$(live_child_pids)
+      if [ -z "$pids" ]; then
+        return 0
+      fi
+
+      echo "stopping dev process tree (pids: $pids)"
+      kill $pids 2>/dev/null || true
+
+      for _ in {1..30}; do
+        pids=$(live_child_pids)
+        if [ -z "$pids" ]; then
+          return 0
+        fi
+        sleep 0.1
+      done
+
+      pids=$(live_child_pids)
+      if [ -n "$pids" ]; then
+        echo "force stopping dev process tree (pids: $pids)"
+        kill -KILL $pids 2>/dev/null || true
+      fi
+    }
+
+    trap cleanup INT TERM EXIT
     just api &
+    child_pids+=("$!")
     just frontend &
-    wait
+    child_pids+=("$!")
+
+    while true; do
+      for pid in "${child_pids[@]}"; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+          wait "$pid"
+          status="$?"
+          cleanup
+          exit "$status"
+        fi
+      done
+      sleep 0.2
+    done
 
 # Drive one live backend agent turn and print token deltas.
 smoke:
