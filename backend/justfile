@@ -33,14 +33,23 @@ compare vcpu ram region family="any":
 lookup provider instance_type region:
     uv run python -m normalize lookup --provider {{provider}} --instance-type {{instance_type}} --region {{region}}
 
-# Run the FastAPI app (compare/lookup/citation excerpt + agent). Port from API_PORT (.env), default 8000.
+# Run the FastAPI app (compare/lookup/citation excerpt + agent). Sources the
+# repo-root .env so API_PORT and the model provider config (PROVIDER_*/MODEL_NAME)
+# are present at the shell level too, matching what the app's Settings reads.
 api:
     #!/usr/bin/env bash
-    uv run uvicorn api.main:app --reload --port ${API_PORT:-8000}
+    set -euo pipefail
+    set -a; [ -f ../.env ] && . ../.env; set +a
+    uv run uvicorn api.main:app --reload --port "${API_PORT:-8000}"
 
-# Drive one live agent turn and print token deltas. Runtime from AGENT_RUNTIME. Expects creds in env.
+# Drive one live agent turn and print token deltas. Runtime from AGENT_RUNTIME.
+# Sources the repo-root .env so PROVIDER_*/MODEL_NAME/AGENT_RUNTIME are loaded
+# without an external secrets wrapper (wrap with `infisical run -- just smoke`
+# instead if your creds live in a vault rather than .env).
 smoke:
     #!/usr/bin/env bash
+    set -euo pipefail
+    set -a; [ -f ../.env ] && . ../.env; set +a
     uv run python -m scripts.agent_smoke
 
 # Run offline prompt/tool/citation evals. No model credentials or snapshots required.

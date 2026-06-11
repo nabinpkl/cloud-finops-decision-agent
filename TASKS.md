@@ -162,13 +162,19 @@ re-verifies the security and budget suites, not just the happy path.
 
 ## Carried-forward v0 items (still open, not subsumed)
 
-- [ ] R26. Fix `backend/justfile` `api` and `smoke` recipes so they preserve
-  `.env` model config instead of unsetting `PROVIDER_BASE_URL`,
-  `PROVIDER_API_KEY`, and `MODEL_NAME`; verify a configured `/assistant` startup
-  path still works.
-- [ ] R35. Refresh `EVALS.md` to reflect the prompt split, the current `just
-  eval` command, the implemented replay runner, and any still-missing
-  live/LLM-judge eval scope.
+- [x] R26. Fixed. Model config was already preserved (the app's `Settings` reads
+  repo-root `.env` via `env_file`), so the literal "recipes unset the vars"
+  premise was stale. The `api`/`smoke` recipes now also source `../.env` at the
+  shell level so `API_PORT`/`PROVIDER_*`/`MODEL_NAME`/`AGENT_RUNTIME` match what
+  the app reads (the `api` recipe's `${API_PORT}` previously never saw `.env`).
+  Verified: with config present, `api.main` imports, `/assistant` is wired, and
+  `API_PORT` from env is honored. (The mandatory input judge correctly refuses
+  startup when `JUDGE_MODEL_NAME` is unset, ADR-0015.)
+- [x] R35. Refreshed `EVALS.md`: actual eval-case files and runner module layout,
+  `just eval` = `python -m evals`, the implemented replay runner, and explicit
+  NOT-YET-BUILT markers for live evals (`eval-smoke`/`eval-live`) and the
+  eval-quality LLM judge. Added a coverage-gap note: the view-spec / co-driver /
+  AG-UI behavior is unit-tested but lacks eval cases and a view-spec grader.
 
 ---
 

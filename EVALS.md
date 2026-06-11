@@ -78,14 +78,18 @@ Create behavior-named YAML suites under `evals/cases/` with required `kind`, `so
 
 Each failed deterministic check carries a failure taxonomy label so regressions are grouped by cause, not only by prose detail. Runtime guardrail judging remains separate from eval-quality judging. Only add an eval-quality LLM judge for semantic checks deterministic rules cannot cover, and keep it under the eval harness with separate environment variables.
 
-### Layer 4: Live Smoke Evals
+### Layer 4: Live Smoke Evals (NOT YET BUILT)
 
-These are opt-in because they need model credentials and may need populated snapshots. They should run behind a separate command, not in `just check`:
+These are opt-in because they need model credentials and may need populated snapshots. They run behind a separate command, never in `just check`. Current state:
 
-- `just eval-smoke`: one or two live questions against the configured runtime.
-- `just eval-live`: the v0 prompt suite against a real model, recording transcripts under ignored `var/evals/`.
+- **Built today:** `just smoke` (`scripts.agent_smoke`) drives one live single-turn through the selected runtime and prints token/cost deltas. It is a manual smoke, not part of the eval harness, and it does not grade or persist a transcript report.
+- **Still missing:** dedicated eval-harness live commands. The planned `just eval-smoke` (one or two live questions graded by the harness) and `just eval-live` (the full prompt suite against a real model, transcripts under ignored `var/evals/`) recipes do not exist yet.
 
-Live evals should save enough evidence to debug regressions: price-agent prompt version, input-judge prompt version, runtime, model name, turns, tool calls, tool results, final text, token usage, latency, tool-call count, and failure labels.
+When built, live evals should save enough evidence to debug regressions: price-agent prompt version, input-judge prompt version, runtime, model name, turns, tool calls, tool results, final text, token usage, latency, tool-call count, and failure labels.
+
+### Layer 5: Eval-quality LLM judge (NOT YET BUILT)
+
+An eval-quality LLM judge for semantic checks deterministic graders cannot cover (e.g. "did the prose actually answer the question") is planned but not implemented. It is distinct from the runtime input judge (ADR-0015), which is mandatory and already shipped. When added it stays under the eval harness behind its own env vars, runs only in Layer 4, and never gates `just check`.
 
 ## Prompt Versioning
 
@@ -104,22 +108,39 @@ eval runs; the prompt version is the human release label.
 Reports also record model config hash, cases hash, and git commit when
 available. They do not include prompt text or provider secrets.
 
-## Proposed Files
+## Files (current)
 
-- `prompts/agents/price-agent/`: canonical price-agent prompt bundle.
+Prompt bundles:
+
+- `prompts/agents/price-agent/`: canonical price-agent prompt bundle (rendered `rendered.system.md` is the runtime source of truth).
 - `prompts/agents/input-judge/`: mandatory input-judge prompt bundle.
-- `evals/README.md`: how to run evals and read results.
-- `evals/cases/ranking_and_candidates.yaml`: cheapest and full-candidate scenarios.
-- `evals/cases/staleness.yaml`: stale snapshot scenarios.
-- `evals/cases/missing_data_refusal.yaml`: unsupported provider or region scenarios.
-- `evals/cases/provider_scope.yaml`: provider boundary scenarios.
-- `evals/cases/untrusted_content_injection.yaml`: prompt-injection and XML/tag attack scenarios.
-- `evals/cases/judge_classifier.yaml`: input-judge classifier cases.
-- `backend/src/evals/`: Python eval runner and graders.
+
+Eval-case suites under `evals/cases/` (offline, fixture-driven):
+
+- `ranking_and_candidates.yaml`: cheapest and full-candidate scenarios.
+- `staleness.yaml`: stale-snapshot scenarios.
+- `missing_data_refusal.yaml`: unsupported provider/region/shape scenarios.
+- `provider_scope.yaml`: provider-boundary ("big 3") scenarios.
+- `untrusted_content_injection.yaml`: prompt-injection and XML/tag attack scenarios.
+- `prompt_control_refusals.yaml`: prompt/config-leak and role-change refusals.
+- `tool_contract_abuse.yaml`: fake tool result / source-index manipulation.
+- `input_validation_refusals.yaml`: malformed / out-of-contract input handling.
+- `judge_classifier.yaml`: input-judge classifier cases.
+
+Runner and graders (`backend/src/evals/`):
+
+- `runner.py` (orchestration), `cases.py` (YAML loading), `graders.py` (deterministic checks), `replay.py` (canned tool-call/result/AnswerPlan replay through the neutral `Emitter`, no live model), `identity.py` (prompt/config/case hashes for report identity), `__main__.py` (`python -m evals`).
 - `backend/tests/test_prompt_loading.py`: prompt source-of-truth test.
 - `backend/tests/test_eval_graders.py`: deterministic grader tests.
-- `just eval`: fast offline evals using fixtures.
-- `just eval-smoke`: one live model smoke eval.
+
+Commands:
+
+- `just eval` (= `uv run python -m evals`): the offline suite, run in `just check` after unit tests. No model credentials or snapshots required.
+- `just eval-smoke` / `just eval-live`: **not implemented** (see Layer 4). `just smoke` is the only live touchpoint today.
+
+## Coverage gaps (current)
+
+The eval-case suites predate the agentic-comparison work (AG-UI transport, the `set_view`/`select` co-driver tools, the column registry, and view-spec validation with Tier-3 refusal). That behavior is currently covered only by pytest unit tests (`test_view_spec_validation.py`, `test_codriver_tools.py`, `test_agui_transport.py`), not by behavior-named eval cases. Adding eval cases AND a deterministic grader for view-spec validation (unregistered/Tier-3 column rejection) and Tier-3 graceful refusal is open work; `graders.py` does not yet cover the view-spec path.
 
 ## Implemented Slice
 
