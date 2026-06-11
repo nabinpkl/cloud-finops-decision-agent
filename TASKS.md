@@ -55,15 +55,21 @@ validated object. Lean toward folding into `AnswerPlan`.
 
 ## Build order (transport spine first)
 
-1. Transport spine: migrate backend to AG-UI server, swap frontend runtime to
-   `@assistant-ui/react-ag-ui`, prove backend-authoritative state end to end with
-   the current fixed table still rendering, hardening suite green. (R9 -> R2)
-2. Co-driver tools: add `set_view`/`select` alongside `compare`/`lookup`. (R3)
-3. Generative-view contract: `columns.json` registry + declarative view-spec +
-   reject-and-retry validation. (R5 -> R6, R7)
-4. Trust + citation depth: separate-zone badges and full citation depth. (R4, R8)
-5. Docs/ADRs alongside: ADR-0016, ADR-0017, PRD non-goals + product shape.
-   (R1, R11)
+1. [done] Transport spine: backend is an AG-UI server, frontend on
+   `@assistant-ui/react-ag-ui`, backend-authoritative state, hardening green. (R9 -> R2)
+2. [done] Co-driver tools: `set_view`/`select` alongside `compare`/`lookup`. (R3)
+3. [done] Generative-view contract: `columns.json` registry + declarative
+   view-spec + reject-and-retry validation. (R5 -> R6, R7)
+4. [partial] Trust + citation depth: badges + citation fields + excerpt +
+   composite sub-rows + stale badge done; Region column + dimensions_not_normalized
+   remain (R8), and the UI is browser-unverified (R12). (R4, R8)
+5. [partial] Docs/ADRs: ADR-0016, ADR-0017 done; PRD non-goals guardrail
+   remains (R11). (R1, R11)
+
+All merged to `main` at 83051fb. Backward-compat cleanup (legacy commands path
+removed, single ViewSpec concept, 422-on-oversize) landed in the same merge.
+Remaining: R8 (Region column + dimensions surfacing), R11 (PRD guardrail),
+R12 (browser verification), and the carried-forward R26/R35.
 
 Migration caveat: the AG-UI swap must carry the hardening surface across, not
 around it. The XML trust-zone wrapping, body/turn limits, mandatory input judge
@@ -72,16 +78,16 @@ re-verifies the security and budget suites, not just the happy path.
 
 ## Phase A: dual-surface foundation
 
-- [ ] R1. Dual-surface product shape. Deterministic table + sidebar agent
+- [x] R1. Dual-surface product shape (merged 83051fb). Deterministic table + sidebar agent
   co-driver over one shared state. Not a standalone manual dashboard, not
   chat-only. Record the product shape in `PRD.md` and `SPEC.md`. Blocks R2.
-- [ ] R2. Shared view-state contract between table and sidebar. One canonical
+- [x] R2. Shared view-state contract (merged 83051fb). One canonical
   view-state object, two writers (human form + agent). Single snapshot and single
   citation / `data_quality` set shared by both surfaces so they never drift.
   Define snapshot-selection ownership, how an agent tool call writes back to the
   visible filters, and the shape of the state object. Agent mutates the view via
   typed deltas (AG-UI `STATE_DELTA`-style). Blocked by R1, blocks R3.
-- [ ] R3. Agent-as-co-driver rule. The agent's only legal state mutations are:
+- [x] R3. Agent-as-co-driver rule (merged 83051fb). The agent's only legal state mutations are:
   request a deterministic `compare()`/`lookup()` with given args, and
   select/highlight/annotate a verified result row. The agent cannot write any
   price, citation, or instance match into state. Extends AnswerPlan validation
@@ -89,7 +95,7 @@ re-verifies the security and budget suites, not just the happy path.
 
 ## Phase B: the generative-view contract
 
-- [ ] R5. Column registry for agent-decided views. Three tiers:
+- [x] R5. Column registry for agent-decided views (merged 83051fb, `columns.json` + loader). Three tiers:
   - Tier 1, cited source columns: direct fields from a `compare()`/`lookup()`
     result row (provider, instance_type, region canonical + native, vcpu_actual,
     ram_gb_actual, monthly_usd, hourly_usd, considered_count, snapshot age,
@@ -101,16 +107,16 @@ re-verifies the security and budget suites, not just the happy path.
     generation, included storage). Refused, never filled.
   Start with a registered derived-formula whitelist, not an expression language;
   open up only if real queries demand it. Blocks R6 and R7.
-- [ ] R6. Extend AnswerPlan validation to the view spec. Every chosen column must
+- [x] R6. Extend AnswerPlan validation to the view spec (merged 83051fb; one `validate_view_spec_fields` on both the AnswerPlan and state-mutating paths). Every chosen column must
   resolve to a registry entry (Tier-1 field or Tier-2 registered formula), and
   every price-bearing cell must bind to a validated tool-result row. Columns
   outside the registry fail validation and do not render. This makes
   "agent-decided but not agent-invented" enforceable. Blocked by R5.
-- [ ] R7. Tier-3 column refusal UX. A column the snapshot cannot back is shown as
+- [x] R7. Tier-3 column refusal UX (merged 83051fb; `refused_columns` on the unified ViewSpec). A column the snapshot cannot back is shown as
   an explicit refusal ("not normalized / unavailable") or omitted with an
   explanation, never fabricated. Column-level expression of Lane 2 refusal
   behavior; add a matching eval case. Blocked by R5.
-- [ ] R4. Two visual trust tiers. Verified tier (numbers/citations from taxonomy
+- [x] R4. Two visual trust tiers (merged 83051fb, verified vs `derived` badge; browser-unverified, see R12). Verified tier (numbers/citations from taxonomy
   + snapshots, the `Source` primitive, checkable) vs agent-derived tier (judgment
   equivalences not in `families.json`, visually distinct, citing the snapshot
   fields used and naming `dimensions_not_normalized`). Design against authority
@@ -118,14 +124,13 @@ re-verifies the security and budget suites, not just the happy path.
 
 ## Phase C: contract fixes carried from the mockup review
 
-- [ ] R8. Fix citation/contract gaps. The UI citation block must carry the real
-  contract fields: `source_url`, `json_path`, `age_hours`, and a logical
-  `snapshot` ref (ADR-0008), not a bare url/item/currency blob. `json_path` is
-  the verification mechanism and must be present. Add a Region column to the
-  comparison table (canonical + native, per the ComparisonTable spec). Surface
-  `dimensions_not_normalized` in the comparison view. Add a stale-snapshot state
-  treatment (`age_hours > 24`) so Lane 2 staleness is visible. USD-only is v0
-  scope; EUR / multi-currency is out.
+- [ ] R8. Fix citation/contract gaps (PARTIAL, merged 83051fb). DONE: real
+  contract fields (`source_url`, `json_path`, `age_hours`, `snapshot` ref) are
+  rendered, excerpt-on-click hunk, composite sub-rows, and a stale-snapshot badge
+  (`data_quality.overall_status == "stale"`). REMAINING: a per-row Region column
+  (canonical + native, per the ComparisonTable spec) is missing (region only
+  shows as a table subtitle); `dimensions_not_normalized` is not surfaced in the
+  comparison view. USD-only confirmed.
 
 ## Phase D: open decisions (capture as ADRs)
 
@@ -143,6 +148,16 @@ re-verifies the security and budget suites, not just the happy path.
   It does not track the user's own resources, spend, or usage (the
   OpenCost/Kubecost/Vantage/CloudZero space the README excludes). Write this down
   so the agent does not drift into a usage/billing dashboard clone.
+
+## Phase E: verification gate
+
+- [ ] R12. Browser-verify the agentic comparison UI end to end. The merged
+  AG-UI migration + co-driver + trust/citation UI is backend-green (183 tests,
+  eval 294/0) but NOT browser-verified. Run backend + frontend locally and
+  exercise: `ComparisonTable` render from a real query, `STATE_SNAPSHOT`
+  view-state sync, the `set_view` co-driver flow, session-limit banner,
+  excerpt-on-click fetch, composite sub-rows, and the verified-vs-derived trust
+  badges. True done-gate for the UI side of R4 and R8.
 
 ## Carried-forward v0 items (still open, not subsumed)
 
