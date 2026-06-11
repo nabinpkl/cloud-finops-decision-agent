@@ -53,24 +53,82 @@ def test_selection_rejects_unknown_field():
         SelectionSpec.model_validate({"rows": [0], "monthly_usd": 1.0})
 
 
-def test_apply_set_view_mutates_view_state():
-    state = {"view": None, "selection": {"rows": [], "highlight": None}}
-    result = run_set_view(columns=[{"column_id": "provider"}])
-    assert apply_view_tool_result(state, result) is True
+def _fresh_state() -> dict:
+    return {"view": None, "selection": {"rows": [], "highlight": None}}
+
+
+def _rows(n: int) -> list[dict]:
+    return [{"provider": "aws", "instance_type": f"x{i}"} for i in range(n)]
+
+
+def test_apply_set_view_mutates_view_state_when_validated():
+    # A registered column over a row that binds to a validated result.
+    state = _fresh_state()
+    result = run_set_view(
+        columns=[{"column_id": "provider"}], source_result_indices=[0]
+    )
+    assert apply_view_tool_result(state, result, _rows(1)) is True
     view = state["view"]
     assert view is not None
     assert view["columns"][0]["column_id"] == "provider"
 
 
-def test_apply_select_mutates_selection():
-    state = {"view": None, "selection": {"rows": [], "highlight": None}}
+def test_apply_set_view_rejects_tier3_column():
+    # Tier-3 (dimensions_not_normalized) is refused, never filled (ADR-0016).
+    state = _fresh_state()
+    result = run_set_view(
+        columns=[{"column_id": "cpu_generation"}], source_result_indices=[0]
+    )
+    assert apply_view_tool_result(state, result, _rows(1)) is False
+    assert state["view"] is None
+
+
+def test_apply_set_view_rejects_unregistered_column():
+    state = _fresh_state()
+    result = run_set_view(
+        columns=[{"column_id": "fabricated"}], source_result_indices=[0]
+    )
+    assert apply_view_tool_result(state, result, _rows(1)) is False
+    assert state["view"] is None
+
+
+def test_apply_set_view_rejects_unbindable_row():
+    # source_result_indices must bind to a real validated result row.
+    state = _fresh_state()
+    result = run_set_view(
+        columns=[{"column_id": "provider"}], source_result_indices=[5]
+    )
+    assert apply_view_tool_result(state, result, _rows(2)) is False
+    assert state["view"] is None
+
+
+def test_apply_set_view_rejects_unregistered_group_by():
+    state = _fresh_state()
+    result = run_set_view(
+        columns=[{"column_id": "provider"}],
+        group_by="fabricated",
+    )
+    assert apply_view_tool_result(state, result, _rows(1)) is False
+    assert state["view"] is None
+
+
+def test_apply_select_mutates_selection_when_rows_bind():
+    state = _fresh_state()
     result = run_select(rows=[1], highlight=1)
-    assert apply_view_tool_result(state, result) is True
+    assert apply_view_tool_result(state, result, _rows(2)) is True
     assert state["selection"] == {"rows": [1], "highlight": 1}
 
 
+def test_apply_select_rejects_out_of_range_row():
+    # The annotation channel is bound to validated rows too (ADR-0016).
+    state = _fresh_state()
+    result = run_select(rows=[9], highlight=9)
+    assert apply_view_tool_result(state, result, _rows(2)) is False
+    assert state["selection"] == {"rows": [], "highlight": None}
+
+
 def test_apply_ignores_non_codriver_result():
-    state = {"view": None, "selection": {"rows": [], "highlight": None}}
+    state = _fresh_state()
     # A compare tool result must never mutate view-state through this channel.
     assert apply_view_tool_result(state, {"results": [{"monthly_usd": 1.0}]}) is False
     assert state["view"] is None
@@ -78,7 +136,7 @@ def test_apply_ignores_non_codriver_result():
 
 
 def test_apply_ignores_malformed_result():
-    state = {"view": None, "selection": {"rows": [], "highlight": None}}
+    state = _fresh_state()
     assert apply_view_tool_result(state, "not-a-dict") is False
     assert apply_view_tool_result(state, {"kind": "set_view"}) is False
     assert state["view"] is None

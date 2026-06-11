@@ -14,7 +14,7 @@ unchanged.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from ag_ui.core import (
     TextMessageContentEvent,
@@ -30,6 +30,28 @@ from api.assistant_transport.agui.context import AGUIRunContext
 from api.assistant_transport.view_state import apply_view_tool_result
 
 
+def _pricing_result_rows(result: object) -> list[dict[str, Any]] | None:
+    """Extract validated result rows from a compare/lookup tool result.
+
+    Returns the row list when ``result`` looks like a pricing tool result
+    (carries ``results`` and/or ``result``), else None so a non-pricing result
+    (e.g. a set_view echo) does not clobber the binding target.
+    """
+    if not isinstance(result, dict):
+        return None
+    mapping = cast(dict[str, Any], result)
+    if "results" not in mapping and "result" not in mapping:
+        return None
+    rows: list[dict[str, Any]] = []
+    listed = mapping.get("results")
+    if isinstance(listed, list):
+        rows.extend(row for row in listed if isinstance(row, dict))
+    single = mapping.get("result")
+    if isinstance(single, dict):
+        rows.append(single)
+    return rows
+
+
 class AGUIStateEmitter:
     """Emit AG-UI events and mirror content into the view-state message."""
 
@@ -39,6 +61,10 @@ class AGUIStateEmitter:
         self._message_id = f"msg_{uuid.uuid4().hex}"
         self._text_open = False
         self._tool_idx_by_call: dict[str, int] = {}
+        # The latest validated compare/lookup rows: the binding target a
+        # subsequent set_view/select result must reference. set_view can only
+        # show rows that exist here (TASKS R3 / ADR-0016 HARD CONSTRAINT).
+        self._latest_result_rows: list[dict[str, Any]] = []
 
     # --- view-state mirror (identical shape to the prior transport) ---------
 
@@ -106,10 +132,16 @@ class AGUIStateEmitter:
         if idx is not None:
             self._parts()[idx]["result"] = result
             self._parts()[idx]["done"] = True
+        # Track the latest validated compare/lookup rows so a following
+        # set_view/select result can be bound against them.
+        rows = _pricing_result_rows(result)
+        if rows is not None:
+            self._latest_result_rows = rows
         # Co-driver tools mutate the backend-authoritative view-state. The
-        # backend is the only writer; it applies set_view/select results that
-        # already passed the tool's shape validation (TASKS R3).
-        apply_view_tool_result(self._ctx.state, result)
+        # backend is the only writer; a set_view/select result lands in state
+        # ONLY after registry + Tier-3-refusal + row-binding validation passes
+        # against the latest validated result rows (ADR-0016 HARD CONSTRAINT).
+        apply_view_tool_result(self._ctx.state, result, self._latest_result_rows)
         self._ctx.emit_event(
             ToolCallResultEvent(
                 message_id=self._message_id,
