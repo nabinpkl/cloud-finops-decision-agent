@@ -9,11 +9,13 @@ from agent.policy.answer_plan_models import (
     AnswerPlan,
     CandidateClaim,
     CompositeCitation,
+    PlanViewSpec,
     PriceClaim,
     SourceCitation,
     UnmetRequirementClaim,
 )
 from agent.policy.final_answer import PolicyViolation
+from normalize.taxonomy.columns import get_column, is_refused
 
 
 def validate_answer_plan(
@@ -73,6 +75,79 @@ def validate_answer_plan(
         violations.append(
             PolicyViolation("answer_plan_ranking", "price claims must preserve result order")
         )
+
+    if plan.view_spec is not None:
+        violations.extend(_validate_view_spec(plan.view_spec, results))
+    return violations
+
+
+def _validate_view_spec(
+    view: PlanViewSpec,
+    results: list[dict[str, Any]],
+) -> list[PolicyViolation]:
+    """Enforce the generative-view contract (TASKS R6/R7).
+
+    Every chosen column must resolve to a registered Tier-1 field or Tier-2
+    formula; a Tier-3 (refused) or unregistered column rejects the whole plan.
+    Every shown row must bind to a validated tool-result row. Tier-3 columns the
+    user asked for belong in ``refused_columns``, surfaced as an explicit
+    refusal, never rendered.
+    """
+    violations: list[PolicyViolation] = []
+
+    for col in view.columns:
+        entry = get_column(col.column_id)
+        if entry is None:
+            violations.append(
+                PolicyViolation(
+                    "view_spec_unregistered_column",
+                    f"column '{col.column_id}' is not in the column registry",
+                )
+            )
+        elif entry.tier == 3:
+            violations.append(
+                PolicyViolation(
+                    "view_spec_refused_column",
+                    f"column '{col.column_id}' is not normalized and cannot be shown; "
+                    "list it under refused_columns instead",
+                )
+            )
+
+    if view.group_by is not None and get_column(view.group_by) is None:
+        violations.append(
+            PolicyViolation(
+                "view_spec_unregistered_column",
+                f"group_by column '{view.group_by}' is not in the column registry",
+            )
+        )
+    if view.sort is not None and get_column(view.sort.column_id) is None:
+        violations.append(
+            PolicyViolation(
+                "view_spec_unregistered_column",
+                f"sort column '{view.sort.column_id}' is not in the column registry",
+            )
+        )
+
+    # Every shown row binds to a real validated result row.
+    for idx in view.source_result_indices:
+        if _result_at(results, idx) is None:
+            violations.append(
+                PolicyViolation(
+                    "view_spec_row_binding",
+                    f"view row index {idx} does not bind to a validated result",
+                )
+            )
+
+    # refused_columns must actually be Tier-3 (graceful refusal, not a dumping
+    # ground for typos or cited columns).
+    for cid in view.refused_columns:
+        if not is_refused(cid):
+            violations.append(
+                PolicyViolation(
+                    "view_spec_refusal_misuse",
+                    f"refused_columns entry '{cid}' is not a refused (Tier-3) column",
+                )
+            )
     return violations
 
 

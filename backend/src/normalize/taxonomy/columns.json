@@ -1,0 +1,106 @@
+{
+  "_meta": {
+    "purpose": "Registered column vocabulary for agent-decided comparison views (TASKS R5, ADR-0016, ADR-0017). The agent picks columns from this registry; the view-spec validator rejects any column not listed. Three tiers: Tier-1 cited source fields read straight off a validated compare/lookup result row; Tier-2 derived columns that are deterministic functions of cited Tier-1 inputs (each carries its formula + the inputs it cites, like ADR-0007 composite citations); Tier-3 dimensions the snapshot does not normalize (network bandwidth, cpu generation, included storage) which are refused, never filled.",
+    "version": 1
+  },
+  "tier1": {
+    "provider": {
+      "label": "Provider",
+      "source_field": "provider",
+      "kind": "string",
+      "price_bearing": false
+    },
+    "instance_type": {
+      "label": "Instance type",
+      "source_field": "instance_type",
+      "kind": "string",
+      "price_bearing": false
+    },
+    "region_native": {
+      "label": "Region",
+      "source_field": "region_native",
+      "kind": "string",
+      "price_bearing": false
+    },
+    "vcpu_actual": {
+      "label": "vCPU",
+      "source_field": "vcpu_actual",
+      "kind": "int",
+      "price_bearing": false
+    },
+    "ram_gb_actual": {
+      "label": "RAM (GB)",
+      "source_field": "ram_gb_actual",
+      "kind": "float",
+      "price_bearing": false
+    },
+    "monthly_usd": {
+      "label": "$/mo",
+      "source_field": "monthly_usd",
+      "kind": "money",
+      "price_bearing": true
+    },
+    "hourly_usd": {
+      "label": "$/hr",
+      "source_field": "hourly_usd",
+      "kind": "money",
+      "price_bearing": true
+    },
+    "considered_count": {
+      "label": "Candidates considered",
+      "source_field": "considered_count",
+      "kind": "int",
+      "price_bearing": false
+    },
+    "snapshot_age_hours": {
+      "label": "Snapshot age (h)",
+      "source_field": "citation.age_hours",
+      "kind": "float",
+      "price_bearing": false
+    }
+  },
+  "tier2": {
+    "dollar_per_vcpu": {
+      "label": "$/vCPU-mo",
+      "kind": "money",
+      "price_bearing": true,
+      "formula": "monthly_usd / vcpu_actual",
+      "cited_inputs": ["monthly_usd", "vcpu_actual"]
+    },
+    "dollar_per_gb_ram": {
+      "label": "$/GB-RAM-mo",
+      "kind": "money",
+      "price_bearing": true,
+      "formula": "monthly_usd / ram_gb_actual",
+      "cited_inputs": ["monthly_usd", "ram_gb_actual"]
+    },
+    "ram_overshoot_gb": {
+      "label": "RAM overshoot (GB)",
+      "kind": "float",
+      "price_bearing": false,
+      "formula": "ram_gb_actual - ram_gb_requested",
+      "cited_inputs": ["ram_gb_actual"]
+    },
+    "delta_vs_cheapest_usd": {
+      "label": "Δ vs cheapest ($/mo)",
+      "kind": "money",
+      "price_bearing": true,
+      "formula": "monthly_usd - min(monthly_usd)",
+      "cited_inputs": ["monthly_usd"]
+    }
+  },
+  "tier3": {
+    "network_bandwidth": {
+      "label": "Network bandwidth",
+      "reason": "not normalized in the snapshot (dimensions_not_normalized)"
+    },
+    "cpu_generation": {
+      "label": "CPU generation",
+      "reason": "not normalized in the snapshot (dimensions_not_normalized)"
+    },
+    "included_storage": {
+      "label": "Included storage",
+      "reason": "not normalized in the snapshot (dimensions_not_normalized)"
+    }
+  }
+}
