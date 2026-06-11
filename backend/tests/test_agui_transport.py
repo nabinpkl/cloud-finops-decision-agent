@@ -246,30 +246,21 @@ def test_set_view_tool_result_mutates_view_state(monkeypatch: pytest.MonkeyPatch
     assert snapshot["view"]["columns"][0]["column_id"] == "provider"
 
 
-def test_legacy_commands_shape_still_accepted(monkeypatch: pytest.MonkeyPatch):
-    """The prior assistant-ui transport contract (state + commands) keeps working."""
-    import api.assistant_transport.turn as turn_module
+def test_request_without_messages_is_rejected(monkeypatch: pytest.MonkeyPatch):
+    """``messages`` is required: a body with no messages is not a valid turn.
+
+    This pins the clean-cut migration — the legacy ``{commands:[...]}`` shape is
+    gone, so a request carrying only ``commands`` (and no ``messages``) is a 422,
+    not a silently-accepted alternate contract.
+    """
     import api.main as apimain
 
-    monkeypatch.setattr(turn_module, "get_runtime", lambda: TextRuntime("hello"))
     client = TestClient(apimain.app)
-    response = client.post(
+    legacy = client.post(
         "/assistant",
-        json={
-            "commands": [
-                {
-                    "type": "add-message",
-                    "message": {
-                        "role": "user",
-                        "parts": [{"type": "text", "text": "hi"}],
-                    },
-                }
-            ]
-        },
+        json={"commands": [{"type": "add-message", "message": {"role": "user"}}]},
     )
+    assert legacy.status_code == 422
 
-    assert response.status_code == 200
-    types = [e["type"] for e in _sse_events(response.text)]
-    assert types[0] == "RUN_STARTED"
-    assert types[-1] == "RUN_FINISHED"
-    assert "STATE_SNAPSHOT" in types
+    empty = client.post("/assistant", json=_run_agent_input("hi", messages=[]))
+    assert empty.status_code == 422

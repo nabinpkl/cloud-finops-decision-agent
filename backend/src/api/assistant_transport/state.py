@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.assistant_transport.models import (
-    AddMessageCommand,
-    AddToolResultCommand,
-    AGUIMessage,
-    Command,
-)
+from api.assistant_transport.models import AGUIMessage
 from agent.security.untrusted import wrap_assistant_history, wrap_user_request
 from agent.runtime import Turn
 from app_config import settings
@@ -61,34 +56,22 @@ def apply_agui_messages(
     text/part caps, history cap) applies unchanged.
 
     Only ``user`` and ``assistant`` roles become turns; any client-supplied
-    ``system``/``developer``/``tool`` message is dropped here exactly as the
-    legacy path drops a non-user ``add-message`` (the agent's own system prompt
-    is the only trusted instruction). Returns True when the latest turn is a
-    user message — the signal that a new turn should run.
+    ``system``/``developer``/``tool`` message is dropped (the agent's own system
+    prompt is the only trusted instruction). Content length is already capped at
+    parse time (``AGUIMessage`` rejects oversize content with 422), so no
+    truncation happens here. Returns True when the latest turn is a user
+    message — the signal that a new turn should run.
     """
     rebuilt: list[dict[str, Any]] = []
     for msg in messages[-settings.assistant_max_state_messages:]:
         if msg.role not in ("user", "assistant"):
             continue
         text = msg.content if isinstance(msg.content, str) else ""
-        text = text[: settings.assistant_max_text_chars]
         rebuilt.append(
             {"role": msg.role, "parts": [{"type": "text", "text": text}]}
         )
     state["messages"] = rebuilt
     return bool(rebuilt) and rebuilt[-1]["role"] == "user"
-
-
-def apply_commands(state: dict[str, Any], commands: list[Command]) -> bool:
-    triggered_by_user_message = False
-    for cmd in commands:
-        if isinstance(cmd, AddMessageCommand):
-            state["messages"].append(cmd.message.model_dump(exclude_none=True))
-            if cmd.message.role == "user":
-                triggered_by_user_message = True
-        elif isinstance(cmd, AddToolResultCommand):
-            _apply_tool_result(state, cmd)
-    return triggered_by_user_message
 
 
 def build_turns(state: dict[str, Any]) -> list[Turn]:
@@ -122,18 +105,6 @@ def append_session_limit_message(state: dict[str, Any]) -> None:
 def append_assistant_message(state: dict[str, Any]) -> int:
     state["messages"].append({"role": "assistant", "parts": []})
     return len(state["messages"]) - 1
-
-
-def _apply_tool_result(state: dict[str, Any], cmd: AddToolResultCommand) -> None:
-    messages = state["messages"]
-    if not messages:
-        return
-    last_idx = len(messages) - 1
-    for i, part in enumerate(messages[last_idx].get("parts", [])):
-        if part.get("toolCallId") == cmd.toolCallId:
-            messages[last_idx]["parts"][i]["result"] = cmd.result
-            messages[last_idx]["parts"][i]["done"] = True
-            break
 
 
 def _message_text(message: dict[str, Any]) -> str:

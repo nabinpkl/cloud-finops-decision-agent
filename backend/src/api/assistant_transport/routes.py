@@ -2,8 +2,7 @@
 
 ``POST /assistant`` accepts an AG-UI ``RunAgentInput`` body (the shape
 ``@ag-ui/client``'s ``HttpAgent`` sends: ``{threadId, runId, state, messages,
-tools, context, forwardedProps}`` with the user's text in ``messages``) and
-also the legacy ``{state, commands:[...]}`` shape for the prior transport. It
+tools, context, forwardedProps}`` with the user's text in ``messages``). It
 emits AG-UI protocol events over Server-Sent Events: ``RUN_STARTED``, the
 streamed text/tool events for the turn, a final ``STATE_SNAPSHOT`` carrying the
 backend-authoritative view-state, and ``RUN_FINISHED``. The agent runtime port
@@ -31,7 +30,6 @@ from api.assistant_transport.agui import AGUIRunContext
 from api.assistant_transport.models import AssistantRequest
 from api.assistant_transport.state import (
     apply_agui_messages,
-    apply_commands,
     history_text_length,
     prepare_incoming_state,
 )
@@ -50,14 +48,9 @@ async def assistant_endpoint(
     session_id = request.cookies.get(settings.session_cookie_name) or new_session_id()
     hashed_id = getattr(request.state, "hashed_client_id", "") or ""
     state = prepare_incoming_state(body.state)
-    # The shipped AG-UI frontend sends ``messages`` (RunAgentInput); the legacy
-    # assistant-ui transport sends ``commands``. The backend is authoritative
-    # over view-state either way; ``messages`` is preferred when present because
-    # it is the full conversation the AG-UI client maintains.
-    if body.messages is not None:
-        triggered_by_user_message = apply_agui_messages(state, body.messages)
-    else:
-        triggered_by_user_message = apply_commands(state, body.commands or [])
+    # The frontend sends the full conversation in ``messages`` (RunAgentInput).
+    # The backend is authoritative over view-state; messages only seed the turn.
+    triggered_by_user_message = apply_agui_messages(state, body.messages)
     if history_text_length(state) > settings.assistant_max_history_chars:
         raise HTTPException(
             status_code=422,

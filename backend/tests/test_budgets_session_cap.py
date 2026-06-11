@@ -34,22 +34,24 @@ def caps_low(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def _user_msg(text: str) -> dict:
-    return {
-        "type": "add-message",
-        "message": {"role": "user", "parts": [{"type": "text", "text": text}]},
-    }
+    """One AG-UI ``RunAgentInput.messages[]`` user entry."""
+    return {"role": "user", "content": text}
+
+
+def _body(*messages: dict) -> dict:
+    return {"messages": list(messages)}
 
 
 def test_first_request_sets_session_cookie(caps_low):
     import api.main as apimain
 
     with patch("api.assistant_transport.turn.get_runtime") as get_rt:
-        # Runtime isn't obtained because state will lack a user message;
-        # but the cookie is set on the response regardless.
+        # A trailing assistant message is not a turn trigger, so the runtime is
+        # never obtained; the session cookie is set on the response regardless.
         client = TestClient(apimain.app)
         r = client.post(
             "/assistant",
-            json={"commands": []},
+            json=_body({"role": "assistant", "content": "prior"}),
         )
     assert r.status_code == 200
     assert settings.session_cookie_name in r.cookies
@@ -68,7 +70,7 @@ def test_session_over_cap_returns_terminal_banner(caps_low):
     with patch("api.assistant_transport.turn.get_runtime") as get_rt:
         r = client.post(
             "/assistant",
-            json={"commands": [_user_msg("hello")]},
+            json=_body(_user_msg("hello")),
         )
 
     assert r.status_code == 200
