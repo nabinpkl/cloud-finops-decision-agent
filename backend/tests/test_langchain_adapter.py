@@ -161,7 +161,8 @@ def test_structured_response_is_emitted_as_answer_plan_json():
             "text",
             (
                 '{"answer_type":"refusal","price_claims":[],"candidate_claims":[]'
-                ',"unmet_requirements":[],"refusal_reason":"out_of_scope"}'
+                ',"unmet_requirements":[],"refusal_reason":"out_of_scope"'
+                ',"view_spec":null}'
             ),
         )
     ]

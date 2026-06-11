@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agent.tools.view_models import ViewSpec
+
 
 class AnswerPlanModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -59,3 +61,8 @@ class AnswerPlan(AnswerPlanModel):
     candidate_claims: list[CandidateClaim] = Field(default_factory=list)
     unmet_requirements: list[UnmetRequirementClaim] = Field(default_factory=list)
     refusal_reason: str | None = None
+    # The declarative view the agent chose, the same ``ViewSpec`` the ``set_view``
+    # tool emits (single view-spec concept). Folding it into the AnswerPlan means
+    # one validator covers both claims and view (TASKS R5/R6); columns must
+    # resolve to the column registry and shown rows must bind to validated rows.
+    view_spec: ViewSpec | None = None

@@ -14,6 +14,8 @@ from agent.policy.answer_plan_models import (
     UnmetRequirementClaim,
 )
 from agent.policy.final_answer import PolicyViolation
+from agent.tools.view_models import ViewSpec
+from normalize.taxonomy.columns import get_column, is_refused
 
 
 def validate_answer_plan(
@@ -73,6 +75,111 @@ def validate_answer_plan(
         violations.append(
             PolicyViolation("answer_plan_ranking", "price claims must preserve result order")
         )
+
+    if plan.view_spec is not None:
+        violations.extend(_validate_view_spec(plan.view_spec, results))
+    return violations
+
+
+def _validate_view_spec(
+    view: ViewSpec,
+    results: list[dict[str, Any]],
+) -> list[PolicyViolation]:
+    """Enforce the generative-view contract on a ViewSpec (TASKS R6/R7).
+
+    Thin adapter over :func:`validate_view_spec_fields`, the single source of
+    truth shared with the ``set_view`` tool-result path that mutates the
+    backend-authoritative view-state. Folding both representations through one
+    validator means the spec that lands in ``state['view']`` is validated by the
+    same rules that gate the rendered prose.
+    """
+    return validate_view_spec_fields(
+        columns=[col.column_id for col in view.columns],
+        group_by=view.group_by,
+        sort_column=view.sort.column_id if view.sort is not None else None,
+        source_result_indices=view.source_result_indices,
+        refused_columns=view.refused_columns,
+        results=results,
+    )
+
+
+def validate_view_spec_fields(
+    *,
+    columns: list[str],
+    group_by: str | None,
+    sort_column: str | None,
+    source_result_indices: list[int],
+    refused_columns: list[str],
+    results: list[dict[str, Any]],
+) -> list[PolicyViolation]:
+    """Registry + Tier-3-refusal + row-binding validation for any view spec.
+
+    Every chosen column must resolve to a registered Tier-1 field or Tier-2
+    formula; a Tier-3 (refused) or unregistered column rejects the whole spec.
+    Every shown row index must bind to a validated tool-result row. Tier-3
+    columns the user asked for belong in ``refused_columns`` (graceful refusal,
+    never rendered). This is the one validator both the AnswerPlan view-spec
+    (gates rendered prose) and the ``set_view`` tool result (gates the
+    backend-authoritative ``state['view']`` mutation) call, so "backend writes
+    state ONLY from validated results" holds on the path that actually mutates
+    state.
+    """
+    violations: list[PolicyViolation] = []
+
+    for column_id in columns:
+        entry = get_column(column_id)
+        if entry is None:
+            violations.append(
+                PolicyViolation(
+                    "view_spec_unregistered_column",
+                    f"column '{column_id}' is not in the column registry",
+                )
+            )
+        elif entry.tier == 3:
+            violations.append(
+                PolicyViolation(
+                    "view_spec_refused_column",
+                    f"column '{column_id}' is not normalized and cannot be shown; "
+                    "list it under refused_columns instead",
+                )
+            )
+
+    if group_by is not None and get_column(group_by) is None:
+        violations.append(
+            PolicyViolation(
+                "view_spec_unregistered_column",
+                f"group_by column '{group_by}' is not in the column registry",
+            )
+        )
+    if sort_column is not None and get_column(sort_column) is None:
+        violations.append(
+            PolicyViolation(
+                "view_spec_unregistered_column",
+                f"sort column '{sort_column}' is not in the column registry",
+            )
+        )
+
+    # Every shown row binds to a real validated result row. A negative index
+    # would silently wrap with Python slicing semantics, so reject it explicitly.
+    for idx in source_result_indices:
+        if idx < 0 or _result_at(results, idx) is None:
+            violations.append(
+                PolicyViolation(
+                    "view_spec_row_binding",
+                    f"view row index {idx} does not bind to a validated result",
+                )
+            )
+
+    # refused_columns must actually be Tier-3 (graceful refusal, not a dumping
+    # ground for typos or cited columns).
+    for cid in refused_columns:
+        if not is_refused(cid):
+            violations.append(
+                PolicyViolation(
+                    "view_spec_refusal_misuse",
+                    f"refused_columns entry '{cid}' is not a refused (Tier-3) column",
+                )
+            )
     return violations
 
 

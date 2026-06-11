@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.assistant_transport.models import (
-    AddMessageCommand,
-    AddToolResultCommand,
-    Command,
-)
+from api.assistant_transport.models import AGUIMessage
 from agent.security.untrusted import wrap_assistant_history, wrap_user_request
 from agent.runtime import Turn
 from app_config import settings
@@ -19,6 +15,19 @@ SESSION_LIMIT_MESSAGE = (
 )
 
 
+def default_view_state() -> dict[str, Any]:
+    """The backend-authoritative view-state seed (ADR-0016 decision 3).
+
+    The agent and the manual form both mutate this through the backend; the
+    table renders ``view`` (declarative spec: columns/layout/grouping) and
+    ``selection`` (annotations). Empty until a validated tool result populates
+    it. The backend never trusts a client-supplied ``view``/``selection``;
+    those are reset to defaults on every incoming request so the agent and
+    deterministic layer remain the only writers of view-state.
+    """
+    return {"view": None, "selection": {"rows": [], "highlight": None}}
+
+
 def prepare_incoming_state(raw_state: dict[str, Any] | None) -> dict[str, Any]:
     state = raw_state or {"messages": []}
     state.setdefault("messages", [])
@@ -27,19 +36,42 @@ def prepare_incoming_state(raw_state: dict[str, Any] | None) -> dict[str, Any]:
     state["messages"] = state["messages"][-settings.assistant_max_state_messages:]
     # Round-tripped state is UI scaffolding. Enforcement flags are backend-owned.
     state.pop("sessionLimitReached", None)
+    # View-state is backend-authoritative: discard any client-supplied view or
+    # selection and reseed from defaults. Only validated agent/form mutations
+    # may write these fields.
+    state.update(default_view_state())
     return state
 
 
-def apply_commands(state: dict[str, Any], commands: list[Command]) -> bool:
-    triggered_by_user_message = False
-    for cmd in commands:
-        if isinstance(cmd, AddMessageCommand):
-            state["messages"].append(cmd.message.model_dump(exclude_none=True))
-            if cmd.message.role == "user":
-                triggered_by_user_message = True
-        elif isinstance(cmd, AddToolResultCommand):
-            _apply_tool_result(state, cmd)
-    return triggered_by_user_message
+def apply_agui_messages(
+    state: dict[str, Any], messages: list[AGUIMessage]
+) -> bool:
+    """Seed conversation state from an AG-UI ``RunAgentInput.messages`` array.
+
+    The AG-UI ``HttpAgent`` (the shipped frontend) sends the full conversation
+    in ``messages`` rather than the legacy ``commands`` shape. Each AG-UI
+    message carries ``{role, content}`` with ``content`` a plain string for
+    user/assistant turns. We rebuild ``state['messages']`` in the internal
+    parts shape so the same hardening surface (``build_turns`` XML wrapping,
+    text/part caps, history cap) applies unchanged.
+
+    Only ``user`` and ``assistant`` roles become turns; any client-supplied
+    ``system``/``developer``/``tool`` message is dropped (the agent's own system
+    prompt is the only trusted instruction). Content length is already capped at
+    parse time (``AGUIMessage`` rejects oversize content with 422), so no
+    truncation happens here. Returns True when the latest turn is a user
+    message — the signal that a new turn should run.
+    """
+    rebuilt: list[dict[str, Any]] = []
+    for msg in messages[-settings.assistant_max_state_messages:]:
+        if msg.role not in ("user", "assistant"):
+            continue
+        text = msg.content if isinstance(msg.content, str) else ""
+        rebuilt.append(
+            {"role": msg.role, "parts": [{"type": "text", "text": text}]}
+        )
+    state["messages"] = rebuilt
+    return bool(rebuilt) and rebuilt[-1]["role"] == "user"
 
 
 def build_turns(state: dict[str, Any]) -> list[Turn]:
@@ -73,18 +105,6 @@ def append_session_limit_message(state: dict[str, Any]) -> None:
 def append_assistant_message(state: dict[str, Any]) -> int:
     state["messages"].append({"role": "assistant", "parts": []})
     return len(state["messages"]) - 1
-
-
-def _apply_tool_result(state: dict[str, Any], cmd: AddToolResultCommand) -> None:
-    messages = state["messages"]
-    if not messages:
-        return
-    last_idx = len(messages) - 1
-    for i, part in enumerate(messages[last_idx].get("parts", [])):
-        if part.get("toolCallId") == cmd.toolCallId:
-            messages[last_idx]["parts"][i]["result"] = cmd.result
-            messages[last_idx]["parts"][i]["done"] = True
-            break
 
 
 def _message_text(message: dict[str, Any]) -> str:

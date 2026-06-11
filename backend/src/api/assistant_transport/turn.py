@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from assistant_stream import RunController
-
-from api.assistant_transport.emitter import StateEmitter
+from api.assistant_transport.agui import AGUIRunContext, AGUIStateEmitter
 from api.assistant_transport.policy_emitter import PolicyEmitter
 from api.assistant_transport.state import (
     append_assistant_message,
@@ -26,7 +24,7 @@ from agent.guardrails.input import run_input_guardrail
 
 
 async def run_agent_turn(
-    controller: RunController,
+    controller: AGUIRunContext,
     *,
     session_id: str,
     hashed_id: str,
@@ -87,15 +85,16 @@ async def run_agent_turn(
             )
             if guardrail.decision.action != "allow":
                 msg = append_assistant_message(controller.state)
-                state_emitter = StateEmitter(controller, msg)
+                state_emitter = AGUIStateEmitter(controller, msg)
                 state_emitter.text_delta(
                     guardrail.decision.public_message
                     or "I cannot safely process that request in this public pricing agent."
                 )
+                state_emitter.close_text()
                 return
 
             msg = append_assistant_message(controller.state)
-            state_emitter = StateEmitter(controller, msg)
+            state_emitter = AGUIStateEmitter(controller, msg)
             emitter = PolicyEmitter(state_emitter)
             runtime = get_runtime()
             await runtime.run(turns, emitter, run_usage)
@@ -105,6 +104,7 @@ async def run_agent_turn(
                     "finops.policy.final_answer.violations",
                     "; ".join(emitter.violations),
                 )
+            state_emitter.close_text()
         except TurnTokenCapExceeded as exc:
             record_exception(turn_span, exc)
             set_error_status(turn_span, exc)
@@ -113,6 +113,7 @@ async def run_agent_turn(
             emitter.discard_text()
             emitter.text_delta(f"\n\n[turn stopped: {exc}]")
             emitter.flush_unchecked()
+            state_emitter.close_text()
         except Exception as exc:
             record_exception(turn_span, exc)
             set_error_status(turn_span, exc)
@@ -121,6 +122,7 @@ async def run_agent_turn(
                 "\n\nThe agent hit an internal error. Try again later."
             )
             emitter.flush_unchecked()
+            state_emitter.close_text()
         finally:
             if run_usage.total:
                 record_usage(

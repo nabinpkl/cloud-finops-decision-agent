@@ -12,9 +12,20 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      // AG-UI transport: the HttpAgent POSTs to /assistant (no subpath).
+      {
+        source: "/assistant",
+        destination: `${backendOrigin}/assistant`,
+      },
       {
         source: "/assistant/:path*",
         destination: `${backendOrigin}/assistant/:path*`,
+      },
+      // Citation excerpt-on-click verification hunk (ADR-0008): same-origin so
+      // the browser never holds the backend URL.
+      {
+        source: "/citation/:path*",
+        destination: `${backendOrigin}/citation/:path*`,
       },
     ];
   },

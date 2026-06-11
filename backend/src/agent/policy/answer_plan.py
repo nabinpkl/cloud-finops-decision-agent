@@ -24,6 +24,7 @@ from agent.policy.answer_plan_models import (
 from agent.policy.answer_plan_parser import parse_answer_plan, render_checked_answer_plan
 from agent.policy.answer_plan_rendering import render_answer_plan
 from agent.policy.answer_plan_validation import validate_answer_plan
+from agent.tools.view_models import ViewSpec
 
 __all__ = [
     "AnswerPlan",
@@ -34,6 +35,7 @@ __all__ = [
     "SnapshotRef",
     "SourceCitation",
     "UnmetRequirementClaim",
+    "ViewSpec",
     "parse_answer_plan",
     "render_answer_plan",
     "render_checked_answer_plan",

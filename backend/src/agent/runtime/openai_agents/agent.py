@@ -19,7 +19,11 @@ from openai import AsyncOpenAI
 from app_config import settings
 from app_config.model_config import model_config as llm_model_config
 from agent.runtime.prompt import INSTRUCTIONS
-from agent.runtime.openai_agents.tools import compare as compare_tool
+from agent.runtime.openai_agents.tools import (
+    compare as compare_tool,
+    select as select_tool,
+    set_view as set_view_tool,
+)
 
 
 def build_model() -> OpenAIChatCompletionsModel:
@@ -56,5 +60,5 @@ def build_agent() -> Agent:
             include_usage=llm_model_config.main.request.stream_usage,
             extra_body=llm_model_config.main.request.extra_body.as_request_body(),
         ),
-        tools=[compare_tool],
+        tools=[compare_tool, set_view_tool, select_tool],
     )

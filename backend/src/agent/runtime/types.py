@@ -80,9 +80,10 @@ class RunUsage:
 @runtime_checkable
 class Emitter(Protocol):
     """How a runtime streams output back to transport. The implementation
-    (`StateEmitter` in `api/assistant_transport/emitter.py`) maps each call onto an assistant-ui
-    native part on the round-tripped state. Runtimes call these verbs; they
-    never touch `controller.state` directly."""
+    (`AGUIStateEmitter` in `api/assistant_transport/agui/emitter.py`) maps each
+    call onto AG-UI wire events and mirrors the content into the
+    backend-authoritative view-state. Runtimes call these verbs; they never
+    touch the transport state directly."""
 
     def text_delta(self, text: str) -> None:
         """Append assistant text. Consecutive deltas coalesce into one text part."""

@@ -94,7 +94,6 @@ class Settings(BaseSettings):
     # so anonymous callers cannot use round-tripped UI state as unbounded prompt
     # or memory input.
     assistant_max_body_bytes: int = 262_144
-    assistant_max_commands: int = 8
     assistant_max_state_messages: int = 24
     assistant_max_message_parts: int = 16
     assistant_max_text_chars: int = 8_000

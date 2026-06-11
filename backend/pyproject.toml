@@ -13,6 +13,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
+    "ag-ui-protocol>=0.1.19",
     "assistant-stream>=0.0.32",
     "fastapi[standard]>=0.136.3",
     "httpx>=0.28",

@@ -292,6 +292,16 @@ Two JSON files in `backend/src/normalize/taxonomy/`, editable in PRs, readable b
 
 The normalization layer accepts either form on input. Output always carries the provider-native code in `region_native` so the agent can quote it back exactly.
 
+### `columns.json`
+
+The registered column vocabulary for agent-decided comparison views (ADR-0016, ADR-0017). It sits beside `families.json`/`regions.json` and is read at runtime by `normalize.taxonomy.columns`. Three tiers:
+
+- **Tier-1 (cited source fields):** read straight off a validated `compare`/`lookup` result row. Each entry carries `label`, `source_field` (the result key, e.g. `monthly_usd` or the nested `citation.age_hours`), `kind`, and `price_bearing`.
+- **Tier-2 (derived columns):** deterministic functions of cited Tier-1 inputs (`$/vCPU`, `$/GB-RAM`, RAM overshoot, delta-vs-cheapest). Each carries its `formula` plus the `cited_inputs` it depends on, mirroring the ADR-0007 composite-citation provenance pattern. Whitelisted formulas, not an expression language.
+- **Tier-3 (refused):** `dimensions_not_normalized` (network bandwidth, CPU generation, included storage). Each carries a `reason`. These are never filled; an explicit ask is a graceful refusal that offers the closest cited columns.
+
+The agent picks columns from this registry through the `set_view` tool / `AnswerPlan.view_spec`. One validator (`agent.policy.answer_plan_validation.validate_view_spec_fields`) backs both paths: a chosen column that is unregistered or Tier-3, or a shown row that does not bind to a validated result, rejects the spec. On the `AnswerPlan.view_spec` path this rejects the whole rendered plan; on the `set_view` tool path the failing result is dropped and `state['view']` is left untouched, so an unvalidated view can never reach the broadcast `STATE_SNAPSHOT`. The `select` tool's row/highlight indices are bound the same way against the latest validated result rows. This is what makes views "agent-decided but not agent-invented", and it is enforced on the path that actually mutates the backend-authoritative view-state.
+
 ## Agent runtime and UI surface
 
 Per ADR-0009 and ADR-0012 the agent loop runs server-side in FastAPI behind `agent.runtime.AgentRuntime`. The default runtime is `langchain`, implemented as a lean LangChain `create_agent` adapter; the OpenAI Agents SDK runtime remains available through `AGENT_RUNTIME=openai_agents`. The model is built against an OpenAI-compatible base URL, so the provider is a `.env` knob (`PROVIDER_BASE_URL`, `PROVIDER_API_KEY`, `MODEL_NAME`), not a hardcoded vendor. The agent's tool calls route through `agent.tools.pricing.run_compare`, which calls `normalize.compare` in-process; the `normalize.wire` translation (drop `store_path`, add a `snapshot` ref) is shared with the HTTP endpoints. FastAPI exposes `POST /assistant` implementing the assistant-transport protocol.

@@ -4,6 +4,7 @@ import { makeAssistantToolUI } from "@assistant-ui/react";
 import { LoaderIcon } from "lucide-react";
 
 import { CitationAge, CitationSource } from "@/components/tools/citation-cells";
+import { CitationExcerpt } from "@/components/tools/citation-excerpt";
 import type {
   CompareArgs,
   CompareResult,
@@ -68,6 +69,100 @@ function Skeleton({ args }: { args: CompareArgs }) {
   );
 }
 
+// Two visual trust tiers (TASKS R4). The verified tier is a plain cell whose
+// number is checkable through the Source primitive + excerpt-on-click. The
+// agent-derived tier (synthesized GCP/Oracle rates composed from separate rate
+// SKUs) is badged distinctly so a glance tells checkable apart from composed.
+function DerivedBadge({ formula }: { formula?: string }) {
+  return (
+    <span
+      className="bg-amber-500/10 text-amber-700 dark:text-amber-400 ml-1.5 cursor-help rounded px-1.5 py-0.5 text-[10px] font-medium"
+      title={
+        formula
+          ? `agent-derived: composed from cited rate SKUs (${formula})`
+          : "agent-derived: composed from cited rate SKUs"
+      }
+    >
+      derived
+    </span>
+  );
+}
+
+type CompareRowType = NonNullable<CompareResult["results"]>[number];
+
+function ResultRows({
+  row,
+  rank,
+  isSynth,
+}: {
+  row: CompareRowType;
+  rank: number;
+  isSynth: boolean;
+}) {
+  const composite = row.citation?.composite ?? [];
+  return (
+    <>
+      <tr className="border-t align-top">
+        <td className="px-3 py-2">
+          <RankCell rank={rank} />
+        </td>
+        <td className="px-3 py-2 font-medium">{providerLabel(row.provider)}</td>
+        <td className="px-3 py-2">
+          {row.instance_type}
+          {isSynth && <DerivedBadge formula={row.citation?.synthesis?.formula} />}
+        </td>
+        <td className="px-3 py-2 text-right">{row.vcpu_actual ?? "-"}</td>
+        <td className="px-3 py-2 text-right">{gb(row.ram_gb_actual)}</td>
+        <td className="px-3 py-2 text-right">{usd(row.hourly_usd)}</td>
+        <td className="px-3 py-2 text-right font-semibold">
+          {usd(row.monthly_usd)}
+        </td>
+        <td className="px-3 py-2">
+          <CitationAge citation={row.citation} />
+        </td>
+        <td className="px-3 py-2">
+          <div className="flex items-center gap-2">
+            <CitationSource citation={row.citation} />
+            <CitationExcerpt citation={row.citation} />
+          </div>
+        </td>
+      </tr>
+      {/* Composite sub-rows: each cited rate SKU that composed the synthesized
+          price, independently verifiable (ADR-0007, TASKS R8). */}
+      {composite.map((entry, j) => (
+        <tr
+          key={`${row.provider}-${row.instance_type}-sub-${j}`}
+          className="bg-muted/30 text-muted-foreground align-top text-xs"
+        >
+          <td className="px-3 py-1.5" />
+          <td className="px-3 py-1.5" />
+          <td className="px-3 py-1.5 pl-6" colSpan={4}>
+            ↳ {entry.rate_unit ?? "rate"}
+            {typeof entry.rate === "number" ? ` @ $${entry.rate}` : ""}
+            {typeof entry.quantity === "number" ? ` × ${entry.quantity}` : ""}
+          </td>
+          <td className="px-3 py-1.5 text-right">
+            {typeof entry.contribution_usd === "number"
+              ? `$${entry.contribution_usd.toFixed(2)}`
+              : "-"}
+          </td>
+          <td className="px-3 py-1.5" />
+          <td className="px-3 py-1.5">
+            <CitationExcerpt
+              citation={{
+                json_path: entry.json_path,
+                source_url: entry.source_url,
+                snapshot: entry.snapshot,
+                age_hours: entry.age_hours,
+              }}
+            />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 const ComparisonTableImpl = ({
   args,
   result,
@@ -128,41 +223,15 @@ const ComparisonTableImpl = ({
             </thead>
             <tbody>
               {rows.map((row, i) => {
+                const composite = row.citation?.composite ?? [];
+                const isSynth = Boolean(row.synthesized) || composite.length > 0;
                 return (
-                  <tr
+                  <ResultRows
                     key={`${row.provider}-${row.instance_type}-${i}`}
-                    className="border-t align-top"
-                  >
-                    <td className="px-3 py-2">
-                      <RankCell rank={i + 1} />
-                    </td>
-                    <td className="px-3 py-2 font-medium">
-                      {providerLabel(row.provider)}
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.instance_type}
-                      {row.synthesized && row.citation?.synthesis?.formula && (
-                        <span
-                          className="text-muted-foreground ml-1 cursor-help"
-                          title={`synthesized: ${row.citation.synthesis.formula}`}
-                        >
-                          (synth)
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right">{row.vcpu_actual ?? "-"}</td>
-                    <td className="px-3 py-2 text-right">{gb(row.ram_gb_actual)}</td>
-                    <td className="px-3 py-2 text-right">{usd(row.hourly_usd)}</td>
-                    <td className="px-3 py-2 text-right font-semibold">
-                      {usd(row.monthly_usd)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <CitationAge citation={row.citation} />
-                    </td>
-                    <td className="px-3 py-2">
-                      <CitationSource citation={row.citation} />
-                    </td>
-                  </tr>
+                    row={row}
+                    rank={i + 1}
+                    isSynth={isSynth}
+                  />
                 );
               })}
             </tbody>
