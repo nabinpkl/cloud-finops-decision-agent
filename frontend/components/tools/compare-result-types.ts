@@ -4,6 +4,13 @@ export type CitationConstituent = {
   source_url?: string;
   age_hours?: number;
   rate_unit?: string;
+  // Composite sub-row provenance (ADR-0007): each constituent of a synthesized
+  // GCP/Oracle rate carries its own rate/quantity/contribution and citation.
+  json_path?: string;
+  rate?: number;
+  quantity?: number;
+  contribution_usd?: number;
+  snapshot?: { provider: string; snapshot_iso: string; filename: string };
 };
 
 export type Citation = {
