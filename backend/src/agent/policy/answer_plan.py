@@ -16,30 +16,26 @@ from agent.policy.answer_plan_models import (
     AnswerPlanModel,
     CandidateClaim,
     CompositeCitation,
-    PlanViewSpec,
     PriceClaim,
     SnapshotRef,
     SourceCitation,
     UnmetRequirementClaim,
-    ViewColumn,
-    ViewSort,
 )
 from agent.policy.answer_plan_parser import parse_answer_plan, render_checked_answer_plan
 from agent.policy.answer_plan_rendering import render_answer_plan
 from agent.policy.answer_plan_validation import validate_answer_plan
+from agent.tools.view_models import ViewSpec
 
 __all__ = [
     "AnswerPlan",
     "AnswerPlanModel",
     "CandidateClaim",
     "CompositeCitation",
-    "PlanViewSpec",
     "PriceClaim",
     "SnapshotRef",
     "SourceCitation",
     "UnmetRequirementClaim",
-    "ViewColumn",
-    "ViewSort",
+    "ViewSpec",
     "parse_answer_plan",
     "render_answer_plan",
     "render_checked_answer_plan",

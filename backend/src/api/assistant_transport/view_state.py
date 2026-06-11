@@ -67,15 +67,16 @@ def _apply_set_view(
     indices = [
         idx for idx in view.get("source_result_indices", []) if isinstance(idx, int)
     ]
+    refused = [c for c in view.get("refused_columns", []) if isinstance(c, str)]
     violations = validate_view_spec_fields(
         columns=columns,
         group_by=view.get("group_by"),
         sort_column=sort_column,
         source_result_indices=indices,
-        # ViewSpec (the tool shape) has no refused_columns field; refusal lives
-        # on the AnswerPlan view-spec path. Pass empty so the validator does not
-        # invent one.
-        refused_columns=[],
+        # ViewSpec carries refused_columns (Tier-3 the user asked for); the same
+        # validator that gates the AnswerPlan path checks they are genuinely
+        # Tier-3, so the set_view path and the prose path enforce one rule.
+        refused_columns=refused,
         results=rows,
     )
     if violations:

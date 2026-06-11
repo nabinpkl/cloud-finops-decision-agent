@@ -60,6 +60,10 @@ class ViewSpec(BaseModel):
     # Indices into the latest validated tool result's ``results`` list. Every row
     # the view shows must bind to a real result row (enforced in step 3).
     source_result_indices: list[int] = Field(default_factory=list, max_length=64)
+    # Tier-3 columns the user asked for that the snapshot cannot back. The agent
+    # surfaces these as an explicit refusal instead of fabricating them (R7).
+    # Validated to be genuinely Tier-3, then rendered as a refusal, never filled.
+    refused_columns: list[str] = Field(default_factory=list, max_length=16)
 
 
 class SelectionSpec(BaseModel):

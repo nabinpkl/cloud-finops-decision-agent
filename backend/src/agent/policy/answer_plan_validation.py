@@ -9,12 +9,12 @@ from agent.policy.answer_plan_models import (
     AnswerPlan,
     CandidateClaim,
     CompositeCitation,
-    PlanViewSpec,
     PriceClaim,
     SourceCitation,
     UnmetRequirementClaim,
 )
 from agent.policy.final_answer import PolicyViolation
+from agent.tools.view_models import ViewSpec
 from normalize.taxonomy.columns import get_column, is_refused
 
 
@@ -82,10 +82,10 @@ def validate_answer_plan(
 
 
 def _validate_view_spec(
-    view: PlanViewSpec,
+    view: ViewSpec,
     results: list[dict[str, Any]],
 ) -> list[PolicyViolation]:
-    """Enforce the generative-view contract on a PlanViewSpec (TASKS R6/R7).
+    """Enforce the generative-view contract on a ViewSpec (TASKS R6/R7).
 
     Thin adapter over :func:`validate_view_spec_fields`, the single source of
     truth shared with the ``set_view`` tool-result path that mutates the
