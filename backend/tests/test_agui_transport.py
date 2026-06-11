@@ -1,9 +1,12 @@
 """AG-UI transport spine (ADR-0016).
 
-The backend is an AG-UI server: ``POST /assistant`` streams AG-UI protocol
+The backend is an AG-UI server: ``POST /assistant`` accepts an AG-UI
+``RunAgentInput`` body (the shape ``@ag-ui/client``'s ``HttpAgent`` sends — the
+user's text in ``messages``, no ``commands`` field) and streams AG-UI protocol
 events (``RUN_STARTED`` / text+tool events / ``STATE_SNAPSHOT`` / ``RUN_FINISHED``)
-over SSE, carrying the backend-authoritative view-state. These tests verify the
-wire shape and the state channel; the hardening-surface contracts are covered in
+over SSE, carrying the backend-authoritative view-state. These tests post the
+real RunAgentInput shape the shipped frontend sends and verify the wire shape
+and the state channel; the hardening-surface contracts are covered in
 ``test_assistant_transport_security.py`` and the budget suites, which run
 against the same migrated endpoint.
 """
@@ -11,6 +14,7 @@ against the same migrated endpoint.
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -23,11 +27,26 @@ from agent.runtime import Emitter, RunUsage, Turn
 from app_config import settings
 
 
-def _user_msg(text: str) -> dict:
-    return {
-        "type": "add-message",
-        "message": {"role": "user", "parts": [{"type": "text", "text": text}]},
+def _run_agent_input(text: str, **extra) -> dict:
+    """Build the AG-UI ``RunAgentInput`` body the shipped frontend POSTs.
+
+    Matches ``@ag-ui/client`` ``HttpAgent``: ``{threadId, runId, state,
+    messages, tools, context, forwardedProps}`` with the user's text inside a
+    ``messages[]`` entry (``{id, role, content}``) and NO ``commands`` field.
+    """
+    body = {
+        "threadId": f"thread_{uuid.uuid4().hex}",
+        "runId": f"run_{uuid.uuid4().hex}",
+        "state": {},
+        "messages": [
+            {"id": f"msg_{uuid.uuid4().hex}", "role": "user", "content": text}
+        ],
+        "tools": [],
+        "context": [],
+        "forwardedProps": {},
     }
+    body.update(extra)
+    return body
 
 
 @pytest.fixture(autouse=True)
@@ -73,13 +92,16 @@ class TextRuntime:
         emit.text_delta(self._text)
 
 
-def test_run_lifecycle_and_state_snapshot(monkeypatch: pytest.MonkeyPatch):
+def test_run_agent_input_round_trip_and_state_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+):
     import api.assistant_transport.turn as turn_module
     import api.main as apimain
 
     monkeypatch.setattr(turn_module, "get_runtime", lambda: TextRuntime("hello"))
     client = TestClient(apimain.app)
-    response = client.post("/assistant", json={"commands": [_user_msg("hi")]})
+    # The exact body @ag-ui/client posts — no `commands`, text in `messages`.
+    response = client.post("/assistant", json=_run_agent_input("hi"))
 
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
@@ -97,9 +119,8 @@ def test_run_lifecycle_and_state_snapshot(monkeypatch: pytest.MonkeyPatch):
     assert "messages" in snapshot
     assert "view" in snapshot
     assert "selection" in snapshot
-    # Plain prose is not a valid AnswerPlan, so the policy layer substitutes the
-    # safe fallback before any text reaches the wire (ADR-0013). The point here
-    # is that the rendered text flows text_delta -> AG-UI event -> view-state.
+    # The user message from RunAgentInput.messages drives a real turn: the
+    # backend ran the agent and rendered an assistant message into the snapshot.
     assistant = [m for m in snapshot["messages"] if m["role"] == "assistant"]
     assert assistant and any(
         p.get("type") == "text" and "pricing citation policy" in (p.get("text") or "")
@@ -111,6 +132,33 @@ def test_run_lifecycle_and_state_snapshot(monkeypatch: pytest.MonkeyPatch):
     assert "pricing citation policy" in text_content
 
 
+def test_no_user_message_runs_no_turn(monkeypatch: pytest.MonkeyPatch):
+    import api.assistant_transport.turn as turn_module
+    import api.main as apimain
+
+    ran = {"called": False}
+
+    class GuardRuntime:
+        async def run(self, turns, emit, usage):
+            ran["called"] = True
+            emit.text_delta("ok")
+
+    monkeypatch.setattr(turn_module, "get_runtime", lambda: GuardRuntime())
+    client = TestClient(apimain.app)
+    # A trailing assistant message is not a turn trigger.
+    body = _run_agent_input("hi")
+    body["messages"].append(
+        {"id": f"msg_{uuid.uuid4().hex}", "role": "assistant", "content": "prior"}
+    )
+    response = client.post("/assistant", json=body)
+
+    assert response.status_code == 200
+    assert ran["called"] is False
+    types = [e["type"] for e in _sse_events(response.text)]
+    assert "RUN_STARTED" in types
+    assert "RUN_FINISHED" in types
+
+
 def test_client_supplied_view_state_is_discarded(monkeypatch: pytest.MonkeyPatch):
     import api.assistant_transport.turn as turn_module
     import api.main as apimain
@@ -119,14 +167,14 @@ def test_client_supplied_view_state_is_discarded(monkeypatch: pytest.MonkeyPatch
     client = TestClient(apimain.app)
     response = client.post(
         "/assistant",
-        json={
-            "state": {
+        json=_run_agent_input(
+            "hi",
+            state={
                 "messages": [],
                 "view": {"columns": ["INJECTED"]},
                 "selection": {"rows": [99], "highlight": "x"},
             },
-            "commands": [_user_msg("hi")],
-        },
+        ),
     )
 
     assert response.status_code == 200
@@ -149,7 +197,7 @@ def test_tool_call_events_emitted(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(turn_module, "get_runtime", lambda: ToolRuntime())
     client = TestClient(apimain.app)
-    response = client.post("/assistant", json={"commands": [_user_msg("hi")]})
+    response = client.post("/assistant", json=_run_agent_input("hi"))
 
     assert response.status_code == 200
     types = [e["type"] for e in _sse_events(response.text)]
@@ -166,19 +214,62 @@ def test_set_view_tool_result_mutates_view_state(monkeypatch: pytest.MonkeyPatch
 
     class ViewRuntime:
         async def run(self, turns, emit, usage):
+            # A validated compare result must exist for the view rows to bind.
+            emit.tool_call("call-c", "compare", "{}", {})
+            emit.tool_result(
+                "call-c",
+                {
+                    "results": [
+                        {"provider": "aws", "instance_type": "m5.xlarge"},
+                    ]
+                },
+            )
             emit.tool_call("call-v", "set_view", "{}", {})
             emit.tool_result(
                 "call-v",
-                run_set_view(columns=[{"column_id": "provider"}]),
+                run_set_view(
+                    columns=[{"column_id": "provider"}],
+                    source_result_indices=[0],
+                ),
             )
 
     monkeypatch.setattr(turn_module, "get_runtime", lambda: ViewRuntime())
     client = TestClient(apimain.app)
-    response = client.post("/assistant", json={"commands": [_user_msg("show table")]})
+    response = client.post("/assistant", json=_run_agent_input("show table"))
 
     assert response.status_code == 200
     snapshot = next(
         e for e in _sse_events(response.text) if e["type"] == "STATE_SNAPSHOT"
     )["snapshot"]
-    # The co-driver tool result lands in the backend-authoritative view-state.
+    # The co-driver tool result lands in the backend-authoritative view-state
+    # only after registry + row-binding validation passes.
     assert snapshot["view"]["columns"][0]["column_id"] == "provider"
+
+
+def test_legacy_commands_shape_still_accepted(monkeypatch: pytest.MonkeyPatch):
+    """The prior assistant-ui transport contract (state + commands) keeps working."""
+    import api.assistant_transport.turn as turn_module
+    import api.main as apimain
+
+    monkeypatch.setattr(turn_module, "get_runtime", lambda: TextRuntime("hello"))
+    client = TestClient(apimain.app)
+    response = client.post(
+        "/assistant",
+        json={
+            "commands": [
+                {
+                    "type": "add-message",
+                    "message": {
+                        "role": "user",
+                        "parts": [{"type": "text", "text": "hi"}],
+                    },
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    types = [e["type"] for e in _sse_events(response.text)]
+    assert types[0] == "RUN_STARTED"
+    assert types[-1] == "RUN_FINISHED"
+    assert "STATE_SNAPSHOT" in types

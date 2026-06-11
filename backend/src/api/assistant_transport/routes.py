@@ -1,13 +1,17 @@
 """FastAPI route for the assistant surface, served as an AG-UI server (ADR-0016).
 
-``POST /assistant`` emits AG-UI protocol events over Server-Sent Events:
-``RUN_STARTED``, the streamed text/tool events for the turn, a final
-``STATE_SNAPSHOT`` carrying the backend-authoritative view-state, and
-``RUN_FINISHED``. The agent runtime port (ADR-0012) is untouched: adapters
-stream neutral ``Emitter`` verbs and a single AG-UI encoder
-(``AGUIStateEmitter``) maps them onto AG-UI events. The hardening surface
-(body limit, history limit, XML wrapping, input judge, AnswerPlan rendering,
-budgets) stays in the turn orchestration; nothing moved to the wire layer.
+``POST /assistant`` accepts an AG-UI ``RunAgentInput`` body (the shape
+``@ag-ui/client``'s ``HttpAgent`` sends: ``{threadId, runId, state, messages,
+tools, context, forwardedProps}`` with the user's text in ``messages``) and
+also the legacy ``{state, commands:[...]}`` shape for the prior transport. It
+emits AG-UI protocol events over Server-Sent Events: ``RUN_STARTED``, the
+streamed text/tool events for the turn, a final ``STATE_SNAPSHOT`` carrying the
+backend-authoritative view-state, and ``RUN_FINISHED``. The agent runtime port
+(ADR-0012) is untouched: adapters stream neutral ``Emitter`` verbs and a single
+AG-UI encoder (``AGUIStateEmitter``) maps them onto AG-UI events. The hardening
+surface (body limit, history limit, XML wrapping, input judge, AnswerPlan
+rendering, budgets) stays in the turn orchestration; nothing moved to the wire
+layer.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from fastapi.responses import StreamingResponse
 from api.assistant_transport.agui import AGUIRunContext
 from api.assistant_transport.models import AssistantRequest
 from api.assistant_transport.state import (
+    apply_agui_messages,
     apply_commands,
     history_text_length,
     prepare_incoming_state,
@@ -45,7 +50,14 @@ async def assistant_endpoint(
     session_id = request.cookies.get(settings.session_cookie_name) or new_session_id()
     hashed_id = getattr(request.state, "hashed_client_id", "") or ""
     state = prepare_incoming_state(body.state)
-    triggered_by_user_message = apply_commands(state, body.commands)
+    # The shipped AG-UI frontend sends ``messages`` (RunAgentInput); the legacy
+    # assistant-ui transport sends ``commands``. The backend is authoritative
+    # over view-state either way; ``messages`` is preferred when present because
+    # it is the full conversation the AG-UI client maintains.
+    if body.messages is not None:
+        triggered_by_user_message = apply_agui_messages(state, body.messages)
+    else:
+        triggered_by_user_message = apply_commands(state, body.commands or [])
     if history_text_length(state) > settings.assistant_max_history_chars:
         raise HTTPException(
             status_code=422,

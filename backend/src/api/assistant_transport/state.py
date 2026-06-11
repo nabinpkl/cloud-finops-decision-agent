@@ -7,6 +7,7 @@ from typing import Any
 from api.assistant_transport.models import (
     AddMessageCommand,
     AddToolResultCommand,
+    AGUIMessage,
     Command,
 )
 from agent.security.untrusted import wrap_assistant_history, wrap_user_request
@@ -45,6 +46,37 @@ def prepare_incoming_state(raw_state: dict[str, Any] | None) -> dict[str, Any]:
     # may write these fields.
     state.update(default_view_state())
     return state
+
+
+def apply_agui_messages(
+    state: dict[str, Any], messages: list[AGUIMessage]
+) -> bool:
+    """Seed conversation state from an AG-UI ``RunAgentInput.messages`` array.
+
+    The AG-UI ``HttpAgent`` (the shipped frontend) sends the full conversation
+    in ``messages`` rather than the legacy ``commands`` shape. Each AG-UI
+    message carries ``{role, content}`` with ``content`` a plain string for
+    user/assistant turns. We rebuild ``state['messages']`` in the internal
+    parts shape so the same hardening surface (``build_turns`` XML wrapping,
+    text/part caps, history cap) applies unchanged.
+
+    Only ``user`` and ``assistant`` roles become turns; any client-supplied
+    ``system``/``developer``/``tool`` message is dropped here exactly as the
+    legacy path drops a non-user ``add-message`` (the agent's own system prompt
+    is the only trusted instruction). Returns True when the latest turn is a
+    user message — the signal that a new turn should run.
+    """
+    rebuilt: list[dict[str, Any]] = []
+    for msg in messages[-settings.assistant_max_state_messages:]:
+        if msg.role not in ("user", "assistant"):
+            continue
+        text = msg.content if isinstance(msg.content, str) else ""
+        text = text[: settings.assistant_max_text_chars]
+        rebuilt.append(
+            {"role": msg.role, "parts": [{"type": "text", "text": text}]}
+        )
+    state["messages"] = rebuilt
+    return bool(rebuilt) and rebuilt[-1]["role"] == "user"
 
 
 def apply_commands(state: dict[str, Any], commands: list[Command]) -> bool:
