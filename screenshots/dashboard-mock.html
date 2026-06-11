@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cloud pricing dashboard — layout mock</title>
+<!--
+  LAYOUT MOCK, not a price quote.
+
+  Purpose: show the ADR-0016 dual-surface product the isolated ComparisonTable
+  screenshots can't convey: a deterministic comparison table the human drives
+  via the filter bar, with a sidebar co-driver agent that operates the SAME
+  table (it does not print a second one). Backend stays the source of truth for
+  view-state; the agent mutates it through set_view.
+
+  The numbers below are ILLUSTRATIVE and do NOT trace to a snapshot on disk, so
+  this file violates the citation contract by design — it is a design artifact,
+  never a runtime answer. Tokens mirror frontend/app/globals.css so it reads as
+  the real shell. No external assets; open directly in a browser.
+-->
+<style>
+  :root {
+    --radius: 0.625rem;
+    --background: oklch(0.99 0.001 286.375);
+    --foreground: oklch(0.141 0.005 285.823);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.141 0.005 285.823);
+    --primary: oklch(0.21 0.006 285.885);
+    --primary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.967 0.001 286.375);
+    --muted-foreground: oklch(0.552 0.016 285.938);
+    --accent: oklch(0.967 0.001 286.375);
+    --accent-foreground: oklch(0.21 0.006 285.885);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.92 0.004 286.32);
+    --amber-bg: oklch(0.55 0.13 80 / 0.12);
+    --amber-fg: oklch(0.52 0.13 70);
+  }
+  [data-theme="dark"] {
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.21 0.006 285.885);
+    --card-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.92 0.004 286.32);
+    --primary-foreground: oklch(0.21 0.006 285.885);
+    --muted: oklch(0.274 0.006 286.033);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --amber-fg: oklch(0.78 0.12 75);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  .muted { color: var(--muted-foreground); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  /* ---- app shell ---- */
+  .app { display: flex; flex-direction: column; height: 100vh; }
+  .topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .logo { font-weight: 700; letter-spacing: -0.01em; }
+  .logo .dot { color: var(--muted-foreground); font-weight: 400; }
+  .topbar .spacer { flex: 1; }
+  .pill {
+    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted-foreground);
+  }
+  .iconbtn {
+    border: 1px solid var(--border); background: var(--card);
+    color: var(--foreground); border-radius: var(--radius);
+    width: 32px; height: 32px; cursor: pointer; font-size: 15px;
+  }
+
+  .body { flex: 1; display: flex; min-height: 0; }
+
+  /* ---- main comparison surface ---- */
+  .main { flex: 1; min-width: 0; overflow: auto; padding: 18px 20px; }
+  .filterbar {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px;
+    padding: 14px 16px; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--card); margin-bottom: 16px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--muted-foreground); font-weight: 500; }
+  .field select, .field input {
+    appearance: none; border: 1px solid var(--border);
+    background: var(--background); color: var(--foreground);
+    border-radius: var(--radius); padding: 7px 10px; font-size: 13px; min-width: 132px;
+  }
+  .filterbar .grow { flex: 1; }
+  .agent-touch {
+    font-size: 11px; color: var(--amber-fg);
+    background: var(--amber-bg); border-radius: 999px; padding: 3px 9px;
+    border: 1px solid color-mix(in oklch, var(--amber-fg) 30%, transparent);
+  }
+  .btn-primary {
+    background: var(--primary); color: var(--primary-foreground);
+    border: none; border-radius: var(--radius); padding: 8px 16px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+
+  /* ---- table (mirrors comparison-table.tsx) ---- */
+  .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 11px 16px; border-bottom: 1px solid var(--border);
+  }
+  .card-head .title { font-weight: 600; }
+  .badge-stale {
+    background: color-mix(in oklch, var(--destructive) 12%, transparent);
+    color: var(--destructive); border-radius: var(--radius);
+    padding: 2px 8px; font-size: 12px; font-weight: 500;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; font-size: 11px; font-weight: 500;
+    color: var(--muted-foreground); padding: 8px 12px;
+  }
+  th.r, td.r { text-align: right; }
+  tbody td { padding: 9px 12px; border-top: 1px solid var(--border); vertical-align: top; }
+  tbody tr.winner { background: color-mix(in oklch, var(--primary) 4%, transparent); }
+  .rank {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    background: var(--muted); color: var(--muted-foreground);
+  }
+  .rank.gold { background: oklch(0.85 0.13 90 / 0.25); color: oklch(0.5 0.12 75); }
+  td .prov { font-weight: 600; }
+  .region-canon { color: var(--muted-foreground); font-size: 10px; margin-left: 4px; }
+  td.monthly { font-weight: 700; }
+  .badge-derived {
+    margin-left: 6px; background: var(--amber-bg); color: var(--amber-fg);
+    border-radius: 5px; padding: 1px 6px; font-size: 10px; font-weight: 500; cursor: help;
+  }
+  .age { font-size: 12px; }
+  .age.fresh { color: var(--muted-foreground); }
+  .age.stale {
+    color: var(--destructive); background: color-mix(in oklch, var(--destructive) 10%, transparent);
+    border-radius: 5px; padding: 1px 6px;
+  }
+  .src {
+    color: var(--muted-foreground); text-decoration: none; font-size: 12px;
+    border-bottom: 1px dotted var(--border);
+  }
+  .src:hover { color: var(--foreground); }
+  .excerpt-ico {
+    margin-left: 8px; cursor: pointer; color: var(--muted-foreground);
+    font-size: 12px; border: 1px solid var(--border); border-radius: 5px; padding: 0 5px;
+  }
+  tr.sub td { background: color-mix(in oklch, var(--muted) 40%, transparent); color: var(--muted-foreground); font-size: 12px; border-top: none; }
+  tr.sub td.indent { padding-left: 28px; }
+  .footnote { padding: 9px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+  .footnote b { color: var(--foreground); font-weight: 500; }
+  .footnote .nn { color: color-mix(in oklch, var(--foreground) 80%, transparent); }
+
+  /* ---- sidebar co-driver agent ---- */
+  .sidebar {
+    width: 380px; flex-shrink: 0; border-left: 1px solid var(--border);
+    background: var(--card); display: flex; flex-direction: column; min-height: 0;
+  }
+  .side-head {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .side-head .title { font-weight: 600; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: oklch(0.7 0.17 145); box-shadow: 0 0 0 3px oklch(0.7 0.17 145 / 0.18); }
+  .thread { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 92%; }
+  .msg.user { align-self: flex-end; }
+  .msg.user .bubble {
+    background: var(--primary); color: var(--primary-foreground);
+    border-radius: 14px 14px 4px 14px; padding: 9px 13px;
+  }
+  .msg.assistant .bubble {
+    background: var(--muted); border-radius: 14px 14px 14px 4px; padding: 9px 13px;
+  }
+  .toolcall {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 9px 11px; font-size: 12px; background: var(--background);
+  }
+  .toolcall .head { display: flex; align-items: center; gap: 7px; font-weight: 500; }
+  .toolcall .tick { color: oklch(0.62 0.16 145); }
+  .toolcall .args { color: var(--muted-foreground); margin-top: 4px; }
+  .toolcall.view .head .verb { color: var(--amber-fg); }
+  .citenote { font-size: 11px; color: var(--muted-foreground); margin-top: 6px; }
+  .composer {
+    border-top: 1px solid var(--border); padding: 12px;
+    display: flex; gap: 8px; align-items: flex-end;
+  }
+  .composer textarea {
+    flex: 1; resize: none; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--background); color: var(--foreground); padding: 9px 11px;
+    font: inherit; font-size: 13px; height: 38px; max-height: 120px;
+  }
+  .composer .send {
+    background: var(--primary); color: var(--primary-foreground); border: none;
+    border-radius: var(--radius); width: 38px; height: 38px; cursor: pointer; font-size: 15px;
+  }
+  .suggest { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 12px 12px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--background); color: var(--muted-foreground);
+    border-radius: 999px; padding: 5px 11px; font-size: 12px; cursor: pointer;
+  }
+  .chip:hover { color: var(--foreground); }
+  .mockbar {
+    font-size: 11px; text-align: center; padding: 4px;
+    background: var(--amber-bg); color: var(--amber-fg);
+    border-bottom: 1px solid color-mix(in oklch, var(--amber-fg) 25%, transparent);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="mockbar">LAYOUT MOCK — illustrative numbers, not snapshot-backed. Not a runtime price answer.</div>
+
+  <!-- top bar -->
+  <div class="topbar">
+    <span class="logo">cloudprice<span class="dot">/compare</span></span>
+    <span class="pill">7 providers · v0</span>
+    <div class="spacer"></div>
+    <span class="pill">session · budget 38% used</span>
+    <button class="iconbtn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'" title="Toggle theme">◐</button>
+  </div>
+
+  <div class="body">
+    <!-- ============ MAIN: deterministic table the human drives ============ -->
+    <div class="main">
+      <!-- manual filter bar = the human's hands on the same view-state -->
+      <div class="filterbar">
+        <div class="field">
+          <label>vCPU</label>
+          <select><option>4</option><option>2</option><option>8</option><option>16</option></select>
+        </div>
+        <div class="field">
+          <label>RAM</label>
+          <select><option>8 GB</option><option>4 GB</option><option>16 GB</option><option>32 GB</option></select>
+        </div>
+        <div class="field">
+          <label>Family</label>
+          <select><option>general-purpose</option><option>any</option><option>compute-optimized</option><option>memory-optimized</option></select>
+        </div>
+        <div class="field">
+          <label>Region</label>
+          <select><option>eu-central</option><option>us-east</option><option>ap-southeast</option></select>
+        </div>
+        <div class="grow"></div>
+        <span class="agent-touch" title="The sidebar agent last mutated this view via set_view">⤷ agent set columns &amp; sort</span>
+        <button class="btn-primary">Compare</button>
+      </div>
+
+      <!-- table mirrors components/tools/comparison-table.tsx -->
+      <div class="card">
+        <div class="card-head">
+          <span class="title">Cheapest 4 vCPU · 8 GB · general-purpose in eu-central</span>
+          <span class="badge-stale">stale data</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Provider</th><th>Instance</th><th>Region</th>
+                <th class="r">vCPU</th><th class="r">RAM</th>
+                <th class="r">Hourly</th><th class="r">Monthly</th>
+                <th>Snapshot</th><th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="winner">
+                <td><span class="rank gold">1</span></td>
+                <td class="prov">AWS</td>
+                <td class="mono">m5.xlarge</td>
+                <td><span title="canonical: eu-central">eu-central-1</span><span class="region-canon">(eu-central)</span></td>
+                <td class="r">4</td><td class="r">8 GB</td>
+                <td class="r mono">$0.192</td><td class="r monthly mono">$140.16</td>
+                <td><span class="age fresh">6h old</span></td>
+                <td><a class="src" href="#">AWS Price List</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+              </tr>
+              <tr>
+                <td><span class="rank">2</span></td>
+                <td class="prov">GCP</td>
+                <td class="mono">n2-standard-4<span class="badge-derived" title="agent-derived: composed from cited rate SKUs (core·4 + ram·8)">derived</span></td>
+                <td><span title="canonical: eu-central">europe-west3</span><span class="region-canon">(eu-central)</span></td>
+                <td class="r">4</td><td class="r">8 GB</td>
+                <td class="r mono">$0.204</td><td class="r monthly mono">$148.92</td>
+                <td><span class="age fresh">just fetched</span></td>
+                <td><a class="src" href="#">GCP SKUs</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+              </tr>
+              <!-- composite sub-rows: each cited rate SKU that composed the synthesized price -->
+              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="excerpt-ico">⌖</span></td></tr>
+              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="excerpt-ico">⌖</span></td></tr>
+              <tr>
+                <td><span class="rank">3</span></td>
+                <td class="prov">Azure</td>
+                <td class="mono">Standard_D4s_v5</td>
+                <td><span title="canonical: eu-central">westeurope</span><span class="region-canon">(eu-central)</span></td>
+                <td class="r">4</td><td class="r">8 GB</td>
+                <td class="r mono">$0.211</td><td class="r monthly mono">$154.20</td>
+                <td><span class="age fresh">just fetched</span></td>
+                <td><a class="src" href="#">Azure Retail Prices</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+              </tr>
+              <tr>
+                <td><span class="rank">4</span></td>
+                <td class="prov">Oracle</td>
+                <td class="mono">VM.Standard.E4.Flex<span class="badge-derived" title="agent-derived: composed from OCPU + memory SKUs">derived</span></td>
+                <td><span title="canonical: eu-central">eu-frankfurt-1</span><span class="region-canon">(eu-central)</span></td>
+                <td class="r">4</td><td class="r">8 GB</td>
+                <td class="r mono">$0.196</td><td class="r monthly mono">$143.08</td>
+                <td><span class="age stale">31h old</span></td>
+                <td><a class="src" href="#">Oracle Price List</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+              </tr>
+              <tr>
+                <td><span class="rank">5</span></td>
+                <td class="prov">Linode</td>
+                <td class="mono">g6-standard-4</td>
+                <td><span title="canonical: eu-central">eu-central</span></td>
+                <td class="r">4</td><td class="r">8 GB</td>
+                <td class="r mono">$0.072</td><td class="r monthly mono">$48.00</td>
+                <td><span class="age fresh">3h old</span></td>
+                <td><a class="src" href="#">Linode Types</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- equivalence basis footnote (AGENTS.md): what holds, what does NOT normalize -->
+        <div class="footnote">
+          <b>Equivalence basis</b> (general-purpose): matched vCPU, RAM, class.
+          Not normalized: <span class="nn">CPU generation, network bandwidth, baseline performance, attached storage</span>.
+        </div>
+        <div class="footnote muted">
+          No match: Vultr, IBM had no general-purpose instance at exactly 4 vCPU / 8 GB in eu-central.
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SIDEBAR: co-driver agent operating the SAME table ============ -->
+    <div class="sidebar">
+      <div class="side-head">
+        <span class="live-dot"></span>
+        <span class="title">Pricing co-driver</span>
+        <div class="spacer" style="flex:1"></div>
+        <span class="pill">backend-authoritative state</span>
+      </div>
+
+      <div class="thread">
+        <div class="msg user"><div class="bubble">Cheapest 4 vCPU 8 GB general-purpose VM in the EU?</div></div>
+
+        <div class="msg assistant">
+          <div class="toolcall" style="margin-bottom:8px">
+            <div class="head"><span class="tick">✓</span> <span>compare</span></div>
+            <div class="args mono">vcpu=4, ram_gb=8, family="general-purpose", region="eu-central"</div>
+          </div>
+          <div class="toolcall view" style="margin-bottom:8px">
+            <div class="head"><span class="tick">✓</span> <span class="verb">set_view</span></div>
+            <div class="args mono">sort=monthly_usd ↑ · columns=[provider, instance, region, vcpu, ram, hourly, monthly]</div>
+          </div>
+          <div class="bubble">
+            Cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, snapshot 6h old).
+            Close runners: GCP n2-standard-4 $148.92 and Azure D4s_v5 $154.20 (both just fetched).
+            Oracle's snapshot is 31h old — flagged stale in the table; say "refetch" for live Oracle prices.
+            <div class="citenote">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on any row to verify the json_path against the source.</div>
+          </div>
+        </div>
+
+        <div class="msg user"><div class="bubble">Add a $/vCPU column and drop hourly.</div></div>
+        <div class="msg assistant">
+          <div class="toolcall view">
+            <div class="head"><span class="tick">✓</span> <span class="verb">set_view</span></div>
+            <div class="args mono">+ derived col "usd_per_vcpu" (formula: monthly_usd / vcpu) · − hourly</div>
+          </div>
+          <div class="bubble" style="margin-top:8px">
+            Done — added <b>$/vCPU</b> as a derived column (badged, with its formula) and removed Hourly.
+            The table above updated in place.
+          </div>
+        </div>
+      </div>
+
+      <div class="suggest">
+        <span class="chip">Compare across AWS, GCP, Azure</span>
+        <span class="chip">Show me 2 vCPU / 4 GB</span>
+        <span class="chip">Refetch Oracle</span>
+      </div>
+      <div class="composer">
+        <textarea placeholder="Ask the co-driver to reshape the table…"></textarea>
+        <button class="send">↑</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

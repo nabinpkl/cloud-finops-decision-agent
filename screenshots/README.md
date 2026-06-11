@@ -9,6 +9,20 @@ UI states of the `ComparisonTable` agent tool component, rendered with **real**
 | `comparison-table-fresh.png` | Same rows with fresh snapshots: no stale badge, recent age pills. |
 | `comparison-table-unmet.png` | No/partial match: `unmet_requirements` rendered. |
 | `comparison-table-loading.png` | Loading skeleton (tool call in flight). |
+| `dashboard-mock.png` / `-dark.png` | **Layout mock** of the full ADR-0016 dual-surface dashboard: a deterministic comparison table the human drives via the filter bar, with a sidebar co-driver agent operating the *same* table (compare + set_view tool calls), not printing a second one. Shows the parts the isolated component shots can't: filter bar, agent↔table coupling, chat thread, suggestions, composer. |
+
+## `dashboard-mock.html` — design artifact, NOT a runtime answer
+
+`dashboard-mock.html` is a self-contained static mock (no build, no data layer;
+open directly in a browser). It exists because the `comparison-table-*` shots
+render the table component in isolation, which doesn't convey the dual-surface
+product (human-driven table + sidebar co-driver). Tokens mirror
+`frontend/app/globals.css`.
+
+Its numbers are **illustrative** and do **not** trace to a snapshot on disk, so
+it deliberately sits outside the citation contract — it is a design artifact for
+communicating layout, never a price quote. The `dashboard-mock.png` /
+`dashboard-mock-dark.png` images are headless Playwright renders of it at 2×.
 
 ## How they were generated
 
