@@ -18,6 +18,7 @@ Cloud VM pricing is the chosen bench because it has **authoritative ground truth
 - Not a product. No growth target, no users to acquire, no revenue.
 - Not another comparison website. Not trying to beat or replace CloudPrice / getdeploying.
 - Not a spend-management / FinOps dashboard for resources already running.
+- **Prospective only, never retrospective.** The sidebar agent is a *pre-purchase* comparison advisor over public catalog prices. It does not connect to a cloud account, and does not track the user's own resources, usage, or spend. The verb is "if I deploy this spec, what would it cost where, and prove it," never "what are my resources costing me." Wiring the agent to account/usage data would slide it into the OpenCost / Kubecost / Vantage / CloudZero space this bench deliberately excludes (above) and would break the citation contract, which only holds for re-fetchable public catalogs. (The AWS console cost-agent pattern inspired the dual-surface UX shape, not its retrospective data direction.)
 - Not a model-first wrapper. The model surface is server-hosted, budgeted, traced, and limited to the semantic-judgment layer; the ingest and normalization layer remain deterministic.
 - Not a forever-research project — it has a defined v0 and a finding to produce (§8–9).
 
