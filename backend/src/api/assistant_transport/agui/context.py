@@ -3,9 +3,9 @@
 ``AGUIRunContext`` replaces ``assistant_stream``'s ``RunController`` as the
 single owner of the canonical view-state during one turn. The agent runtime
 and the manual form both mutate this state through the backend; the route
-broadcasts ``STATE_SNAPSHOT`` on connect and ``STATE_DELTA`` (or a fresh
-snapshot) after the turn settles. The frontend renders state; it does not own
-it (ADR-0016 decision 3).
+broadcasts one full ``STATE_SNAPSHOT`` after the turn settles (the transport is
+snapshot-only; no ``STATE_DELTA`` is emitted). The frontend renders state; it
+does not own it (ADR-0016 decision 3).
 
 The context exposes the same ``state`` attribute the previous transport used,
 so the hardening-surface helpers (``state.py`` message helpers, ``StateEmitter``

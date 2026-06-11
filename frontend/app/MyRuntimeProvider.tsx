@@ -12,7 +12,8 @@ import { publishSessionLimitReached } from "@/lib/session-limit";
 // RUN_FINISHED). The HttpAgent client carries the wire; the assistant-ui AG-UI
 // runtime adapter renders text + tool-call parts so the existing
 // ComparisonTable Tool UI keeps working unchanged. State is backend-authoritative:
-// the frontend renders the STATE_SNAPSHOT/STATE_DELTA view-state, never owns it.
+// the frontend renders the STATE_SNAPSHOT view-state, never owns it. The
+// transport is snapshot-only (one full STATE_SNAPSHOT per turn; no STATE_DELTA).
 
 // Same-origin path; next.config.js rewrites /assistant to the backend so the
 // browser never sees the backend URL and CORS is avoided.
@@ -38,8 +39,8 @@ export function MyRuntimeProvider({ children }: { children: ReactNode }) {
   });
 
   // Mirror the server-trusted session-limit flag from the backend-authoritative
-  // view-state into the banner store. The HttpAgent applies STATE_SNAPSHOT /
-  // STATE_DELTA to agent.state; subscribe to read it.
+  // view-state into the banner store. The HttpAgent applies the per-turn
+  // STATE_SNAPSHOT to agent.state; subscribe to read it.
   useEffect(() => {
     const sub = agent.subscribe({
       onStateChanged: ({ state }: { state: unknown }) => {
