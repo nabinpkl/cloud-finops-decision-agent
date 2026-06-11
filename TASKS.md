@@ -33,6 +33,43 @@ Ordering edges:
 - R9 (AG-UI vs assistant-transport) and R10 (query-shape mapping) are open
   decisions; capture each as an ADR before building against it.
 
+## Decisions settled (2026-06-11)
+
+| Area | Decision |
+|---|---|
+| State authority (R2) | Backend-authoritative. FastAPI owns view-state; frontend renders. |
+| Transport (R9) | Adopt AG-UI now. FastAPI becomes an AG-UI server. See ADR-0016. |
+| Frontend client (R9) | Keep assistant-ui via `@assistant-ui/react-ag-ui`; no CopilotKit. `ComparisonTable` preserved. See ADR-0016. |
+| Query shapes (R10) | Agent composes multiple `compare()`/`lookup()` calls; validated layer stitches; no aggregation primitives in normalize. See ADR-0017. |
+| View spec (R5/R6) | Agent emits a declarative view-spec (columns + layout + bindings). |
+| Column registry (R5) | New `columns.json` JSON taxonomy beside `families.json`/`regions.json`. |
+| Validation fail (R6) | Reject whole plan and re-prompt the agent on any unregistered column or unbindable cell. |
+| Agent tools (R3) | `compare`/`lookup` (data) + `set_view` (declarative spec) + `select`/`highlight` (annotate). Backend writes state only from validated results. |
+| Tier-3 ask (R7) | On an explicit unbackable-dimension ask, agent explains it's not in the snapshot and offers closest cited columns. Graceful, not a hard reject. |
+| Trust tiers (R4) | Separate zones + badges. Table = verified zone; agent-derived claims badged in the sidebar. |
+| Citation depth (R8) | Full depth: contract fields + outbound link + excerpt-on-click + composite sub-rows. |
+
+Open implementation detail to resolve before R6: whether the `set_view` view-spec
+is a section of the `AnswerPlan` (one validator covers both) or a parallel
+validated object. Lean toward folding into `AnswerPlan`.
+
+## Build order (transport spine first)
+
+1. Transport spine: migrate backend to AG-UI server, swap frontend runtime to
+   `@assistant-ui/react-ag-ui`, prove backend-authoritative state end to end with
+   the current fixed table still rendering, hardening suite green. (R9 -> R2)
+2. Co-driver tools: add `set_view`/`select` alongside `compare`/`lookup`. (R3)
+3. Generative-view contract: `columns.json` registry + declarative view-spec +
+   reject-and-retry validation. (R5 -> R6, R7)
+4. Trust + citation depth: separate-zone badges and full citation depth. (R4, R8)
+5. Docs/ADRs alongside: ADR-0016, ADR-0017, PRD non-goals + product shape.
+   (R1, R11)
+
+Migration caveat: the AG-UI swap must carry the hardening surface across, not
+around it. The XML trust-zone wrapping, body/turn limits, mandatory input judge
+(ADR-0015), and verified `AnswerPlan` rendering (ADR-0013) stay in force; step 1
+re-verifies the security and budget suites, not just the happy path.
+
 ## Phase A: dual-surface foundation
 
 - [ ] R1. Dual-surface product shape. Deterministic table + sidebar agent
@@ -92,20 +129,15 @@ Ordering edges:
 
 ## Phase D: open decisions (capture as ADRs)
 
-- [ ] R9. Evaluate AG-UI vs assistant-transport for `/assistant`. AG-UI (typed
-  agent-to-UI events: `TEXT_MESSAGE_CONTENT`, `TOOL_CALL_START`, `STATE_DELTA`)
-  is now an ecosystem option. Decide whether to adopt AG-UI event names
-  (interop) or stay neutral behind the runtime port (ADR-0009/0012). `STATE_DELTA`
-  is worth borrowing regardless to formalize the shared view-state mutation
-  channel from R2. Capture as an ADR.
-- [ ] R10. Map the realistic question set to query shapes. `compare()` returns
-  one ranked list for a single vcpu/ram/region/family. Real sidebar questions
-  need grouping/aggregation ("cheapest per family", "spread per provider", "what
-  got pricier since last snapshot"). Decide: agent composes multiple
-  deterministic calls and the validated layer stitches each sub-table cited
-  (preferred, keeps the deterministic core small and fits the agent-judgment /
-  normalize-lookup split), vs add grouping/aggregation primitives to `normalize`
-  that emit citations. Capture as an ADR.
+- [x] R9. DECIDED in ADR-0016. Adopt AG-UI now: FastAPI becomes an AG-UI server;
+  frontend keeps assistant-ui via `@assistant-ui/react-ag-ui` (no CopilotKit);
+  state is backend-authoritative, streamed as `STATE_SNAPSHOT`/`STATE_DELTA`. The
+  *implementation* of this decision is build-order step 1, not yet done.
+- [x] R10. DECIDED in ADR-0017. Agent composes multiple `compare()`/`lookup()`
+  calls; the validated layer stitches them, every cell cited; no aggregation
+  primitives in `normalize`. Aggregate columns are Tier-2 registry formulas over
+  cited cells. Snapshot-history questions ("what got pricier") are out of scope
+  pending a snapshot-retention ADR. Implementation lands with the view-spec work.
 - [ ] R11. Record the prospective-only guardrail in `PRD.md` non-goals. The
   sidebar agent is a pre-purchase comparison advisor over public catalog prices.
   It does not track the user's own resources, spend, or usage (the

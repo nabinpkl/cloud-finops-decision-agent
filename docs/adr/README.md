@@ -18,12 +18,15 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | [0006](0006-flex-rules-over-shape-catalog.md) | Flex-rules JSON over a fetched shape catalog for GCP and Oracle (v0) | Accepted |
 | [0007](0007-rate-rows-composite-citations.md) | Rate rows and composite citations for resource-priced providers | Accepted |
 | [0008](0008-vertical-slice-api-and-citation-excerpt.md) | Vertical slice for the agent UI, and serve-time citation excerpts | Accepted (partially superseded by 0009) |
-| [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md) | Agent runtime in FastAPI on the OpenAI Agents SDK; frontend/ frontend-only; provider is a base-URL knob | Accepted |
+| [0009](0009-agent-runtime-in-fastapi-openai-agents-sdk.md) | Agent runtime in FastAPI on the OpenAI Agents SDK; frontend/ frontend-only; provider is a base-URL knob | Accepted (transport partially superseded by 0016) |
 | [0010](0010-observability-via-otel-jsonl.md) | Observability via OTel JSONL traces on disk for the agent runtime | Accepted |
 | [0011](0011-public-endpoint-threat-model.md) | Public-endpoint threat model and budget enforcement seams (tokens as primitive) | Accepted |
 | [0012](0012-agent-runtime-port.md) | Agent-runtime port: framework-neutral seam to swap the agent loop (OpenAI Agents / LangChain) by env | Accepted |
 | [0013](0013-verified-answer-plan-rendering.md) | Verified AnswerPlan rendering for agent prose | Accepted |
 | [0014](0014-agent-hardening-threat-register.md) | Agent hardening threat register | Accepted |
+| [0015](0015-rail-based-agent-guardrails.md) | Rail-based agent guardrails (in-house rail taxonomy, mandatory input judge) | Accepted |
+| [0016](0016-ag-ui-transport.md) | AG-UI transport for the agent surface; FastAPI as an AG-UI server; assistant-ui via the AG-UI adapter | Accepted (implementation pending) |
+| [0017](0017-agent-composed-query-shapes.md) | Agent-composed query shapes over aggregation primitives in normalize | Accepted (implementation pending) |
 
 ## When to write an ADR
 
