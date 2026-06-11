@@ -35,11 +35,13 @@ from normalize.query.models import (
     CompareRequest,
     CompareResponse,
     CompareResult,
+    EquivalenceBasis,
     LookupRequest,
     LookupResponse,
     LookupResult,
     UnmetRequirement,
 )
+from normalize.taxonomy.loader import family_dimensions
 
 DEFAULT_PROVIDERS = ["aws", "azure", "ibm", "linode", "vultr", "gcp", "oracle"]
 SUPPORTED_PROVIDER_SET = set(SUPPORTED_PROVIDERS)
@@ -136,6 +138,16 @@ def compare(
 
     results.sort(key=lambda r: (r.monthly_usd or float("inf"), r.hourly_usd or float("inf")))
 
+    # Equivalence basis: when a concrete family is requested, surface the
+    # dimensions the cross-provider comparison holds on and (critically) does
+    # not, so the agent and UI can disclose what the equivalence ignores per
+    # AGENTS.md. Absent for family="any" (no equivalence claim is being made).
+    equivalence: EquivalenceBasis | None = None
+    if family != ANY_FAMILY:
+        dims = family_dimensions(family)
+        if dims is not None:
+            equivalence = EquivalenceBasis(family=family, **dims)
+
     return CompareResponse(
         request=CompareRequest(
             vcpu=vcpu,
@@ -147,6 +159,7 @@ def compare(
         results=results,
         unmet_requirements=unmet,
         data_quality=compute_envelope(providers),
+        equivalence=equivalence,
     ).to_public_dict()
 
 

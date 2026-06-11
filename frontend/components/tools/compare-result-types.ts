@@ -35,12 +35,19 @@ export type CompareRow = {
   citation?: Citation;
 };
 
+export type EquivalenceBasis = {
+  family: string;
+  dimensions_matched: string[];
+  dimensions_not_normalized: string[];
+};
+
 export type CompareResult = {
   request?: { vcpu?: number; ram_gb?: number; region?: string; family?: string };
   results?: CompareRow[];
   ranked_by?: string;
   unmet_requirements?: Array<{ provider: string; reason: string }>;
   data_quality?: { overall_status?: string };
+  equivalence?: EquivalenceBasis;
 };
 
 export type CompareArgs = {

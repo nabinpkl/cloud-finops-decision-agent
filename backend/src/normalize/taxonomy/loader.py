@@ -55,6 +55,27 @@ def classify_family(provider: str, instance_type: str) -> str:
     return UNCLASSIFIED
 
 
+def family_dimensions(family: str) -> dict[str, list[str]] | None:
+    """Return the equivalence basis for a family, or None if not a real family.
+
+    ``dimensions_matched`` are the dimensions the cross-provider equivalence holds
+    on; ``dimensions_not_normalized`` are the ones it does NOT. AGENTS.md requires
+    the agent surface ``dimensions_not_normalized`` whenever it makes a
+    cross-provider comparison, so compare() attaches this to its response.
+    """
+    body = _families_raw().get(family)
+    if not isinstance(body, dict):
+        return None
+    matched = body.get("dimensions_matched")
+    not_normalized = body.get("dimensions_not_normalized")
+    if not isinstance(matched, list) or not isinstance(not_normalized, list):
+        return None
+    return {
+        "dimensions_matched": [str(d) for d in matched],
+        "dimensions_not_normalized": [str(d) for d in not_normalized],
+    }
+
+
 def families_for_provider(provider: str) -> dict[str, list[str]]:
     """Return {family_slug: [prefixes]} for one provider. Families with empty
     prefix lists are returned too (so coverage checks can see deliberate gaps)."""

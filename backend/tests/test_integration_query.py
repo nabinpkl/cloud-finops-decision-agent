@@ -51,6 +51,37 @@ def test_closest_larger_picks_smallest_fit(monkeypatch, tmp_path):
     assert winner["considered_count"] == 2  # only the two that met the spec
 
 
+def test_equivalence_basis_present_for_family(monkeypatch, tmp_path):
+    df = make_df([
+        instance_row(provider="aws", instance_type="a1.xlarge", family="general-purpose",
+                     region_canonical="us-east", vcpu=4, ram_gb=8, hourly_usd=0.115, monthly_usd=84.0),
+    ])
+    _patch_loader(monkeypatch, tmp_path, df)
+
+    out = q.compare(vcpu=4, ram_gb=8, region="us-east", family="general-purpose", providers=["aws"])
+
+    equiv = out["equivalence"]
+    assert equiv["family"] == "general-purpose"
+    assert equiv["dimensions_matched"] == ["vcpu", "ram_gb"]
+    # The dimensions the cross-provider equivalence does NOT hold on must be
+    # surfaced (AGENTS.md), e.g. cpu_generation / network_bandwidth.
+    assert "cpu_generation" in equiv["dimensions_not_normalized"]
+    assert "network_bandwidth" in equiv["dimensions_not_normalized"]
+
+
+def test_no_equivalence_basis_for_any_family(monkeypatch, tmp_path):
+    df = make_df([
+        instance_row(provider="aws", instance_type="a1.xlarge", family="general-purpose",
+                     region_canonical="us-east", vcpu=4, ram_gb=8, hourly_usd=0.115, monthly_usd=84.0),
+    ])
+    _patch_loader(monkeypatch, tmp_path, df)
+
+    # family="any" asserts no cross-provider equivalence, so no basis is emitted.
+    out = q.compare(vcpu=4, ram_gb=8, region="us-east", family="any", providers=["aws"])
+
+    assert "equivalence" not in out
+
+
 def test_unmet_when_nothing_fits(monkeypatch, tmp_path):
     df = make_df([
         instance_row(provider="aws", instance_type="t3.micro", family="general-purpose",

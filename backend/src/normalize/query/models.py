@@ -85,15 +85,30 @@ class UnmetRequirement(QueryModel):
     reason: str
 
 
+class EquivalenceBasis(QueryModel):
+    """The cross-provider equivalence basis for the requested family.
+
+    ``dimensions_matched`` are the dimensions the comparison holds on (vcpu,
+    ram_gb); ``dimensions_not_normalized`` are the ones it does NOT (cpu
+    generation, network bandwidth, included storage, ...). Present only when a
+    concrete family is requested; absent for ``family="any"``.
+    """
+
+    family: str
+    dimensions_matched: list[str]
+    dimensions_not_normalized: list[str]
+
+
 class CompareResponse(QueryModel):
     request: CompareRequest
     results: list[CompareResult]
     ranked_by: Literal["monthly_usd"] = "monthly_usd"
     unmet_requirements: list[UnmetRequirement]
     data_quality: dict[str, Any]
+    equivalence: EquivalenceBasis | None = None
 
     def to_public_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "request": self.request.model_dump(mode="json"),
             "results": [result.to_public_dict() for result in self.results],
             "ranked_by": self.ranked_by,
@@ -102,6 +117,9 @@ class CompareResponse(QueryModel):
             ],
             "data_quality": self.data_quality,
         }
+        if self.equivalence is not None:
+            out["equivalence"] = self.equivalence.model_dump(mode="json")
+        return out
 
 
 class LookupRequest(QueryModel):

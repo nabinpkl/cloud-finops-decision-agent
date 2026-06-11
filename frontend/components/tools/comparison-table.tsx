@@ -94,10 +94,12 @@ function ResultRows({
   row,
   rank,
   isSynth,
+  canonicalRegion,
 }: {
   row: CompareRowType;
   rank: number;
   isSynth: boolean;
+  canonicalRegion?: string;
 }) {
   const composite = row.citation?.composite ?? [];
   return (
@@ -110,6 +112,18 @@ function ResultRows({
         <td className="px-3 py-2">
           {row.instance_type}
           {isSynth && <DerivedBadge formula={row.citation?.synthesis?.formula} />}
+        </td>
+        <td className="px-3 py-2">
+          {/* Region: provider-native code, with the canonical bucket it maps to
+              as the title so both halves of the equivalence are visible. */}
+          <span title={canonicalRegion ? `canonical: ${canonicalRegion}` : undefined}>
+            {row.region_native ?? "-"}
+          </span>
+          {canonicalRegion && (
+            <span className="text-muted-foreground ml-1 text-[10px]">
+              ({canonicalRegion})
+            </span>
+          )}
         </td>
         <td className="px-3 py-2 text-right">{row.vcpu_actual ?? "-"}</td>
         <td className="px-3 py-2 text-right">{gb(row.ram_gb_actual)}</td>
@@ -136,7 +150,7 @@ function ResultRows({
         >
           <td className="px-3 py-1.5" />
           <td className="px-3 py-1.5" />
-          <td className="px-3 py-1.5 pl-6" colSpan={4}>
+          <td className="px-3 py-1.5 pl-6" colSpan={5}>
             ↳ {entry.rate_unit ?? "rate"}
             {typeof entry.rate === "number" ? ` @ $${entry.rate}` : ""}
             {typeof entry.quantity === "number" ? ` × ${entry.quantity}` : ""}
@@ -213,6 +227,7 @@ const ComparisonTableImpl = ({
                 <th className="px-3 py-2 font-medium">#</th>
                 <th className="px-3 py-2 font-medium">Provider</th>
                 <th className="px-3 py-2 font-medium">Instance</th>
+                <th className="px-3 py-2 font-medium">Region</th>
                 <th className="px-3 py-2 text-right font-medium">vCPU</th>
                 <th className="px-3 py-2 text-right font-medium">RAM</th>
                 <th className="px-3 py-2 text-right font-medium">Hourly</th>
@@ -231,6 +246,7 @@ const ComparisonTableImpl = ({
                     row={row}
                     rank={i + 1}
                     isSynth={isSynth}
+                    canonicalRegion={data.request?.region}
                   />
                 );
               })}
@@ -243,6 +259,22 @@ const ComparisonTableImpl = ({
         <div className="text-muted-foreground border-t px-4 py-2 text-xs">
           No match: {unmet.map((u) => providerLabel(u.provider)).join(", ")} had
           no instance meeting the spec.
+        </div>
+      )}
+
+      {/* Equivalence basis (AGENTS.md): when a family is requested, disclose what
+          the cross-provider comparison holds on and, critically, what it does
+          NOT normalize, so the equivalence is never silently asserted. */}
+      {data.equivalence && (
+        <div className="text-muted-foreground border-t px-4 py-2 text-xs">
+          <span className="font-medium">Equivalence basis</span>
+          {data.equivalence.family ? ` (${data.equivalence.family})` : ""}:
+          matched {data.equivalence.dimensions_matched.join(", ") || "—"}. Not
+          normalized:{" "}
+          <span className="text-foreground/80">
+            {data.equivalence.dimensions_not_normalized.join(", ") || "—"}
+          </span>
+          .
         </div>
       )}
     </div>
