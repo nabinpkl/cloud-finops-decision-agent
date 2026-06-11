@@ -47,8 +47,12 @@ shell and the `ComparisonTable` Tool component for no protocol gain.
 3. **State is backend-authoritative, streamed as AG-UI state events.** The
    canonical view-state (filters + current result set + selection) lives in the
    FastAPI process. The agent and the manual form both mutate it through the
-   backend; the backend broadcasts `STATE_SNAPSHOT` on connect and `STATE_DELTA`
-   on every change. The frontend renders state; it does not own it.
+   backend; the backend broadcasts a single `STATE_SNAPSHOT` after the turn
+   completes. (As shipped the transport is **snapshot-only**: it buffers the turn
+   and emits one full snapshot, observationally equivalent to deltas for a
+   single-turn round-trip. `STATE_DELTA` is reserved for a future incremental
+   variant and is not emitted today.) The frontend renders state; it does not own
+   it.
 
 4. **The hardening surface migrates with the transport, not around it.** The XML
    trust-zone wrapping, body/history/turn limits, budget enforcement, the
@@ -57,6 +61,35 @@ shell and the `ComparisonTable` Tool component for no protocol gain.
    The migration step re-verifies the security and budget test suites, not only
    the happy path. No price, citation, or claim binding moves to the wire layer;
    `normalize.wire` still strips `store_path` below the transport.
+
+5. **The conversation thread is client-owned and fully untrusted.** AG-UI's
+   `RunAgentInput` carries the entire conversation in `messages[]` on every turn,
+   so the backend rebuilds the thread from client input each request
+   (`apply_agui_messages`) and keeps **no server-side conversation store**. This
+   is deliberate for a stateless, public, read-only pricing agent. Every
+   client-supplied message is distrusted at the boundary:
+   - both user and prior-assistant text are XML-escaped and wrapped in untrusted
+     trust-zone tags (`<external_user_request>` / `<previous_assistant_message>`);
+   - only `user`/`assistant` roles become turns — client `system`/`developer`/
+     `tool` messages are dropped, so no client role maps to a trusted zone and no
+     client can inject a `<trusted_tool_result>` into history;
+   - message count, per-message length, and total history are capped (422), and
+     the body-size middleware and token caps bound amplification;
+   - view-state is reseeded server-side (`prepare_incoming_state`), so a
+     client-supplied `view`/`selection`/`sessionLimitReached` is never trusted;
+   - `AnswerPlan` price claims bind to the latest **real** tool result from this
+     turn, not to anything in the client-supplied history.
+
+   The accepted consequence: **session identity (cookie + hashed IP) governs
+   budget and rate limits, not conversation integrity.** The backend cannot
+   detect tampered or replayed history, and forged assistant history is a
+   prompt-injection surface that the trust-zone wrapping + input judge mitigate
+   but do not eliminate (the prompt is not a security boundary; the deterministic
+   citation/validation layer is). This is safe because nothing in the
+   client-supplied history is authoritative: it cannot fabricate a price, leak an
+   internal path, grant a trusted instruction, or mutate view-state. A
+   server-side thread store would only be required if history ever became
+   authoritative (per-user state, private data, persistent memory).
 
 ## Consequences
 

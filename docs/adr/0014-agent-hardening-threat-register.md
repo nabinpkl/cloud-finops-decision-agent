@@ -4,7 +4,8 @@
 - **Date:** 2026-06-06
 - **Related:** [0011](0011-public-endpoint-threat-model.md),
   [0012](0012-agent-runtime-port.md),
-  [0013](0013-verified-answer-plan-rendering.md)
+  [0013](0013-verified-answer-plan-rendering.md),
+  [0016](0016-ag-ui-transport.md)
 
 ## Context
 
@@ -82,6 +83,7 @@ supersede it before shipping.
 | Runtime anomaly detection beyond budget/policy spans | Deferred | OTel traces and evals exist, but there is no production alerting loop yet. For a local open bench, this is acceptable. | Required for hosted production, sustained public traffic, or any side-effecting/autonomous behavior. |
 | Tamper-resistant snapshot integrity | Deferred and already scoped to v1 | v0 stores hashes/report artifacts inside the same local store. That catches accidental drift but is not notarization. The agent does not get write tools to mutate snapshots. | Required before claiming external integrity or using snapshots as audit evidence beyond this local bench. |
 | Rogue-agent containment | Not applicable | The runtime is per-request and does not self-initiate tasks. There are no background autonomous loops or agent identities that can act without a user request. | Required before scheduled tasks, autonomous monitoring, self-improvement loops, or persistent worker agents. |
+| Server-side conversation integrity / thread store | Not implemented (deliberate) | Under AG-UI the client owns the thread: `RunAgentInput.messages[]` carries the whole conversation each turn and the backend rebuilds it with no server store (ADR-0016 §5). All client history is XML-escaped, zone-wrapped, role-filtered, capped, and non-authoritative (cannot fabricate prices, leak paths, grant trusted instructions, or mutate view-state). Session identity governs budget/rate, not conversation integrity. | Required before history becomes authoritative: per-user state, private data, persistent/long-term memory, or any case where a tampered/replayed thread could change a side-effecting outcome. |
 
 ## Residual risks that still apply
 
@@ -98,6 +100,14 @@ supersede it before shipping.
 4. **Dependency compromise remains a normal software supply-chain risk.** The
    agent architecture cannot remove that risk; it only localizes framework glue
    behind adapters and keeps tool authority narrow.
+5. **The conversation thread is client-owned (ADR-0016 §5).** Under AG-UI the
+   client sends the full `messages[]` each turn and the backend keeps no thread
+   store, so the backend cannot detect tampered or replayed history. This is safe
+   only because client history is non-authoritative: every message is escaped,
+   zone-wrapped, role-filtered, and capped, and prices/citations bind to the
+   live tool result, not history. Forged assistant history is a mitigated (not
+   eliminated) injection surface. If a future change makes history authoritative,
+   add a server-side thread store before shipping.
 
 ## Mitigation plan landed 2026-06-06
 
