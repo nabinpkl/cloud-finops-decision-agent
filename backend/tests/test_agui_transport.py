@@ -157,3 +157,28 @@ def test_tool_call_events_emitted(monkeypatch: pytest.MonkeyPatch):
     assert "TOOL_CALL_ARGS" in types
     assert "TOOL_CALL_END" in types
     assert "TOOL_CALL_RESULT" in types
+
+
+def test_set_view_tool_result_mutates_view_state(monkeypatch: pytest.MonkeyPatch):
+    import api.assistant_transport.turn as turn_module
+    import api.main as apimain
+    from agent.tools.view import run_set_view
+
+    class ViewRuntime:
+        async def run(self, turns, emit, usage):
+            emit.tool_call("call-v", "set_view", "{}", {})
+            emit.tool_result(
+                "call-v",
+                run_set_view(columns=[{"column_id": "provider"}]),
+            )
+
+    monkeypatch.setattr(turn_module, "get_runtime", lambda: ViewRuntime())
+    client = TestClient(apimain.app)
+    response = client.post("/assistant", json={"commands": [_user_msg("show table")]})
+
+    assert response.status_code == 200
+    snapshot = next(
+        e for e in _sse_events(response.text) if e["type"] == "STATE_SNAPSHOT"
+    )["snapshot"]
+    # The co-driver tool result lands in the backend-authoritative view-state.
+    assert snapshot["view"]["columns"][0]["column_id"] == "provider"

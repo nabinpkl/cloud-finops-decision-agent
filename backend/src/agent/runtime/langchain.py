@@ -42,6 +42,13 @@ from agent.tools.pricing import (
     CompareToolArgs,
     run_compare_for_model,
 )
+from agent.tools.view import (
+    SELECT_DESCRIPTION,
+    SET_VIEW_DESCRIPTION,
+    run_select_for_model,
+    run_set_view_for_model,
+)
+from agent.tools.view_models import SelectionSpec, ViewSpec
 
 
 def _compare_tool() -> StructuredTool:
@@ -71,6 +78,51 @@ def _compare_tool() -> StructuredTool:
         name="compare",
         description=COMPARE_DESCRIPTION,
         args_schema=CompareToolArgs,
+        response_format="content_and_artifact",
+    )
+
+
+def _set_view_tool() -> StructuredTool:
+    """Bind the neutral `run_set_view` co-driver tool (TASKS R3)."""
+
+    def set_view(
+        columns: list[dict[str, Any]],
+        layout: str = "table",
+        group_by: str | None = None,
+        sort: dict[str, Any] | None = None,
+        source_result_indices: list[int] | None = None,
+    ) -> tuple[str, dict[str, Any]]:
+        return run_set_view_for_model(
+            columns=columns,
+            layout=layout,
+            group_by=group_by,
+            sort=sort,
+            source_result_indices=source_result_indices or [],
+        )
+
+    return StructuredTool.from_function(
+        set_view,
+        name="set_view",
+        description=SET_VIEW_DESCRIPTION,
+        args_schema=ViewSpec,
+        response_format="content_and_artifact",
+    )
+
+
+def _select_tool() -> StructuredTool:
+    """Bind the neutral `run_select` annotation tool (TASKS R3)."""
+
+    def select(
+        rows: list[int] | None = None,
+        highlight: int | None = None,
+    ) -> tuple[str, dict[str, Any]]:
+        return run_select_for_model(rows=rows or [], highlight=highlight)
+
+    return StructuredTool.from_function(
+        select,
+        name="select",
+        description=SELECT_DESCRIPTION,
+        args_schema=SelectionSpec,
         response_format="content_and_artifact",
     )
 
@@ -171,7 +223,7 @@ class LangChainRuntime:
         ]
         agent = create_agent(
             model=_build_model(),
-            tools=[_compare_tool()],
+            tools=[_compare_tool(), _set_view_tool(), _select_tool()],
             system_prompt=INSTRUCTIONS,
             middleware=middleware,
             response_format=ProviderStrategy(

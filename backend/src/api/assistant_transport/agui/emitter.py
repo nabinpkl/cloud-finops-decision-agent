@@ -27,6 +27,7 @@ from ag_ui.core import (
 )
 
 from api.assistant_transport.agui.context import AGUIRunContext
+from api.assistant_transport.view_state import apply_view_tool_result
 
 
 class AGUIStateEmitter:
@@ -105,6 +106,10 @@ class AGUIStateEmitter:
         if idx is not None:
             self._parts()[idx]["result"] = result
             self._parts()[idx]["done"] = True
+        # Co-driver tools mutate the backend-authoritative view-state. The
+        # backend is the only writer; it applies set_view/select results that
+        # already passed the tool's shape validation (TASKS R3).
+        apply_view_tool_result(self._ctx.state, result)
         self._ctx.emit_event(
             ToolCallResultEvent(
                 message_id=self._message_id,
