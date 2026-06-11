@@ -19,6 +19,19 @@ SESSION_LIMIT_MESSAGE = (
 )
 
 
+def default_view_state() -> dict[str, Any]:
+    """The backend-authoritative view-state seed (ADR-0016 decision 3).
+
+    The agent and the manual form both mutate this through the backend; the
+    table renders ``view`` (declarative spec: columns/layout/grouping) and
+    ``selection`` (annotations). Empty until a validated tool result populates
+    it. The backend never trusts a client-supplied ``view``/``selection``;
+    those are reset to defaults on every incoming request so the agent and
+    deterministic layer remain the only writers of view-state.
+    """
+    return {"view": None, "selection": {"rows": [], "highlight": None}}
+
+
 def prepare_incoming_state(raw_state: dict[str, Any] | None) -> dict[str, Any]:
     state = raw_state or {"messages": []}
     state.setdefault("messages", [])
@@ -27,6 +40,10 @@ def prepare_incoming_state(raw_state: dict[str, Any] | None) -> dict[str, Any]:
     state["messages"] = state["messages"][-settings.assistant_max_state_messages:]
     # Round-tripped state is UI scaffolding. Enforcement flags are backend-owned.
     state.pop("sessionLimitReached", None)
+    # View-state is backend-authoritative: discard any client-supplied view or
+    # selection and reseed from defaults. Only validated agent/form mutations
+    # may write these fields.
+    state.update(default_view_state())
     return state
 
 
