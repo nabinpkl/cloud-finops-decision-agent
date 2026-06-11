@@ -60,16 +60,17 @@ validated object. Lean toward folding into `AnswerPlan`.
 2. [done] Co-driver tools: `set_view`/`select` alongside `compare`/`lookup`. (R3)
 3. [done] Generative-view contract: `columns.json` registry + declarative
    view-spec + reject-and-retry validation. (R5 -> R6, R7)
-4. [partial] Trust + citation depth: badges + citation fields + excerpt +
-   composite sub-rows + stale badge done; Region column + dimensions_not_normalized
-   remain (R8), and the UI is browser-unverified (R12). (R4, R8)
-5. [partial] Docs/ADRs: ADR-0016, ADR-0017 done; PRD non-goals guardrail
-   remains (R11). (R1, R11)
+4. [done] Trust + citation depth: badges, citation fields, excerpt, composite
+   sub-rows, stale badge, Region column, and the equivalence-basis footnote.
+   UI still browser-unverified (R12). (R4, R8)
+5. [done] Docs/ADRs: ADR-0016, ADR-0017, and the PRD prospective-only
+   guardrail. (R1, R11)
 
-All merged to `main` at 83051fb. Backward-compat cleanup (legacy commands path
-removed, single ViewSpec concept, 422-on-oversize) landed in the same merge.
-Remaining: R8 (Region column + dimensions surfacing), R11 (PRD guardrail),
-R12 (browser verification), and the carried-forward R26/R35.
+All merged to `main` (83051fb, then 1032846 + d25be36 for the R8/R11
+completion). Backward-compat cleanup (legacy commands path removed, single
+ViewSpec concept, 422-on-oversize) landed in the 83051fb merge. The only
+remaining work on the new arc is R12 (browser end-to-end verification); the
+carried-forward v0 items R26/R35 are still open.
 
 Migration caveat: the AG-UI swap must carry the hardening surface across, not
 around it. The XML trust-zone wrapping, body/turn limits, mandatory input judge
@@ -124,13 +125,13 @@ re-verifies the security and budget suites, not just the happy path.
 
 ## Phase C: contract fixes carried from the mockup review
 
-- [ ] R8. Fix citation/contract gaps (PARTIAL, merged 83051fb). DONE: real
-  contract fields (`source_url`, `json_path`, `age_hours`, `snapshot` ref) are
-  rendered, excerpt-on-click hunk, composite sub-rows, and a stale-snapshot badge
-  (`data_quality.overall_status == "stale"`). REMAINING: a per-row Region column
-  (canonical + native, per the ComparisonTable spec) is missing (region only
-  shows as a table subtitle); `dimensions_not_normalized` is not surfaced in the
-  comparison view. USD-only confirmed.
+- [x] R8. Fix citation/contract gaps (done; 83051fb + 1032846). Real contract
+  fields (`source_url`, `json_path`, `age_hours`, `snapshot` ref) rendered,
+  excerpt-on-click hunk, composite sub-rows, stale-snapshot badge, a per-row
+  Region column (provider-native + canonical bucket), and an equivalence-basis
+  footnote surfacing `dimensions_not_normalized` (compare() now emits an
+  `equivalence` block for concrete families). USD-only confirmed. Browser
+  verification still pending under R12.
 
 ## Phase D: open decisions (capture as ADRs)
 
@@ -143,11 +144,11 @@ re-verifies the security and budget suites, not just the happy path.
   primitives in `normalize`. Aggregate columns are Tier-2 registry formulas over
   cited cells. Snapshot-history questions ("what got pricier") are out of scope
   pending a snapshot-retention ADR. Implementation lands with the view-spec work.
-- [ ] R11. Record the prospective-only guardrail in `PRD.md` non-goals. The
-  sidebar agent is a pre-purchase comparison advisor over public catalog prices.
-  It does not track the user's own resources, spend, or usage (the
-  OpenCost/Kubecost/Vantage/CloudZero space the README excludes). Write this down
-  so the agent does not drift into a usage/billing dashboard clone.
+- [x] R11. Record the prospective-only guardrail in `PRD.md` non-goals (done;
+  d25be36). The sidebar agent is a pre-purchase comparison advisor over public
+  catalog prices; it does not connect to an account or track the user's own
+  resources/usage/spend. Recorded in PRD §3 with the rationale (would break the
+  citation contract and slide into the excluded spend-management space).
 
 ## Phase E: verification gate
 
