@@ -7,10 +7,11 @@
 <!--
   LAYOUT MOCK, not a price quote.
 
-  Shows the ADR-0016 dual-surface product the isolated ComparisonTable
-  screenshots can't: a deterministic table the human drives via filters, with a
-  sidebar co-driver agent that operates the SAME table (compare + set_view), not
-  a second one. Backend stays source of truth for view-state.
+  This is the HOME PAGE = a manual comparison dashboard the human drives via
+  filters. Beside it sits a pricing assistant that answers questions with cited
+  results. The assistant is a SEPARATE surface from this manual dashboard: it
+  does not reshape the manual table (no set_view coupling here). Refetch is an
+  operator/agent concern, not a user button, so it is absent.
 
   Clean-design rules applied (synthesised from current SaaS guidance):
     - Sticky full-width navbar, primary elements only: brand left, 3-6 nav
@@ -283,7 +284,6 @@
       <h1>Cheapest 4 vCPU · 8 GB</h1>
     </div>
     <div class="actions">
-      <button class="btn">Refetch</button>
       <button class="btn">Export</button>
       <button class="btn primary">＋ New comparison</button>
     </div>
@@ -299,7 +299,6 @@
         <div class="field"><label>Family</label><select><option>general-purpose</option><option>any</option><option>compute-opt</option><option>memory-opt</option></select></div>
         <div class="field"><label>Region</label><select><option>eu-central</option><option>us-east</option><option>ap-southeast</option></select></div>
         <span class="grow"></span>
-        <span class="agent-tag">⤷ agent set columns &amp; sort</span>
         <button class="btn primary" style="height:34px">Compare</button>
       </div>
 
@@ -389,33 +388,34 @@
     <!-- ---------- RIGHT: co-driver agent operating the SAME table ---------- -->
     <aside class="agent">
       <div class="agent-head">
-        <span class="live"></span><span class="t">Pricing co-driver</span>
+        <span class="live"></span><span class="t">Pricing assistant</span>
         <span class="state chip">budget 38%</span>
       </div>
       <div class="thread">
         <div class="msg user"><div class="bubble">Cheapest 4 vCPU 8 GB general-purpose VM in the EU?</div></div>
         <div class="msg bot">
           <div class="tool"><div class="h"><span class="ok">✓</span> compare</div><div class="a mono">vcpu=4, ram_gb=8, family="general-purpose", region="eu-central"</div></div>
-          <div class="tool"><div class="h"><span class="ok">✓</span> <span class="verb">set_view</span></div><div class="a mono">sort=monthly_usd ↑ · cols=[provider, instance, region, vcpu, ram, hourly, monthly]</div></div>
           <div class="bubble">
             Cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, 6h old). Close: Oracle $143.08, GCP $148.92, Azure $154.20.
-            Oracle's snapshot is 31h old — flagged stale in the table; say "refetch" for live Oracle.
-            <div class="cite">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on a row to verify json_path against the source.</div>
+            Oracle's snapshot is 31h old, so its number is flagged stale.
+            <div class="cite">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on a citation to verify json_path against the source.</div>
           </div>
         </div>
-        <div class="msg user"><div class="bubble">Add a $/vCPU column and drop hourly.</div></div>
+        <div class="msg user"><div class="bubble">Which has the best $/vCPU?</div></div>
         <div class="msg bot">
-          <div class="tool"><div class="h"><span class="ok">✓</span> <span class="verb">set_view</span></div><div class="a mono">+ derived "usd_per_vcpu" (monthly_usd / vcpu) · − hourly</div></div>
-          <div class="bubble">Done — added <b>$/vCPU</b> as a derived column (badged, with its formula) and removed Hourly. The table updated in place.</div>
+          <div class="bubble">
+            On $/vCPU: <b>Linode</b> is far ahead at <b>$12.00</b> per vCPU/mo ($48.00 ÷ 4), then AWS $35.04, Oracle $35.77, GCP $37.23, Azure $38.55.
+            Linode is cheapest outright too — note the equivalence caveats above before treating these as interchangeable.
+          </div>
         </div>
       </div>
       <div class="suggest">
         <span class="s">Compare AWS · GCP · Azure</span>
         <span class="s">Try 2 vCPU / 4 GB</span>
-        <span class="s">Refetch Oracle</span>
+        <span class="s">Explain the equivalence</span>
       </div>
       <div class="composer">
-        <textarea placeholder="Ask the co-driver to reshape the table…"></textarea>
+        <textarea placeholder="Ask about prices across providers…"></textarea>
         <button class="send">↑</button>
       </div>
     </aside>
