@@ -163,6 +163,13 @@
   td.price { font-weight: 600; }
   td.price .unit { font-weight: 400; color: var(--muted-foreground); font-size: 11px; margin-left: 1px; }
   .tag-derived { margin-left: 6px; font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 5px; color: var(--derived); background: var(--derived-soft); cursor: help; }
+  /* disclosure toggle for a derived row's composite breakdown sub-rows */
+  .disclose { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-right: 4px;
+    border: none; background: transparent; color: var(--muted-foreground); cursor: pointer; font-size: 9px; border-radius: 4px;
+    vertical-align: middle; transition: transform .15s ease; }
+  .disclose:hover { background: var(--muted); color: var(--foreground); }
+  .disclose.open { transform: rotate(90deg); }
+  tr.sub { transition: opacity .15s ease; }
   .age { font-size: 12px; color: var(--muted-foreground); }
   .age.bad { color: var(--stale); background: var(--stale-soft); border-radius: 5px; padding: 1px 7px; font-weight: 500; }
   .age .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); margin-right: 5px; vertical-align: middle; }
@@ -312,15 +319,16 @@
               <td><a class="src" href="#">Oracle Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
             </tr>
             <tr>
-              <td><span class="rank">3</span></td><td class="prov">GCP</td><td class="mono">n2-standard-4<span class="tag-derived" title="agent-derived: core·4 + ram·8">derived</span></td>
+              <td><span class="rank">3</span></td><td class="prov">GCP</td>
+              <td class="mono"><button class="disclose open" aria-expanded="true" title="Show/hide rate breakdown" onclick="toggleGroup('gcp', this)">▶</button>n2-standard-4<span class="tag-derived" title="agent-derived: core·4 + ram·8">derived</span></td>
               <td>europe-west3<span class="region-canon">eu-central</span></td>
               <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.204</td>
               <td class="r price mono">$148.92<span class="unit">/mo</span></td>
               <td><span class="age"><span class="dot"></span>just now</span></td>
               <td><a class="src" href="#">GCP SKUs</a><span class="verify" title="verify json_path against source">⌖</span></td>
             </tr>
-            <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="verify">⌖</span></td></tr>
-            <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="verify">⌖</span></td></tr>
+            <tr class="sub" data-subof="gcp"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="verify">⌖</span></td></tr>
+            <tr class="sub" data-subof="gcp"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="verify">⌖</span></td></tr>
             <tr>
               <td><span class="rank">4</span></td><td class="prov">Azure</td><td class="mono">Standard_D4s_v5</td>
               <td>westeurope<span class="region-canon">eu-central</span></td>
@@ -408,6 +416,12 @@
     function agent(open){
       const on = document.body.classList.toggle('agent-open', open);
       document.querySelector('.ask-btn')?.setAttribute('aria-pressed', String(on));
+    }
+    // expand/collapse a derived row's composite breakdown sub-rows
+    function toggleGroup(id, btn){
+      const open = btn.classList.toggle('open');
+      btn.setAttribute('aria-expanded', String(open));
+      document.querySelectorAll(`tr[data-subof="${id}"]`).forEach(r => { r.style.display = open ? '' : 'none'; });
     }
   </script>
 </body>
