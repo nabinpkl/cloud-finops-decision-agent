@@ -7,34 +7,27 @@
 <!--
   LAYOUT MOCK, not a price quote.
 
-  One workspace, one page. The traditional deterministic comparison dashboard
-  (navbar + filters + table) is the primary layer the human drives, sitting on
-  top of an agent chat surface that is docked as a PANEL on the same page (not a
-  separate route). The panel is collapsible. The assistant answers questions
-  with cited results; it does not reshape the manual table (no set_view coupling
-  here). Refetch is an operator/agent concern, not a user button, so it is absent.
+  Architecture shown:
+    - MAIN PAGE = the traditional deterministic comparison dashboard
+      (navbar + filters + full-width table). It owns the page; nothing about the
+      agent is baked into it.
+    - AGENT = a SEPARATE panel, summoned on demand from an agent icon (navbar
+      button + a floating launcher). It opens as an elevated slide-over over a
+      dimmed page, with its own identity and a close control; closing it returns
+      the dashboard to full width. It is not a docked column and not a route.
+    - The assistant answers with cited results; it does NOT reshape the manual
+      table (no set_view coupling). Refetch is operator/agent-side, not a user
+      button, so it is absent.
 
-  Clean-design rules applied (synthesised from current SaaS guidance):
-    - Sticky full-width navbar, primary elements only: brand left, 3-6 nav
-      items, secondary actions right (Telerik top-navbar anatomy).
-    - Page header beneath the navbar carries page context, so location is
-      always clear.
-    - 8pt spacing scale, single accent colour, 3 font weights (400/500/600),
-      one type scale. Colour used sparingly + only for state.
-    - Data-dense table (tight rows, strong right-alignment, tabular numerals);
-      whitespace lives around sections, not inside the grid. Hierarchy points
-      the eye at the winner row + the monthly price.
-
+  Open/close is wired (launcher + navbar icon open it; ✕ or the scrim close it).
   Numbers are ILLUSTRATIVE and do NOT trace to a snapshot — a design artifact,
   never a runtime answer. No external assets; open directly in a browser.
 -->
 <style>
   :root {
-    /* spacing scale (8pt) */
     --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
-    --radius: 10px; --radius-sm: 7px; --radius-pill: 999px;
+    --radius: 10px; --radius-sm: 7px; --radius-lg: 16px; --radius-pill: 999px;
 
-    /* neutrals (mirror frontend/app/globals.css) */
     --background: oklch(0.985 0.001 286.375);
     --foreground: oklch(0.18 0.005 285.823);
     --card: oklch(1 0 0);
@@ -43,8 +36,8 @@
     --border: oklch(0.922 0.004 286.32);
     --border-soft: oklch(0.95 0.003 286.32);
 
-    /* single accent + semantic state colours, used sparingly */
     --accent: oklch(0.55 0.16 264);
+    --accent-2: oklch(0.62 0.17 320);
     --accent-soft: oklch(0.55 0.16 264 / 0.10);
     --ok: oklch(0.62 0.15 150);
     --stale: oklch(0.58 0.20 27);
@@ -54,6 +47,8 @@
     --win-soft: oklch(0.55 0.16 264 / 0.045);
 
     --shadow: 0 1px 2px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.05);
+    --shadow-xl: 0 10px 30px -8px oklch(0 0 0 / 0.22), 0 30px 60px -20px oklch(0 0 0 / 0.18);
+    --scrim: oklch(0.2 0.01 285 / 0.28);
   }
   [data-theme="dark"] {
     --background: oklch(0.16 0.005 285.823);
@@ -64,6 +59,7 @@
     --border: oklch(1 0 0 / 0.11);
     --border-soft: oklch(1 0 0 / 0.06);
     --accent: oklch(0.72 0.15 264);
+    --accent-2: oklch(0.74 0.16 320);
     --accent-soft: oklch(0.72 0.15 264 / 0.16);
     --ok: oklch(0.72 0.15 150);
     --stale: oklch(0.70 0.19 22);
@@ -72,6 +68,8 @@
     --derived-soft: oklch(0.80 0.12 75 / 0.16);
     --win-soft: oklch(0.72 0.15 264 / 0.09);
     --shadow: 0 1px 2px oklch(0 0 0 / 0.3);
+    --shadow-xl: 0 10px 30px -8px oklch(0 0 0 / 0.55), 0 30px 70px -20px oklch(0 0 0 / 0.5);
+    --scrim: oklch(0 0 0 / 0.5);
   }
 
   * { box-sizing: border-box; }
@@ -79,11 +77,8 @@
   body {
     margin: 0;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: var(--background);
-    color: var(--foreground);
-    font-size: 14px;
-    line-height: 1.5;
-    letter-spacing: -0.006em;
+    background: var(--background); color: var(--foreground);
+    font-size: 14px; line-height: 1.5; letter-spacing: -0.006em;
     -webkit-font-smoothing: antialiased;
   }
   .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-feature-settings: "tnum" 1; letter-spacing: 0; }
@@ -94,128 +89,74 @@
   /* ============================ NAVBAR ============================ */
   .nav {
     position: sticky; top: 0; z-index: 20;
-    display: flex; align-items: center; gap: var(--s5);
-    height: 56px; padding: 0 var(--s5);
+    display: flex; align-items: center; gap: var(--s5); height: 56px; padding: 0 var(--s5);
     background: color-mix(in oklch, var(--card) 88%, transparent);
-    backdrop-filter: saturate(1.4) blur(10px);
-    border-bottom: 1px solid var(--border);
+    backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--border);
   }
   .brand { display: flex; align-items: center; gap: var(--s2); font-weight: 600; letter-spacing: -0.02em; }
-  .brand .mark {
-    width: 22px; height: 22px; border-radius: 6px;
-    background: linear-gradient(135deg, var(--accent), color-mix(in oklch, var(--accent) 60%, oklch(0.7 0.18 320)));
-  }
+  .brand .mark { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
   .brand .sub { color: var(--muted-foreground); font-weight: 400; }
   .nav-links { display: flex; align-items: center; gap: var(--s1); }
-  .nav-links a {
-    padding: 6px 10px; border-radius: var(--radius-sm); text-decoration: none;
-    color: var(--muted-foreground); font-size: 13.5px; font-weight: 500;
-  }
-  .nav-links a:hover { color: var(--foreground); background: var(--muted); }
-  .nav-links a.active { color: var(--foreground); background: var(--muted); }
+  .nav-links a { padding: 6px 10px; border-radius: var(--radius-sm); text-decoration: none; color: var(--muted-foreground); font-size: 13.5px; font-weight: 500; }
+  .nav-links a:hover, .nav-links a.active { color: var(--foreground); background: var(--muted); }
   .nav-spacer { flex: 1; }
   .nav-right { display: flex; align-items: center; gap: var(--s3); }
-  .search {
-    display: flex; align-items: center; gap: var(--s2);
-    height: 34px; padding: 0 var(--s3); min-width: 220px;
-    border: 1px solid var(--border); border-radius: var(--radius);
-    background: var(--background); color: var(--muted-foreground); font-size: 13px;
-  }
-  .search kbd {
-    margin-left: auto; font: inherit; font-size: 11px; padding: 1px 6px;
-    border: 1px solid var(--border); border-radius: 5px; color: var(--muted-foreground);
-  }
-  .icon-btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 34px; height: 34px; border-radius: var(--radius);
-    border: 1px solid var(--border); background: var(--background);
-    color: var(--muted-foreground); cursor: pointer; font-size: 15px;
-  }
+  .search { display: flex; align-items: center; gap: var(--s2); height: 34px; padding: 0 var(--s3); min-width: 210px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); color: var(--muted-foreground); font-size: 13px; }
+  .search kbd { margin-left: auto; font: inherit; font-size: 11px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--background); color: var(--muted-foreground); cursor: pointer; font-size: 15px; }
   .icon-btn:hover { color: var(--foreground); }
-  .avatar {
-    width: 30px; height: 30px; border-radius: var(--radius-pill);
-    background: linear-gradient(135deg, var(--accent), oklch(0.7 0.16 200));
-    color: white; display: inline-flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 600; cursor: pointer;
-  }
+  /* the agent summon button — distinct, accent-tinted so it reads as "the AI" */
+  .ask-btn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; border-radius: var(--radius);
+    border: 1px solid color-mix(in oklch, var(--accent) 35%, transparent); background: var(--accent-soft); color: var(--accent);
+    font-size: 13px; font-weight: 600; cursor: pointer; }
+  .ask-btn .spark { width: 15px; height: 15px; }
+  .avatar { width: 30px; height: 30px; border-radius: var(--radius-pill); background: linear-gradient(135deg, var(--accent), oklch(0.7 0.16 200));
+    color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; cursor: pointer; }
 
-  /* ============================ PAGE HEADER ============================ */
-  .pagehead {
-    display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4);
-    padding: var(--s5) var(--s5) var(--s4);
-    max-width: 1320px; margin: 0 auto; width: 100%;
-  }
+  /* ============================ PAGE HEADER + SHELL ============================ */
+  .pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4);
+    padding: var(--s5) var(--s5) var(--s4); max-width: 1280px; margin: 0 auto; width: 100%; }
   .pagehead h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
   .pagehead .crumb { font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 3px; }
   .pagehead .actions { display: flex; gap: var(--s2); }
-  .btn {
-    height: 34px; padding: 0 var(--s4); border-radius: var(--radius);
-    font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border);
-    background: var(--background); color: var(--foreground);
-    display: inline-flex; align-items: center; gap: var(--s2);
-  }
+  .btn { height: 34px; padding: 0 var(--s4); border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--border); background: var(--background); color: var(--foreground); display: inline-flex; align-items: center; gap: var(--s2); }
   .btn.primary { background: var(--accent); border-color: transparent; color: white; }
 
-  /* ============================ LAYOUT ============================ */
-  .shell { max-width: 1320px; margin: 0 auto; width: 100%; padding: 0 var(--s5) var(--s6);
-           display: grid; grid-template-columns: 1fr 372px; gap: var(--s5); align-items: start; }
+  .shell { max-width: 1280px; margin: 0 auto; width: 100%; padding: 0 var(--s5) var(--s6); }
 
-  /* ---- filter toolbar ---- */
-  .toolbar {
-    display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s4);
-    padding: var(--s4); margin-bottom: var(--s4);
-    border: 1px solid var(--border); border-radius: var(--radius);
-    background: var(--card); box-shadow: var(--shadow);
-  }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s4); padding: var(--s4); margin-bottom: var(--s4);
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
   .field { display: flex; flex-direction: column; gap: 5px; }
   .field label { font-size: 11px; font-weight: 500; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.04em; }
-  .field select {
-    appearance: none; height: 34px; min-width: 138px; padding: 0 var(--s3);
-    border: 1px solid var(--border); border-radius: var(--radius);
+  .field select { appearance: none; height: 34px; min-width: 140px; padding: 0 var(--s3); border: 1px solid var(--border); border-radius: var(--radius);
     background: var(--background); color: var(--foreground); font: inherit; font-size: 13px;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%), linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
-    background-position: right 13px center, right 8px center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
-  }
+    background-position: right 13px center, right 8px center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   .toolbar .grow { flex: 1; }
-  .agent-tag {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 11.5px; color: var(--accent); background: var(--accent-soft);
-    border-radius: var(--radius-pill); padding: 5px 11px;
-  }
 
-  /* ---- card + table ---- */
+  /* card + table */
   .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); }
   .card-head .t { font-weight: 600; }
-  .chip {
-    font-size: 11.5px; font-weight: 500; padding: 3px 9px; border-radius: var(--radius-pill);
-    border: 1px solid var(--border); color: var(--muted-foreground);
-  }
+  .chip { font-size: 11.5px; font-weight: 500; padding: 3px 9px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--muted-foreground); }
   .chip.stale { color: var(--stale); background: var(--stale-soft); border-color: transparent; }
-
   table { width: 100%; border-collapse: collapse; }
-  thead th {
-    text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
-    color: var(--muted-foreground); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--border-soft);
-    white-space: nowrap;
-  }
+  thead th { text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground);
+    padding: var(--s2) var(--s3); border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
   th.r, td.r { text-align: right; }
-  tbody td { padding: 10px var(--s3); border-top: 1px solid var(--border-soft); vertical-align: middle; }
+  tbody td { padding: 11px var(--s3); border-top: 1px solid var(--border-soft); vertical-align: middle; }
   tbody tr:first-child td { border-top: none; }
   tbody tr.win { background: var(--win-soft); }
-  .rank {
-    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
-    border-radius: 6px; font-size: 11.5px; font-weight: 600; background: var(--muted); color: var(--muted-foreground);
-  }
+  .rank { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: var(--muted); color: var(--muted-foreground); }
   .rank.first { background: var(--accent); color: white; }
   .prov { font-weight: 600; }
   .region-canon { color: var(--muted-foreground); font-size: 11px; margin-left: 5px; }
   td.price { font-weight: 600; }
   td.price .unit { font-weight: 400; color: var(--muted-foreground); font-size: 11px; margin-left: 1px; }
-  .tag-derived {
-    margin-left: 6px; font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 5px;
-    color: var(--derived); background: var(--derived-soft); cursor: help; vertical-align: middle;
-  }
+  .tag-derived { margin-left: 6px; font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 5px; color: var(--derived); background: var(--derived-soft); cursor: help; }
   .age { font-size: 12px; color: var(--muted-foreground); }
   .age.bad { color: var(--stale); background: var(--stale-soft); border-radius: 5px; padding: 1px 7px; font-weight: 500; }
   .age .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); margin-right: 5px; vertical-align: middle; }
@@ -228,15 +169,38 @@
   .footnote b { color: var(--foreground); font-weight: 600; }
   .footnote .em { color: color-mix(in oklch, var(--foreground) 75%, transparent); }
 
-  /* ============================ SIDEBAR AGENT ============================ */
-  .agent { position: sticky; top: 72px; display: flex; flex-direction: column;
-           height: calc(100vh - 72px - var(--s6)); border: 1px solid var(--border);
-           border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
-  .agent-head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); background: color-mix(in oklch, var(--muted) 35%, transparent); }
-  .agent-head .t { font-weight: 600; }
-  .agent-head .live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ok) 25%, transparent); }
-  .agent-head .state { margin-left: auto; font-size: 11px; }
-  .agent-head .collapse { width: 28px; height: 28px; font-size: 13px; }
+  /* ============================ AGENT PANEL (separate, on-demand) ============================ */
+  /* Scrim: dims + separates the page from the summoned panel. */
+  .scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim);
+    opacity: 0; visibility: hidden; transition: opacity .22s ease, visibility .22s; }
+  body.agent-open .scrim { opacity: 1; visibility: visible; }
+
+  /* The panel is a DETACHED, elevated slide-over — floating with margin so it
+     reads as a separate object hovering over the page, not a docked column. */
+  .agent {
+    position: fixed; z-index: 50; top: 72px; right: 16px; bottom: 16px; width: 416px; max-width: calc(100vw - 32px);
+    display: flex; flex-direction: column; background: var(--card);
+    border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); overflow: hidden;
+    transform: translateX(calc(100% + 24px)); opacity: 0; transition: transform .26s cubic-bezier(.32,.72,0,1), opacity .2s ease;
+  }
+  body.agent-open .agent { transform: none; opacity: 1; }
+
+  /* Distinct agent identity header — gradient wash sets it apart from the neutral page. */
+  .agent-head { position: relative; padding: var(--s4); border-bottom: 1px solid var(--border-soft);
+    background: linear-gradient(135deg, color-mix(in oklch, var(--accent) 14%, var(--card)), var(--card) 70%); }
+  .agent-id { display: flex; align-items: center; gap: var(--s3); }
+  .agent-mark { width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: inline-flex; align-items: center; justify-content: center; color: white;
+    box-shadow: 0 4px 12px -3px color-mix(in oklch, var(--accent) 60%, transparent); }
+  .agent-mark .spark { width: 19px; height: 19px; }
+  .agent-id .meta { display: flex; flex-direction: column; line-height: 1.25; }
+  .agent-id .name { font-weight: 600; }
+  .agent-id .status { font-size: 11.5px; color: var(--muted-foreground); display: flex; align-items: center; gap: 5px; }
+  .agent-id .status .live { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ok) 25%, transparent); }
+  .agent-head .ctrls { position: absolute; top: var(--s3); right: var(--s3); display: flex; gap: 6px; }
+  .agent-head .ctrls .icon-btn { width: 30px; height: 30px; background: color-mix(in oklch, var(--card) 70%, transparent); }
+  .agent-note { margin-top: var(--s3); font-size: 11.5px; color: var(--muted-foreground); }
+
   .thread { flex: 1; overflow: auto; padding: var(--s4); display: flex; flex-direction: column; gap: var(--s4); }
   .msg { max-width: 90%; }
   .msg.user { align-self: flex-end; }
@@ -245,34 +209,50 @@
   .tool { border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 8px 11px; font-size: 12px; background: var(--background); margin-bottom: var(--s2); }
   .tool .h { display: flex; align-items: center; gap: 7px; font-weight: 500; }
   .tool .h .ok { color: var(--ok); }
-  .tool .h .verb { color: var(--accent); }
   .tool .a { color: var(--muted-foreground); margin-top: 3px; }
   .cite { font-size: 11px; color: var(--muted-foreground); margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border-soft); }
-  .suggest { display: flex; gap: var(--s2); flex-wrap: wrap; padding: 0 var(--s3) var(--s3); }
+  .suggest { display: flex; gap: var(--s2); flex-wrap: wrap; padding: 0 var(--s4) var(--s3); }
   .suggest .s { border: 1px solid var(--border); background: var(--background); color: var(--muted-foreground); border-radius: var(--radius-pill); padding: 6px 12px; font-size: 12px; cursor: pointer; }
   .suggest .s:hover { color: var(--foreground); }
-  .composer { display: flex; gap: var(--s2); align-items: flex-end; padding: var(--s3); border-top: 1px solid var(--border-soft); }
-  .composer textarea { flex: 1; resize: none; height: 38px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); color: var(--foreground); padding: 9px 12px; font: inherit; font-size: 13px; }
-  .composer .send { width: 38px; height: 38px; border: none; border-radius: var(--radius); background: var(--accent); color: white; cursor: pointer; font-size: 15px; }
+  .composer { display: flex; gap: var(--s2); align-items: flex-end; padding: var(--s3) var(--s4) var(--s4); border-top: 1px solid var(--border-soft); }
+  .composer textarea { flex: 1; resize: none; height: 40px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); color: var(--foreground); padding: 10px 12px; font: inherit; font-size: 13px; }
+  .composer .send { width: 40px; height: 40px; border: none; border-radius: var(--radius); background: var(--accent); color: white; cursor: pointer; font-size: 15px; }
+
+  /* Floating launcher — the agent icon that summons the panel when it's closed. */
+  .launcher { position: fixed; z-index: 30; right: 22px; bottom: 22px; display: flex; align-items: center; gap: 10px;
+    transition: opacity .18s ease, transform .18s ease; }
+  body.agent-open .launcher { opacity: 0; transform: scale(.9); pointer-events: none; }
+  .launcher .cap { font-size: 12.5px; font-weight: 500; color: var(--foreground); background: var(--card); border: 1px solid var(--border);
+    box-shadow: var(--shadow); border-radius: var(--radius-pill); padding: 7px 13px; }
+  .launcher .cap kbd { font: inherit; font-size: 11px; color: var(--muted-foreground); margin-left: 6px; }
+  .launcher .fab { width: 56px; height: 56px; border: none; border-radius: 50%; cursor: pointer; color: white;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 22px -6px color-mix(in oklch, var(--accent) 65%, transparent), var(--shadow);
+    position: relative; }
+  .launcher .fab .spark { width: 26px; height: 26px; }
+  .launcher .fab::after { content: ""; position: absolute; inset: -5px; border-radius: 50%;
+    border: 2px solid color-mix(in oklch, var(--accent) 40%, transparent); opacity: .6; }
 
   .mockflag { font-size: 11px; text-align: center; padding: 5px; background: var(--derived-soft); color: var(--derived); }
 </style>
 </head>
-<body>
+<body class="agent-open">
   <div class="mockflag">Layout mock — illustrative numbers, not snapshot-backed. Not a runtime price answer.</div>
 
   <!-- ===================== NAVBAR ===================== -->
   <nav class="nav">
     <span class="brand"><span class="mark"></span>cloudprice<span class="sub">/compare</span></span>
     <div class="nav-links">
-      <a href="#" class="active">Compare</a>
-      <a href="#">Snapshots</a>
-      <a href="#">Providers</a>
-      <a href="#">Docs</a>
+      <a href="#" class="active">Compare</a><a href="#">Snapshots</a><a href="#">Providers</a><a href="#">Docs</a>
     </div>
     <span class="nav-spacer"></span>
     <div class="nav-right">
       <div class="search"><span>⌕</span><span>Search specs, providers…</span><kbd>⌘K</kbd></div>
+      <!-- agent icon (navbar) -->
+      <button class="ask-btn" onclick="agent(true)">
+        <svg class="spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>
+        Ask AI
+      </button>
       <button class="icon-btn" title="Toggle theme"
         onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">◐</button>
       <span class="avatar">NP</span>
@@ -291,137 +271,140 @@
     </div>
   </div>
 
-  <!-- ===================== TWO-SURFACE SHELL ===================== -->
-  <div class="shell">
-    <!-- ---------- LEFT: deterministic table the human drives ---------- -->
-    <div>
-      <div class="toolbar">
-        <div class="field"><label>vCPU</label><select><option>4</option><option>2</option><option>8</option><option>16</option></select></div>
-        <div class="field"><label>RAM</label><select><option>8 GB</option><option>4 GB</option><option>16 GB</option><option>32 GB</option></select></div>
-        <div class="field"><label>Family</label><select><option>general-purpose</option><option>any</option><option>compute-opt</option><option>memory-opt</option></select></div>
-        <div class="field"><label>Region</label><select><option>eu-central</option><option>us-east</option><option>ap-southeast</option></select></div>
-        <span class="grow"></span>
-        <button class="btn primary" style="height:34px">Compare</button>
-      </div>
+  <!-- ===================== MAIN: deterministic dashboard (full width) ===================== -->
+  <main class="shell">
+    <div class="toolbar">
+      <div class="field"><label>vCPU</label><select><option>4</option><option>2</option><option>8</option><option>16</option></select></div>
+      <div class="field"><label>RAM</label><select><option>8 GB</option><option>4 GB</option><option>16 GB</option><option>32 GB</option></select></div>
+      <div class="field"><label>Family</label><select><option>general-purpose</option><option>any</option><option>compute-opt</option><option>memory-opt</option></select></div>
+      <div class="field"><label>Region</label><select><option>eu-central</option><option>us-east</option><option>ap-southeast</option></select></div>
+      <span class="grow"></span>
+      <button class="btn primary" style="height:34px">Compare</button>
+    </div>
 
-      <div class="card">
-        <div class="card-head">
-          <span class="t">7 providers · ranked by monthly</span>
-          <span class="chip stale">1 snapshot stale</span>
+    <div class="card">
+      <div class="card-head"><span class="t">7 providers · ranked by monthly</span><span class="chip stale">1 snapshot stale</span></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Provider</th><th>Instance</th><th>Region</th>
+              <th class="r">vCPU</th><th class="r">RAM</th><th class="r">Hourly</th><th class="r">Monthly</th><th>Snapshot</th><th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="win">
+              <td><span class="rank first">1</span></td><td class="prov">AWS</td><td class="mono">m5.xlarge</td>
+              <td>eu-central-1<span class="region-canon">eu-central</span></td>
+              <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.192</td>
+              <td class="r price mono">$140.16<span class="unit">/mo</span></td>
+              <td><span class="age"><span class="dot"></span>6h</span></td>
+              <td><a class="src" href="#">AWS Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank">2</span></td><td class="prov">Oracle</td><td class="mono">VM.Standard.E4.Flex<span class="tag-derived" title="agent-derived: OCPU + memory SKUs">derived</span></td>
+              <td>eu-frankfurt-1<span class="region-canon">eu-central</span></td>
+              <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.196</td>
+              <td class="r price mono">$143.08<span class="unit">/mo</span></td>
+              <td><span class="age bad">31h</span></td>
+              <td><a class="src" href="#">Oracle Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank">3</span></td><td class="prov">GCP</td><td class="mono">n2-standard-4<span class="tag-derived" title="agent-derived: core·4 + ram·8">derived</span></td>
+              <td>europe-west3<span class="region-canon">eu-central</span></td>
+              <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.204</td>
+              <td class="r price mono">$148.92<span class="unit">/mo</span></td>
+              <td><span class="age"><span class="dot"></span>just now</span></td>
+              <td><a class="src" href="#">GCP SKUs</a><span class="verify" title="verify json_path against source">⌖</span></td>
+            </tr>
+            <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="verify">⌖</span></td></tr>
+            <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="verify">⌖</span></td></tr>
+            <tr>
+              <td><span class="rank">4</span></td><td class="prov">Azure</td><td class="mono">Standard_D4s_v5</td>
+              <td>westeurope<span class="region-canon">eu-central</span></td>
+              <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.211</td>
+              <td class="r price mono">$154.20<span class="unit">/mo</span></td>
+              <td><span class="age"><span class="dot"></span>just now</span></td>
+              <td><a class="src" href="#">Azure Retail Prices</a><span class="verify" title="verify json_path against source">⌖</span></td>
+            </tr>
+            <tr>
+              <td><span class="rank">5</span></td><td class="prov">Linode</td><td class="mono">g6-standard-4</td>
+              <td>eu-central</td>
+              <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.072</td>
+              <td class="r price mono">$48.00<span class="unit">/mo</span></td>
+              <td><span class="age"><span class="dot"></span>3h</span></td>
+              <td><a class="src" href="#">Linode Types</a><span class="verify" title="verify json_path against source">⌖</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="footnote">
+        <b>Equivalence basis</b> (general-purpose): matched vCPU, RAM, class.
+        Not normalized: <span class="em">CPU generation, network bandwidth, baseline performance, attached storage</span>.
+      </div>
+      <div class="footnote muted">No match · Vultr, IBM had no general-purpose instance at 4 vCPU / 8 GB in eu-central.</div>
+    </div>
+  </main>
+
+  <!-- ===================== AGENT: separate on-demand panel ===================== -->
+  <div class="scrim" onclick="agent(false)"></div>
+
+  <aside class="agent" role="dialog" aria-label="Pricing assistant">
+    <div class="agent-head">
+      <div class="agent-id">
+        <span class="agent-mark"><svg class="spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg></span>
+        <span class="meta">
+          <span class="name">Pricing assistant</span>
+          <span class="status"><span class="live"></span>online · cited answers · budget 38%</span>
+        </span>
+      </div>
+      <div class="ctrls">
+        <button class="icon-btn" title="Expand">⤢</button>
+        <button class="icon-btn" title="Close" onclick="agent(false)">✕</button>
+      </div>
+      <div class="agent-note">Answers from snapshot data with verifiable citations. It does not change the table on the left.</div>
+    </div>
+
+    <div class="thread">
+      <div class="msg user"><div class="bubble">Cheapest 4 vCPU 8 GB general-purpose VM in the EU?</div></div>
+      <div class="msg bot">
+        <div class="tool"><div class="h"><span class="ok">✓</span> compare</div><div class="a mono">vcpu=4, ram_gb=8, family="general-purpose", region="eu-central"</div></div>
+        <div class="bubble">
+          Cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, 6h old). Close: Oracle $143.08, GCP $148.92, Azure $154.20.
+          Oracle's snapshot is 31h old, so its number is flagged stale.
+          <div class="cite">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on a citation to verify json_path against the source.</div>
         </div>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th><th>Provider</th><th>Instance</th><th>Region</th>
-                <th class="r">vCPU</th><th class="r">RAM</th><th class="r">Hourly</th><th class="r">Monthly</th>
-                <th>Snapshot</th><th>Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="win">
-                <td><span class="rank first">1</span></td>
-                <td class="prov">AWS</td>
-                <td class="mono">m5.xlarge</td>
-                <td>eu-central-1<span class="region-canon">eu-central</span></td>
-                <td class="r num">4</td><td class="r num">8 GB</td>
-                <td class="r mono">$0.192</td>
-                <td class="r price mono">$140.16<span class="unit">/mo</span></td>
-                <td><span class="age"><span class="dot"></span>6h</span></td>
-                <td><a class="src" href="#">AWS Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
-              </tr>
-              <tr>
-                <td><span class="rank">2</span></td>
-                <td class="prov">Oracle</td>
-                <td class="mono">VM.Standard.E4.Flex<span class="tag-derived" title="agent-derived: OCPU + memory SKUs">derived</span></td>
-                <td>eu-frankfurt-1<span class="region-canon">eu-central</span></td>
-                <td class="r num">4</td><td class="r num">8 GB</td>
-                <td class="r mono">$0.196</td>
-                <td class="r price mono">$143.08<span class="unit">/mo</span></td>
-                <td><span class="age bad">31h</span></td>
-                <td><a class="src" href="#">Oracle Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
-              </tr>
-              <tr>
-                <td><span class="rank">3</span></td>
-                <td class="prov">GCP</td>
-                <td class="mono">n2-standard-4<span class="tag-derived" title="agent-derived: core·4 + ram·8">derived</span></td>
-                <td>europe-west3<span class="region-canon">eu-central</span></td>
-                <td class="r num">4</td><td class="r num">8 GB</td>
-                <td class="r mono">$0.204</td>
-                <td class="r price mono">$148.92<span class="unit">/mo</span></td>
-                <td><span class="age"><span class="dot"></span>just now</span></td>
-                <td><a class="src" href="#">GCP SKUs</a><span class="verify" title="verify json_path against source">⌖</span></td>
-              </tr>
-              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="verify">⌖</span></td></tr>
-              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="verify">⌖</span></td></tr>
-              <tr>
-                <td><span class="rank">4</span></td>
-                <td class="prov">Azure</td>
-                <td class="mono">Standard_D4s_v5</td>
-                <td>westeurope<span class="region-canon">eu-central</span></td>
-                <td class="r num">4</td><td class="r num">8 GB</td>
-                <td class="r mono">$0.211</td>
-                <td class="r price mono">$154.20<span class="unit">/mo</span></td>
-                <td><span class="age"><span class="dot"></span>just now</span></td>
-                <td><a class="src" href="#">Azure Retail Prices</a><span class="verify" title="verify json_path against source">⌖</span></td>
-              </tr>
-              <tr>
-                <td><span class="rank">5</span></td>
-                <td class="prov">Linode</td>
-                <td class="mono">g6-standard-4</td>
-                <td>eu-central</td>
-                <td class="r num">4</td><td class="r num">8 GB</td>
-                <td class="r mono">$0.072</td>
-                <td class="r price mono">$48.00<span class="unit">/mo</span></td>
-                <td><span class="age"><span class="dot"></span>3h</span></td>
-                <td><a class="src" href="#">Linode Types</a><span class="verify" title="verify json_path against source">⌖</span></td>
-              </tr>
-            </tbody>
-          </table>
+      </div>
+      <div class="msg user"><div class="bubble">Which has the best $/vCPU?</div></div>
+      <div class="msg bot">
+        <div class="bubble">
+          On $/vCPU: <b>Linode</b> is far ahead at <b>$12.00</b> per vCPU/mo ($48.00 ÷ 4), then AWS $35.04, Oracle $35.77, GCP $37.23, Azure $38.55.
+          Linode is cheapest outright too — note the equivalence caveats above before treating these as interchangeable.
         </div>
-        <div class="footnote">
-          <b>Equivalence basis</b> (general-purpose): matched vCPU, RAM, class.
-          Not normalized: <span class="em">CPU generation, network bandwidth, baseline performance, attached storage</span>.
-        </div>
-        <div class="footnote muted">No match · Vultr, IBM had no general-purpose instance at 4 vCPU / 8 GB in eu-central.</div>
       </div>
     </div>
 
-    <!-- ---------- RIGHT: co-driver agent operating the SAME table ---------- -->
-    <aside class="agent">
-      <div class="agent-head">
-        <span class="live"></span><span class="t">Pricing assistant</span>
-        <span class="state chip">budget 38%</span>
-        <button class="icon-btn collapse" title="Collapse panel">⟩</button>
-      </div>
-      <div class="thread">
-        <div class="msg user"><div class="bubble">Cheapest 4 vCPU 8 GB general-purpose VM in the EU?</div></div>
-        <div class="msg bot">
-          <div class="tool"><div class="h"><span class="ok">✓</span> compare</div><div class="a mono">vcpu=4, ram_gb=8, family="general-purpose", region="eu-central"</div></div>
-          <div class="bubble">
-            Cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, 6h old). Close: Oracle $143.08, GCP $148.92, Azure $154.20.
-            Oracle's snapshot is 31h old, so its number is flagged stale.
-            <div class="cite">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on a citation to verify json_path against the source.</div>
-          </div>
-        </div>
-        <div class="msg user"><div class="bubble">Which has the best $/vCPU?</div></div>
-        <div class="msg bot">
-          <div class="bubble">
-            On $/vCPU: <b>Linode</b> is far ahead at <b>$12.00</b> per vCPU/mo ($48.00 ÷ 4), then AWS $35.04, Oracle $35.77, GCP $37.23, Azure $38.55.
-            Linode is cheapest outright too — note the equivalence caveats above before treating these as interchangeable.
-          </div>
-        </div>
-      </div>
-      <div class="suggest">
-        <span class="s">Compare AWS · GCP · Azure</span>
-        <span class="s">Try 2 vCPU / 4 GB</span>
-        <span class="s">Explain the equivalence</span>
-      </div>
-      <div class="composer">
-        <textarea placeholder="Ask about prices across providers…"></textarea>
-        <button class="send">↑</button>
-      </div>
-    </aside>
+    <div class="suggest">
+      <span class="s">Compare AWS · GCP · Azure</span>
+      <span class="s">Try 2 vCPU / 4 GB</span>
+      <span class="s">Explain the equivalence</span>
+    </div>
+    <div class="composer">
+      <textarea placeholder="Ask about prices across providers…"></textarea>
+      <button class="send">↑</button>
+    </div>
+  </aside>
+
+  <!-- floating launcher (agent icon) shown when the panel is closed -->
+  <div class="launcher">
+    <span class="cap">Ask the pricing agent<kbd>⌘J</kbd></span>
+    <button class="fab" onclick="agent(true)" aria-label="Open pricing assistant">
+      <svg class="spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>
+    </button>
   </div>
+
+  <script>
+    function agent(open){ document.body.classList.toggle('agent-open', open); }
+  </script>
 </body>
 </html>
