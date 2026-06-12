@@ -51,6 +51,7 @@
     --shadow: 0 1px 2px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.05);
     --shadow-panel: -8px 0 24px -12px oklch(0 0 0 / 0.16);
     --panel-w: 404px;
+    --mockflag-h: 26px; --nav-h: 56px; --top-h: 82px; /* mockflag + nav; panel docks below this */
   }
   [data-theme="dark"] {
     --background: oklch(0.16 0.005 285.823);
@@ -87,10 +88,12 @@
   .muted { color: var(--muted-foreground); }
   a { color: inherit; }
 
-  /* ============================ NAVBAR ============================ */
+  /* ============================ TOP BAR (mockflag + navbar) ============================ */
+  /* Full-width and sticky as one unit so the agent panel docks BELOW it and
+     never overrides the navbar. This bar does not shift when the panel opens. */
+  .topbar { position: sticky; top: 0; z-index: 50; }
   .nav {
-    position: sticky; top: 0; z-index: 20;
-    display: flex; align-items: center; gap: var(--s5); height: 56px; padding: 0 var(--s5);
+    display: flex; align-items: center; gap: var(--s5); height: var(--nav-h); padding: 0 var(--s5);
     background: color-mix(in oklch, var(--card) 88%, transparent);
     backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--border);
   }
@@ -179,7 +182,7 @@
   /* The panel is flush-docked (part of the workspace), not a floating modal. No
      scrim — the page beside it stays fully lit and interactive. */
   .agent {
-    position: fixed; z-index: 30; top: 0; right: 0; bottom: 0; width: var(--panel-w); max-width: 100vw;
+    position: fixed; z-index: 40; top: var(--top-h); right: 0; bottom: 0; width: var(--panel-w); max-width: 100vw;
     display: flex; flex-direction: column; background: var(--card);
     border-left: 1px solid var(--border); box-shadow: var(--shadow-panel); overflow: hidden;
     transform: translateX(100%); transition: transform .26s cubic-bezier(.32,.72,0,1);
@@ -241,14 +244,13 @@
   .launcher .fab::after { content: ""; position: absolute; inset: -5px; border-radius: 50%;
     border: 2px solid color-mix(in oklch, var(--accent) 40%, transparent); opacity: .6; }
 
-  .mockflag { font-size: 11px; text-align: center; padding: 5px; background: var(--derived-soft); color: var(--derived); }
+  .mockflag { height: var(--mockflag-h); line-height: 16px; padding: 5px; font-size: 11px; text-align: center; background: var(--derived-soft); color: var(--derived); }
 </style>
 </head>
 <body class="agent-open">
- <!-- .page reflows left when the agent opens, so both stay visible (not a modal) -->
- <div class="page">
+ <!-- Top bar stays full width and does not shift; the panel docks below it. -->
+ <div class="topbar">
   <div class="mockflag">Layout mock — illustrative numbers, not snapshot-backed. Not a runtime price answer.</div>
-
   <!-- ===================== NAVBAR ===================== -->
   <nav class="nav">
     <span class="brand"><span class="mark"></span>cloudprice<span class="sub">/compare</span></span>
@@ -268,7 +270,10 @@
       <span class="avatar">NP</span>
     </div>
   </nav>
+ </div><!-- /.topbar -->
 
+ <!-- .page reflows left when the agent opens, so both stay visible (not a modal) -->
+ <div class="page">
   <!-- ===================== PAGE HEADER ===================== -->
   <div class="pagehead">
     <div>
