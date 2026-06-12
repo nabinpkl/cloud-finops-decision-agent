@@ -7,17 +7,19 @@
 <!--
   LAYOUT MOCK, not a price quote.
 
-  Architecture shown:
+  Architecture shown (Copilot-style, NOT a modal):
     - MAIN PAGE = the traditional deterministic comparison dashboard
-      (navbar + filters + full-width table). It owns the page; nothing about the
-      agent is baked into it.
-    - AGENT = a SEPARATE panel, summoned on demand from an agent icon (navbar
-      button + a floating launcher). It opens as an elevated slide-over over a
-      dimmed page, with its own identity and a close control; closing it returns
-      the dashboard to full width. It is not a docked column and not a route.
-    - The assistant answers with cited results; it does NOT reshape the manual
-      table (no set_view coupling). Refetch is operator/agent-side, not a user
-      button, so it is absent.
+      (navbar + filters + table). It owns the page.
+    - AGENT = a SEPARATE panel summoned on demand from an agent icon (navbar
+      button + a floating launcher). Opening it SHIFTS the layout — the page
+      reflows left to make room and the panel docks on the right, so BOTH stay
+      visible at once. No scrim, no dimming: it is not a modal. Closing it
+      returns the dashboard to full width.
+    - Because both are visible together, the agent is implicitly grounded in
+      what the user is looking at. The panel hints this explicitly: a "Looking
+      at …" context strip mirrors the current comparison, and answers reference
+      "your current view". It still does NOT reshape the table (no set_view).
+    - Refetch is operator/agent-side, not a user button, so it is absent.
 
   Open/close is wired (launcher + navbar icon open it; ✕ or the scrim close it).
   Numbers are ILLUSTRATIVE and do NOT trace to a snapshot — a design artifact,
@@ -47,8 +49,8 @@
     --win-soft: oklch(0.55 0.16 264 / 0.045);
 
     --shadow: 0 1px 2px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.05);
-    --shadow-xl: 0 10px 30px -8px oklch(0 0 0 / 0.22), 0 30px 60px -20px oklch(0 0 0 / 0.18);
-    --scrim: oklch(0.2 0.01 285 / 0.28);
+    --shadow-panel: -8px 0 24px -12px oklch(0 0 0 / 0.16);
+    --panel-w: 404px;
   }
   [data-theme="dark"] {
     --background: oklch(0.16 0.005 285.823);
@@ -68,8 +70,7 @@
     --derived-soft: oklch(0.80 0.12 75 / 0.16);
     --win-soft: oklch(0.72 0.15 264 / 0.09);
     --shadow: 0 1px 2px oklch(0 0 0 / 0.3);
-    --shadow-xl: 0 10px 30px -8px oklch(0 0 0 / 0.55), 0 30px 70px -20px oklch(0 0 0 / 0.5);
-    --scrim: oklch(0 0 0 / 0.5);
+    --shadow-panel: -8px 0 28px -12px oklch(0 0 0 / 0.5);
   }
 
   * { box-sizing: border-box; }
@@ -169,21 +170,21 @@
   .footnote b { color: var(--foreground); font-weight: 600; }
   .footnote .em { color: color-mix(in oklch, var(--foreground) 75%, transparent); }
 
-  /* ============================ AGENT PANEL (separate, on-demand) ============================ */
-  /* Scrim: dims + separates the page from the summoned panel. */
-  .scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim);
-    opacity: 0; visibility: hidden; transition: opacity .22s ease, visibility .22s; }
-  body.agent-open .scrim { opacity: 1; visibility: visible; }
+  /* ============================ AGENT PANEL (Copilot-style, layout-shifting) ============================ */
+  /* Opening the panel SHIFTS the page left rather than covering it — both stay
+     visible, so the agent is implicitly looking at the same thing the user is. */
+  .page { transition: margin-right .26s cubic-bezier(.32,.72,0,1); }
+  body.agent-open .page { margin-right: var(--panel-w); }
 
-  /* The panel is a DETACHED, elevated slide-over — floating with margin so it
-     reads as a separate object hovering over the page, not a docked column. */
+  /* The panel is flush-docked (part of the workspace), not a floating modal. No
+     scrim — the page beside it stays fully lit and interactive. */
   .agent {
-    position: fixed; z-index: 50; top: 72px; right: 16px; bottom: 16px; width: 416px; max-width: calc(100vw - 32px);
+    position: fixed; z-index: 30; top: 0; right: 0; bottom: 0; width: var(--panel-w); max-width: 100vw;
     display: flex; flex-direction: column; background: var(--card);
-    border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); overflow: hidden;
-    transform: translateX(calc(100% + 24px)); opacity: 0; transition: transform .26s cubic-bezier(.32,.72,0,1), opacity .2s ease;
+    border-left: 1px solid var(--border); box-shadow: var(--shadow-panel); overflow: hidden;
+    transform: translateX(100%); transition: transform .26s cubic-bezier(.32,.72,0,1);
   }
-  body.agent-open .agent { transform: none; opacity: 1; }
+  body.agent-open .agent { transform: none; }
 
   /* Distinct agent identity header — gradient wash sets it apart from the neutral page. */
   .agent-head { position: relative; padding: var(--s4); border-bottom: 1px solid var(--border-soft);
@@ -200,6 +201,13 @@
   .agent-head .ctrls { position: absolute; top: var(--s3); right: var(--s3); display: flex; gap: 6px; }
   .agent-head .ctrls .icon-btn { width: 30px; height: 30px; background: color-mix(in oklch, var(--card) 70%, transparent); }
   .agent-note { margin-top: var(--s3); font-size: 11.5px; color: var(--muted-foreground); }
+  /* context strip: implicitly shows the agent is grounded in the on-screen view */
+  .agent-context { display: flex; align-items: center; gap: 7px; margin-top: var(--s3);
+    padding: 7px 11px; font-size: 12px; border-radius: var(--radius-sm);
+    background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in oklch, var(--accent) 22%, transparent); }
+  .agent-context .eye { width: 14px; height: 14px; flex-shrink: 0; opacity: .9; }
+  .agent-context b { font-weight: 600; }
+  .agent-context .live-link { margin-left: auto; font-size: 10.5px; opacity: .8; }
 
   .thread { flex: 1; overflow: auto; padding: var(--s4); display: flex; flex-direction: column; gap: var(--s4); }
   .msg { max-width: 90%; }
@@ -237,6 +245,8 @@
 </style>
 </head>
 <body class="agent-open">
+ <!-- .page reflows left when the agent opens, so both stay visible (not a modal) -->
+ <div class="page">
   <div class="mockflag">Layout mock — illustrative numbers, not snapshot-backed. Not a runtime price answer.</div>
 
   <!-- ===================== NAVBAR ===================== -->
@@ -345,11 +355,10 @@
       <div class="footnote muted">No match · Vultr, IBM had no general-purpose instance at 4 vCPU / 8 GB in eu-central.</div>
     </div>
   </main>
+ </div><!-- /.page -->
 
-  <!-- ===================== AGENT: separate on-demand panel ===================== -->
-  <div class="scrim" onclick="agent(false)"></div>
-
-  <aside class="agent" role="dialog" aria-label="Pricing assistant">
+  <!-- ===================== AGENT: separate, layout-shifting panel ===================== -->
+  <aside class="agent" role="complementary" aria-label="Pricing assistant">
     <div class="agent-head">
       <div class="agent-id">
         <span class="agent-mark"><svg class="spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg></span>
@@ -359,19 +368,24 @@
         </span>
       </div>
       <div class="ctrls">
-        <button class="icon-btn" title="Expand">⤢</button>
+        <button class="icon-btn" title="Dock left">⤢</button>
         <button class="icon-btn" title="Close" onclick="agent(false)">✕</button>
       </div>
-      <div class="agent-note">Answers from snapshot data with verifiable citations. It does not change the table on the left.</div>
+      <div class="agent-note">Cited answers from snapshot data. It reads your current view but does not change the table beside it.</div>
+      <div class="agent-context">
+        <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        Looking at <b>4 vCPU · 8 GB · general-purpose</b> · eu-central
+        <span class="live-link">live</span>
+      </div>
     </div>
 
     <div class="thread">
-      <div class="msg user"><div class="bubble">Cheapest 4 vCPU 8 GB general-purpose VM in the EU?</div></div>
+      <div class="msg user"><div class="bubble">Which of these is cheapest?</div></div>
       <div class="msg bot">
         <div class="tool"><div class="h"><span class="ok">✓</span> compare</div><div class="a mono">vcpu=4, ram_gb=8, family="general-purpose", region="eu-central"</div></div>
         <div class="bubble">
-          Cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, 6h old). Close: Oracle $143.08, GCP $148.92, Azure $154.20.
-          Oracle's snapshot is 31h old, so its number is flagged stale.
+          For your current view, cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, 6h old). Close: Oracle $143.08, GCP $148.92, Azure $154.20.
+          Oracle's row is 31h old — that's the stale one flagged in your table.
           <div class="cite">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on a citation to verify json_path against the source.</div>
         </div>
       </div>
