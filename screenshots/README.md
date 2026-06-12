@@ -9,7 +9,7 @@ UI states of the `ComparisonTable` agent tool component, rendered with **real**
 | `comparison-table-fresh.png` | Same rows with fresh snapshots: no stale badge, recent age pills. |
 | `comparison-table-unmet.png` | No/partial match: `unmet_requirements` rendered. |
 | `comparison-table-loading.png` | Loading skeleton (tool call in flight). |
-| `dashboard-mock.png` / `-dark.png` | **Layout mock** of the full ADR-0016 dual-surface dashboard: a deterministic comparison table the human drives via the filter bar, with a sidebar co-driver agent operating the *same* table (compare + set_view tool calls), not printing a second one. Shows the parts the isolated component shots can't: filter bar, agent↔table coupling, chat thread, suggestions, composer. |
+| `dashboard-mock.png` / `-dark.png` | **Layout mock** of the full ADR-0016 dual-surface dashboard: a deterministic comparison table the human drives via the filter bar, with a sidebar co-driver agent operating the *same* table (compare + set_view tool calls), not printing a second one. Shows the parts the isolated component shots can't: sticky navbar, page header, filter toolbar, agent↔table coupling, chat thread, suggestions, composer. Clean-design pass applied (8pt scale, single accent, 3 weights, data-dense table). |
 
 ## `dashboard-mock.html` — design artifact, NOT a runtime answer
 

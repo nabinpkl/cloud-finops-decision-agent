@@ -3,53 +3,73 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cloud pricing dashboard — layout mock</title>
+<title>cloudprice — compare</title>
 <!--
   LAYOUT MOCK, not a price quote.
 
-  Purpose: show the ADR-0016 dual-surface product the isolated ComparisonTable
-  screenshots can't convey: a deterministic comparison table the human drives
-  via the filter bar, with a sidebar co-driver agent that operates the SAME
-  table (it does not print a second one). Backend stays the source of truth for
-  view-state; the agent mutates it through set_view.
+  Shows the ADR-0016 dual-surface product the isolated ComparisonTable
+  screenshots can't: a deterministic table the human drives via filters, with a
+  sidebar co-driver agent that operates the SAME table (compare + set_view), not
+  a second one. Backend stays source of truth for view-state.
 
-  The numbers below are ILLUSTRATIVE and do NOT trace to a snapshot on disk, so
-  this file violates the citation contract by design — it is a design artifact,
-  never a runtime answer. Tokens mirror frontend/app/globals.css so it reads as
-  the real shell. No external assets; open directly in a browser.
+  Clean-design rules applied (synthesised from current SaaS guidance):
+    - Sticky full-width navbar, primary elements only: brand left, 3-6 nav
+      items, secondary actions right (Telerik top-navbar anatomy).
+    - Page header beneath the navbar carries page context, so location is
+      always clear.
+    - 8pt spacing scale, single accent colour, 3 font weights (400/500/600),
+      one type scale. Colour used sparingly + only for state.
+    - Data-dense table (tight rows, strong right-alignment, tabular numerals);
+      whitespace lives around sections, not inside the grid. Hierarchy points
+      the eye at the winner row + the monthly price.
+
+  Numbers are ILLUSTRATIVE and do NOT trace to a snapshot — a design artifact,
+  never a runtime answer. No external assets; open directly in a browser.
 -->
 <style>
   :root {
-    --radius: 0.625rem;
-    --background: oklch(0.99 0.001 286.375);
-    --foreground: oklch(0.141 0.005 285.823);
+    /* spacing scale (8pt) */
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+    --radius: 10px; --radius-sm: 7px; --radius-pill: 999px;
+
+    /* neutrals (mirror frontend/app/globals.css) */
+    --background: oklch(0.985 0.001 286.375);
+    --foreground: oklch(0.18 0.005 285.823);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.141 0.005 285.823);
-    --primary: oklch(0.21 0.006 285.885);
-    --primary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.967 0.001 286.375);
-    --muted-foreground: oklch(0.552 0.016 285.938);
-    --accent: oklch(0.967 0.001 286.375);
-    --accent-foreground: oklch(0.21 0.006 285.885);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.92 0.004 286.32);
-    --amber-bg: oklch(0.55 0.13 80 / 0.12);
-    --amber-fg: oklch(0.52 0.13 70);
+    --muted-foreground: oklch(0.55 0.016 285.938);
+    --border: oklch(0.922 0.004 286.32);
+    --border-soft: oklch(0.95 0.003 286.32);
+
+    /* single accent + semantic state colours, used sparingly */
+    --accent: oklch(0.55 0.16 264);
+    --accent-soft: oklch(0.55 0.16 264 / 0.10);
+    --ok: oklch(0.62 0.15 150);
+    --stale: oklch(0.58 0.20 27);
+    --stale-soft: oklch(0.58 0.20 27 / 0.10);
+    --derived: oklch(0.62 0.13 75);
+    --derived-soft: oklch(0.62 0.13 75 / 0.13);
+    --win-soft: oklch(0.55 0.16 264 / 0.045);
+
+    --shadow: 0 1px 2px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.05);
   }
   [data-theme="dark"] {
-    --background: oklch(0.141 0.005 285.823);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.21 0.006 285.885);
-    --card-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.92 0.004 286.32);
-    --primary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.274 0.006 286.033);
-    --muted-foreground: oklch(0.705 0.015 286.067);
-    --accent: oklch(0.274 0.006 286.033);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --amber-fg: oklch(0.78 0.12 75);
+    --background: oklch(0.16 0.005 285.823);
+    --foreground: oklch(0.97 0.002 286.375);
+    --card: oklch(0.205 0.006 285.885);
+    --muted: oklch(0.255 0.006 286.033);
+    --muted-foreground: oklch(0.70 0.015 286.067);
+    --border: oklch(1 0 0 / 0.11);
+    --border-soft: oklch(1 0 0 / 0.06);
+    --accent: oklch(0.72 0.15 264);
+    --accent-soft: oklch(0.72 0.15 264 / 0.16);
+    --ok: oklch(0.72 0.15 150);
+    --stale: oklch(0.70 0.19 22);
+    --stale-soft: oklch(0.70 0.19 22 / 0.16);
+    --derived: oklch(0.80 0.12 75);
+    --derived-soft: oklch(0.80 0.12 75 / 0.16);
+    --win-soft: oklch(0.72 0.15 264 / 0.09);
+    --shadow: 0 1px 2px oklch(0 0 0 / 0.3);
   }
 
   * { box-sizing: border-box; }
@@ -60,346 +80,345 @@
     background: var(--background);
     color: var(--foreground);
     font-size: 14px;
-    line-height: 1.45;
+    line-height: 1.5;
+    letter-spacing: -0.006em;
     -webkit-font-smoothing: antialiased;
   }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-feature-settings: "tnum" 1; letter-spacing: 0; }
+  .num { font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted-foreground); }
-  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  a { color: inherit; }
 
-  /* ---- app shell ---- */
-  .app { display: flex; flex-direction: column; height: 100vh; }
-  .topbar {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 18px; border-bottom: 1px solid var(--border);
-    background: var(--card);
+  /* ============================ NAVBAR ============================ */
+  .nav {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: var(--s5);
+    height: 56px; padding: 0 var(--s5);
+    background: color-mix(in oklch, var(--card) 88%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px);
+    border-bottom: 1px solid var(--border);
   }
-  .logo { font-weight: 700; letter-spacing: -0.01em; }
-  .logo .dot { color: var(--muted-foreground); font-weight: 400; }
-  .topbar .spacer { flex: 1; }
-  .pill {
-    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+  .brand { display: flex; align-items: center; gap: var(--s2); font-weight: 600; letter-spacing: -0.02em; }
+  .brand .mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), color-mix(in oklch, var(--accent) 60%, oklch(0.7 0.18 320)));
+  }
+  .brand .sub { color: var(--muted-foreground); font-weight: 400; }
+  .nav-links { display: flex; align-items: center; gap: var(--s1); }
+  .nav-links a {
+    padding: 6px 10px; border-radius: var(--radius-sm); text-decoration: none;
+    color: var(--muted-foreground); font-size: 13.5px; font-weight: 500;
+  }
+  .nav-links a:hover { color: var(--foreground); background: var(--muted); }
+  .nav-links a.active { color: var(--foreground); background: var(--muted); }
+  .nav-spacer { flex: 1; }
+  .nav-right { display: flex; align-items: center; gap: var(--s3); }
+  .search {
+    display: flex; align-items: center; gap: var(--s2);
+    height: 34px; padding: 0 var(--s3); min-width: 220px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--background); color: var(--muted-foreground); font-size: 13px;
+  }
+  .search kbd {
+    margin-left: auto; font: inherit; font-size: 11px; padding: 1px 6px;
+    border: 1px solid var(--border); border-radius: 5px; color: var(--muted-foreground);
+  }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--background);
+    color: var(--muted-foreground); cursor: pointer; font-size: 15px;
+  }
+  .icon-btn:hover { color: var(--foreground); }
+  .avatar {
+    width: 30px; height: 30px; border-radius: var(--radius-pill);
+    background: linear-gradient(135deg, var(--accent), oklch(0.7 0.16 200));
+    color: white; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+
+  /* ============================ PAGE HEADER ============================ */
+  .pagehead {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4);
+    padding: var(--s5) var(--s5) var(--s4);
+    max-width: 1320px; margin: 0 auto; width: 100%;
+  }
+  .pagehead h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  .pagehead .crumb { font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 3px; }
+  .pagehead .actions { display: flex; gap: var(--s2); }
+  .btn {
+    height: 34px; padding: 0 var(--s4); border-radius: var(--radius);
+    font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border);
+    background: var(--background); color: var(--foreground);
+    display: inline-flex; align-items: center; gap: var(--s2);
+  }
+  .btn.primary { background: var(--accent); border-color: transparent; color: white; }
+
+  /* ============================ LAYOUT ============================ */
+  .shell { max-width: 1320px; margin: 0 auto; width: 100%; padding: 0 var(--s5) var(--s6);
+           display: grid; grid-template-columns: 1fr 372px; gap: var(--s5); align-items: start; }
+
+  /* ---- filter toolbar ---- */
+  .toolbar {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s4);
+    padding: var(--s4); margin-bottom: var(--s4);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--card); box-shadow: var(--shadow);
+  }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; font-weight: 500; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.04em; }
+  .field select {
+    appearance: none; height: 34px; min-width: 138px; padding: 0 var(--s3);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--background); color: var(--foreground); font: inherit; font-size: 13px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%), linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+    background-position: right 13px center, right 8px center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  }
+  .toolbar .grow { flex: 1; }
+  .agent-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; color: var(--accent); background: var(--accent-soft);
+    border-radius: var(--radius-pill); padding: 5px 11px;
+  }
+
+  /* ---- card + table ---- */
+  .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); }
+  .card-head .t { font-weight: 600; }
+  .chip {
+    font-size: 11.5px; font-weight: 500; padding: 3px 9px; border-radius: var(--radius-pill);
     border: 1px solid var(--border); color: var(--muted-foreground);
   }
-  .iconbtn {
-    border: 1px solid var(--border); background: var(--card);
-    color: var(--foreground); border-radius: var(--radius);
-    width: 32px; height: 32px; cursor: pointer; font-size: 15px;
-  }
+  .chip.stale { color: var(--stale); background: var(--stale-soft); border-color: transparent; }
 
-  .body { flex: 1; display: flex; min-height: 0; }
-
-  /* ---- main comparison surface ---- */
-  .main { flex: 1; min-width: 0; overflow: auto; padding: 18px 20px; }
-  .filterbar {
-    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px;
-    padding: 14px 16px; border: 1px solid var(--border);
-    border-radius: var(--radius); background: var(--card); margin-bottom: 16px;
-  }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 11px; color: var(--muted-foreground); font-weight: 500; }
-  .field select, .field input {
-    appearance: none; border: 1px solid var(--border);
-    background: var(--background); color: var(--foreground);
-    border-radius: var(--radius); padding: 7px 10px; font-size: 13px; min-width: 132px;
-  }
-  .filterbar .grow { flex: 1; }
-  .agent-touch {
-    font-size: 11px; color: var(--amber-fg);
-    background: var(--amber-bg); border-radius: 999px; padding: 3px 9px;
-    border: 1px solid color-mix(in oklch, var(--amber-fg) 30%, transparent);
-  }
-  .btn-primary {
-    background: var(--primary); color: var(--primary-foreground);
-    border: none; border-radius: var(--radius); padding: 8px 16px;
-    font-size: 13px; font-weight: 500; cursor: pointer;
-  }
-
-  /* ---- table (mirrors comparison-table.tsx) ---- */
-  .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
-  .card-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 11px 16px; border-bottom: 1px solid var(--border);
-  }
-  .card-head .title { font-weight: 600; }
-  .badge-stale {
-    background: color-mix(in oklch, var(--destructive) 12%, transparent);
-    color: var(--destructive); border-radius: var(--radius);
-    padding: 2px 8px; font-size: 12px; font-weight: 500;
-  }
   table { width: 100%; border-collapse: collapse; }
   thead th {
-    text-align: left; font-size: 11px; font-weight: 500;
-    color: var(--muted-foreground); padding: 8px 12px;
+    text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted-foreground); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--border-soft);
+    white-space: nowrap;
   }
   th.r, td.r { text-align: right; }
-  tbody td { padding: 9px 12px; border-top: 1px solid var(--border); vertical-align: top; }
-  tbody tr.winner { background: color-mix(in oklch, var(--primary) 4%, transparent); }
+  tbody td { padding: 10px var(--s3); border-top: 1px solid var(--border-soft); vertical-align: middle; }
+  tbody tr:first-child td { border-top: none; }
+  tbody tr.win { background: var(--win-soft); }
   .rank {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px; border-radius: 6px; font-size: 12px; font-weight: 500;
-    background: var(--muted); color: var(--muted-foreground);
+    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+    border-radius: 6px; font-size: 11.5px; font-weight: 600; background: var(--muted); color: var(--muted-foreground);
   }
-  .rank.gold { background: oklch(0.85 0.13 90 / 0.25); color: oklch(0.5 0.12 75); }
-  td .prov { font-weight: 600; }
-  .region-canon { color: var(--muted-foreground); font-size: 10px; margin-left: 4px; }
-  td.monthly { font-weight: 700; }
-  .badge-derived {
-    margin-left: 6px; background: var(--amber-bg); color: var(--amber-fg);
-    border-radius: 5px; padding: 1px 6px; font-size: 10px; font-weight: 500; cursor: help;
+  .rank.first { background: var(--accent); color: white; }
+  .prov { font-weight: 600; }
+  .region-canon { color: var(--muted-foreground); font-size: 11px; margin-left: 5px; }
+  td.price { font-weight: 600; }
+  td.price .unit { font-weight: 400; color: var(--muted-foreground); font-size: 11px; margin-left: 1px; }
+  .tag-derived {
+    margin-left: 6px; font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 5px;
+    color: var(--derived); background: var(--derived-soft); cursor: help; vertical-align: middle;
   }
-  .age { font-size: 12px; }
-  .age.fresh { color: var(--muted-foreground); }
-  .age.stale {
-    color: var(--destructive); background: color-mix(in oklch, var(--destructive) 10%, transparent);
-    border-radius: 5px; padding: 1px 6px;
-  }
-  .src {
-    color: var(--muted-foreground); text-decoration: none; font-size: 12px;
-    border-bottom: 1px dotted var(--border);
-  }
+  .age { font-size: 12px; color: var(--muted-foreground); }
+  .age.bad { color: var(--stale); background: var(--stale-soft); border-radius: 5px; padding: 1px 7px; font-weight: 500; }
+  .age .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); margin-right: 5px; vertical-align: middle; }
+  .src { color: var(--muted-foreground); text-decoration: none; font-size: 12.5px; border-bottom: 1px dotted var(--border); }
   .src:hover { color: var(--foreground); }
-  .excerpt-ico {
-    margin-left: 8px; cursor: pointer; color: var(--muted-foreground);
-    font-size: 12px; border: 1px solid var(--border); border-radius: 5px; padding: 0 5px;
-  }
-  tr.sub td { background: color-mix(in oklch, var(--muted) 40%, transparent); color: var(--muted-foreground); font-size: 12px; border-top: none; }
-  tr.sub td.indent { padding-left: 28px; }
-  .footnote { padding: 9px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
-  .footnote b { color: var(--foreground); font-weight: 500; }
-  .footnote .nn { color: color-mix(in oklch, var(--foreground) 80%, transparent); }
+  .verify { margin-left: 8px; cursor: pointer; color: var(--muted-foreground); font-size: 11px; border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+  tr.sub td { background: color-mix(in oklch, var(--muted) 45%, transparent); color: var(--muted-foreground); font-size: 12px; border-top: none; padding: 7px var(--s3); }
+  tr.sub .indent { padding-left: 40px; }
+  .footnote { padding: 10px var(--s4); border-top: 1px solid var(--border-soft); font-size: 12px; color: var(--muted-foreground); }
+  .footnote b { color: var(--foreground); font-weight: 600; }
+  .footnote .em { color: color-mix(in oklch, var(--foreground) 75%, transparent); }
 
-  /* ---- sidebar co-driver agent ---- */
-  .sidebar {
-    width: 380px; flex-shrink: 0; border-left: 1px solid var(--border);
-    background: var(--card); display: flex; flex-direction: column; min-height: 0;
-  }
-  .side-head {
-    padding: 12px 16px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .side-head .title { font-weight: 600; }
-  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: oklch(0.7 0.17 145); box-shadow: 0 0 0 3px oklch(0.7 0.17 145 / 0.18); }
-  .thread { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-  .msg { max-width: 92%; }
+  /* ============================ SIDEBAR AGENT ============================ */
+  .agent { position: sticky; top: 72px; display: flex; flex-direction: column;
+           height: calc(100vh - 72px - var(--s6)); border: 1px solid var(--border);
+           border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
+  .agent-head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); }
+  .agent-head .t { font-weight: 600; }
+  .agent-head .live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ok) 25%, transparent); }
+  .agent-head .state { margin-left: auto; font-size: 11px; }
+  .thread { flex: 1; overflow: auto; padding: var(--s4); display: flex; flex-direction: column; gap: var(--s4); }
+  .msg { max-width: 90%; }
   .msg.user { align-self: flex-end; }
-  .msg.user .bubble {
-    background: var(--primary); color: var(--primary-foreground);
-    border-radius: 14px 14px 4px 14px; padding: 9px 13px;
-  }
-  .msg.assistant .bubble {
-    background: var(--muted); border-radius: 14px 14px 14px 4px; padding: 9px 13px;
-  }
-  .toolcall {
-    border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 9px 11px; font-size: 12px; background: var(--background);
-  }
-  .toolcall .head { display: flex; align-items: center; gap: 7px; font-weight: 500; }
-  .toolcall .tick { color: oklch(0.62 0.16 145); }
-  .toolcall .args { color: var(--muted-foreground); margin-top: 4px; }
-  .toolcall.view .head .verb { color: var(--amber-fg); }
-  .citenote { font-size: 11px; color: var(--muted-foreground); margin-top: 6px; }
-  .composer {
-    border-top: 1px solid var(--border); padding: 12px;
-    display: flex; gap: 8px; align-items: flex-end;
-  }
-  .composer textarea {
-    flex: 1; resize: none; border: 1px solid var(--border); border-radius: var(--radius);
-    background: var(--background); color: var(--foreground); padding: 9px 11px;
-    font: inherit; font-size: 13px; height: 38px; max-height: 120px;
-  }
-  .composer .send {
-    background: var(--primary); color: var(--primary-foreground); border: none;
-    border-radius: var(--radius); width: 38px; height: 38px; cursor: pointer; font-size: 15px;
-  }
-  .suggest { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 12px 12px; }
-  .chip {
-    border: 1px solid var(--border); background: var(--background); color: var(--muted-foreground);
-    border-radius: 999px; padding: 5px 11px; font-size: 12px; cursor: pointer;
-  }
-  .chip:hover { color: var(--foreground); }
-  .mockbar {
-    font-size: 11px; text-align: center; padding: 4px;
-    background: var(--amber-bg); color: var(--amber-fg);
-    border-bottom: 1px solid color-mix(in oklch, var(--amber-fg) 25%, transparent);
-  }
+  .msg.user .bubble { background: var(--accent); color: white; border-radius: 14px 14px 4px 14px; padding: 9px 13px; font-size: 13.5px; }
+  .msg.bot .bubble { background: var(--muted); border-radius: 14px 14px 14px 4px; padding: 10px 13px; font-size: 13.5px; }
+  .tool { border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 8px 11px; font-size: 12px; background: var(--background); margin-bottom: var(--s2); }
+  .tool .h { display: flex; align-items: center; gap: 7px; font-weight: 500; }
+  .tool .h .ok { color: var(--ok); }
+  .tool .h .verb { color: var(--accent); }
+  .tool .a { color: var(--muted-foreground); margin-top: 3px; }
+  .cite { font-size: 11px; color: var(--muted-foreground); margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border-soft); }
+  .suggest { display: flex; gap: var(--s2); flex-wrap: wrap; padding: 0 var(--s3) var(--s3); }
+  .suggest .s { border: 1px solid var(--border); background: var(--background); color: var(--muted-foreground); border-radius: var(--radius-pill); padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .suggest .s:hover { color: var(--foreground); }
+  .composer { display: flex; gap: var(--s2); align-items: flex-end; padding: var(--s3); border-top: 1px solid var(--border-soft); }
+  .composer textarea { flex: 1; resize: none; height: 38px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); color: var(--foreground); padding: 9px 12px; font: inherit; font-size: 13px; }
+  .composer .send { width: 38px; height: 38px; border: none; border-radius: var(--radius); background: var(--accent); color: white; cursor: pointer; font-size: 15px; }
+
+  .mockflag { font-size: 11px; text-align: center; padding: 5px; background: var(--derived-soft); color: var(--derived); }
 </style>
 </head>
 <body>
-<div class="app">
-  <div class="mockbar">LAYOUT MOCK — illustrative numbers, not snapshot-backed. Not a runtime price answer.</div>
+  <div class="mockflag">Layout mock — illustrative numbers, not snapshot-backed. Not a runtime price answer.</div>
 
-  <!-- top bar -->
-  <div class="topbar">
-    <span class="logo">cloudprice<span class="dot">/compare</span></span>
-    <span class="pill">7 providers · v0</span>
-    <div class="spacer"></div>
-    <span class="pill">session · budget 38% used</span>
-    <button class="iconbtn" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'" title="Toggle theme">◐</button>
+  <!-- ===================== NAVBAR ===================== -->
+  <nav class="nav">
+    <span class="brand"><span class="mark"></span>cloudprice<span class="sub">/compare</span></span>
+    <div class="nav-links">
+      <a href="#" class="active">Compare</a>
+      <a href="#">Snapshots</a>
+      <a href="#">Providers</a>
+      <a href="#">Docs</a>
+    </div>
+    <span class="nav-spacer"></span>
+    <div class="nav-right">
+      <div class="search"><span>⌕</span><span>Search specs, providers…</span><kbd>⌘K</kbd></div>
+      <button class="icon-btn" title="Toggle theme"
+        onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">◐</button>
+      <span class="avatar">NP</span>
+    </div>
+  </nav>
+
+  <!-- ===================== PAGE HEADER ===================== -->
+  <div class="pagehead">
+    <div>
+      <div class="crumb">Compare · general-purpose · EU</div>
+      <h1>Cheapest 4 vCPU · 8 GB</h1>
+    </div>
+    <div class="actions">
+      <button class="btn">Refetch</button>
+      <button class="btn">Export</button>
+      <button class="btn primary">＋ New comparison</button>
+    </div>
   </div>
 
-  <div class="body">
-    <!-- ============ MAIN: deterministic table the human drives ============ -->
-    <div class="main">
-      <!-- manual filter bar = the human's hands on the same view-state -->
-      <div class="filterbar">
-        <div class="field">
-          <label>vCPU</label>
-          <select><option>4</option><option>2</option><option>8</option><option>16</option></select>
-        </div>
-        <div class="field">
-          <label>RAM</label>
-          <select><option>8 GB</option><option>4 GB</option><option>16 GB</option><option>32 GB</option></select>
-        </div>
-        <div class="field">
-          <label>Family</label>
-          <select><option>general-purpose</option><option>any</option><option>compute-optimized</option><option>memory-optimized</option></select>
-        </div>
-        <div class="field">
-          <label>Region</label>
-          <select><option>eu-central</option><option>us-east</option><option>ap-southeast</option></select>
-        </div>
-        <div class="grow"></div>
-        <span class="agent-touch" title="The sidebar agent last mutated this view via set_view">⤷ agent set columns &amp; sort</span>
-        <button class="btn-primary">Compare</button>
+  <!-- ===================== TWO-SURFACE SHELL ===================== -->
+  <div class="shell">
+    <!-- ---------- LEFT: deterministic table the human drives ---------- -->
+    <div>
+      <div class="toolbar">
+        <div class="field"><label>vCPU</label><select><option>4</option><option>2</option><option>8</option><option>16</option></select></div>
+        <div class="field"><label>RAM</label><select><option>8 GB</option><option>4 GB</option><option>16 GB</option><option>32 GB</option></select></div>
+        <div class="field"><label>Family</label><select><option>general-purpose</option><option>any</option><option>compute-opt</option><option>memory-opt</option></select></div>
+        <div class="field"><label>Region</label><select><option>eu-central</option><option>us-east</option><option>ap-southeast</option></select></div>
+        <span class="grow"></span>
+        <span class="agent-tag">⤷ agent set columns &amp; sort</span>
+        <button class="btn primary" style="height:34px">Compare</button>
       </div>
 
-      <!-- table mirrors components/tools/comparison-table.tsx -->
       <div class="card">
         <div class="card-head">
-          <span class="title">Cheapest 4 vCPU · 8 GB · general-purpose in eu-central</span>
-          <span class="badge-stale">stale data</span>
+          <span class="t">7 providers · ranked by monthly</span>
+          <span class="chip stale">1 snapshot stale</span>
         </div>
         <div style="overflow-x:auto">
           <table>
             <thead>
               <tr>
                 <th>#</th><th>Provider</th><th>Instance</th><th>Region</th>
-                <th class="r">vCPU</th><th class="r">RAM</th>
-                <th class="r">Hourly</th><th class="r">Monthly</th>
+                <th class="r">vCPU</th><th class="r">RAM</th><th class="r">Hourly</th><th class="r">Monthly</th>
                 <th>Snapshot</th><th>Source</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="winner">
-                <td><span class="rank gold">1</span></td>
+              <tr class="win">
+                <td><span class="rank first">1</span></td>
                 <td class="prov">AWS</td>
                 <td class="mono">m5.xlarge</td>
-                <td><span title="canonical: eu-central">eu-central-1</span><span class="region-canon">(eu-central)</span></td>
-                <td class="r">4</td><td class="r">8 GB</td>
-                <td class="r mono">$0.192</td><td class="r monthly mono">$140.16</td>
-                <td><span class="age fresh">6h old</span></td>
-                <td><a class="src" href="#">AWS Price List</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+                <td>eu-central-1<span class="region-canon">eu-central</span></td>
+                <td class="r num">4</td><td class="r num">8 GB</td>
+                <td class="r mono">$0.192</td>
+                <td class="r price mono">$140.16<span class="unit">/mo</span></td>
+                <td><span class="age"><span class="dot"></span>6h</span></td>
+                <td><a class="src" href="#">AWS Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
               </tr>
               <tr>
                 <td><span class="rank">2</span></td>
-                <td class="prov">GCP</td>
-                <td class="mono">n2-standard-4<span class="badge-derived" title="agent-derived: composed from cited rate SKUs (core·4 + ram·8)">derived</span></td>
-                <td><span title="canonical: eu-central">europe-west3</span><span class="region-canon">(eu-central)</span></td>
-                <td class="r">4</td><td class="r">8 GB</td>
-                <td class="r mono">$0.204</td><td class="r monthly mono">$148.92</td>
-                <td><span class="age fresh">just fetched</span></td>
-                <td><a class="src" href="#">GCP SKUs</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+                <td class="prov">Oracle</td>
+                <td class="mono">VM.Standard.E4.Flex<span class="tag-derived" title="agent-derived: OCPU + memory SKUs">derived</span></td>
+                <td>eu-frankfurt-1<span class="region-canon">eu-central</span></td>
+                <td class="r num">4</td><td class="r num">8 GB</td>
+                <td class="r mono">$0.196</td>
+                <td class="r price mono">$143.08<span class="unit">/mo</span></td>
+                <td><span class="age bad">31h</span></td>
+                <td><a class="src" href="#">Oracle Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
               </tr>
-              <!-- composite sub-rows: each cited rate SKU that composed the synthesized price -->
-              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="excerpt-ico">⌖</span></td></tr>
-              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="excerpt-ico">⌖</span></td></tr>
               <tr>
                 <td><span class="rank">3</span></td>
-                <td class="prov">Azure</td>
-                <td class="mono">Standard_D4s_v5</td>
-                <td><span title="canonical: eu-central">westeurope</span><span class="region-canon">(eu-central)</span></td>
-                <td class="r">4</td><td class="r">8 GB</td>
-                <td class="r mono">$0.211</td><td class="r monthly mono">$154.20</td>
-                <td><span class="age fresh">just fetched</span></td>
-                <td><a class="src" href="#">Azure Retail Prices</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+                <td class="prov">GCP</td>
+                <td class="mono">n2-standard-4<span class="tag-derived" title="agent-derived: core·4 + ram·8">derived</span></td>
+                <td>europe-west3<span class="region-canon">eu-central</span></td>
+                <td class="r num">4</td><td class="r num">8 GB</td>
+                <td class="r mono">$0.204</td>
+                <td class="r price mono">$148.92<span class="unit">/mo</span></td>
+                <td><span class="age"><span class="dot"></span>just now</span></td>
+                <td><a class="src" href="#">GCP SKUs</a><span class="verify" title="verify json_path against source">⌖</span></td>
               </tr>
+              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="verify">⌖</span></td></tr>
+              <tr class="sub"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="verify">⌖</span></td></tr>
               <tr>
                 <td><span class="rank">4</span></td>
-                <td class="prov">Oracle</td>
-                <td class="mono">VM.Standard.E4.Flex<span class="badge-derived" title="agent-derived: composed from OCPU + memory SKUs">derived</span></td>
-                <td><span title="canonical: eu-central">eu-frankfurt-1</span><span class="region-canon">(eu-central)</span></td>
-                <td class="r">4</td><td class="r">8 GB</td>
-                <td class="r mono">$0.196</td><td class="r monthly mono">$143.08</td>
-                <td><span class="age stale">31h old</span></td>
-                <td><a class="src" href="#">Oracle Price List</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+                <td class="prov">Azure</td>
+                <td class="mono">Standard_D4s_v5</td>
+                <td>westeurope<span class="region-canon">eu-central</span></td>
+                <td class="r num">4</td><td class="r num">8 GB</td>
+                <td class="r mono">$0.211</td>
+                <td class="r price mono">$154.20<span class="unit">/mo</span></td>
+                <td><span class="age"><span class="dot"></span>just now</span></td>
+                <td><a class="src" href="#">Azure Retail Prices</a><span class="verify" title="verify json_path against source">⌖</span></td>
               </tr>
               <tr>
                 <td><span class="rank">5</span></td>
                 <td class="prov">Linode</td>
                 <td class="mono">g6-standard-4</td>
-                <td><span title="canonical: eu-central">eu-central</span></td>
-                <td class="r">4</td><td class="r">8 GB</td>
-                <td class="r mono">$0.072</td><td class="r monthly mono">$48.00</td>
-                <td><span class="age fresh">3h old</span></td>
-                <td><a class="src" href="#">Linode Types</a><span class="excerpt-ico" title="view json_path excerpt">⌖</span></td>
+                <td>eu-central</td>
+                <td class="r num">4</td><td class="r num">8 GB</td>
+                <td class="r mono">$0.072</td>
+                <td class="r price mono">$48.00<span class="unit">/mo</span></td>
+                <td><span class="age"><span class="dot"></span>3h</span></td>
+                <td><a class="src" href="#">Linode Types</a><span class="verify" title="verify json_path against source">⌖</span></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <!-- equivalence basis footnote (AGENTS.md): what holds, what does NOT normalize -->
         <div class="footnote">
           <b>Equivalence basis</b> (general-purpose): matched vCPU, RAM, class.
-          Not normalized: <span class="nn">CPU generation, network bandwidth, baseline performance, attached storage</span>.
+          Not normalized: <span class="em">CPU generation, network bandwidth, baseline performance, attached storage</span>.
         </div>
-        <div class="footnote muted">
-          No match: Vultr, IBM had no general-purpose instance at exactly 4 vCPU / 8 GB in eu-central.
-        </div>
+        <div class="footnote muted">No match · Vultr, IBM had no general-purpose instance at 4 vCPU / 8 GB in eu-central.</div>
       </div>
     </div>
 
-    <!-- ============ SIDEBAR: co-driver agent operating the SAME table ============ -->
-    <div class="sidebar">
-      <div class="side-head">
-        <span class="live-dot"></span>
-        <span class="title">Pricing co-driver</span>
-        <div class="spacer" style="flex:1"></div>
-        <span class="pill">backend-authoritative state</span>
+    <!-- ---------- RIGHT: co-driver agent operating the SAME table ---------- -->
+    <aside class="agent">
+      <div class="agent-head">
+        <span class="live"></span><span class="t">Pricing co-driver</span>
+        <span class="state chip">budget 38%</span>
       </div>
-
       <div class="thread">
         <div class="msg user"><div class="bubble">Cheapest 4 vCPU 8 GB general-purpose VM in the EU?</div></div>
-
-        <div class="msg assistant">
-          <div class="toolcall" style="margin-bottom:8px">
-            <div class="head"><span class="tick">✓</span> <span>compare</span></div>
-            <div class="args mono">vcpu=4, ram_gb=8, family="general-purpose", region="eu-central"</div>
-          </div>
-          <div class="toolcall view" style="margin-bottom:8px">
-            <div class="head"><span class="tick">✓</span> <span class="verb">set_view</span></div>
-            <div class="args mono">sort=monthly_usd ↑ · columns=[provider, instance, region, vcpu, ram, hourly, monthly]</div>
-          </div>
+        <div class="msg bot">
+          <div class="tool"><div class="h"><span class="ok">✓</span> compare</div><div class="a mono">vcpu=4, ram_gb=8, family="general-purpose", region="eu-central"</div></div>
+          <div class="tool"><div class="h"><span class="ok">✓</span> <span class="verb">set_view</span></div><div class="a mono">sort=monthly_usd ↑ · cols=[provider, instance, region, vcpu, ram, hourly, monthly]</div></div>
           <div class="bubble">
-            Cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, snapshot 6h old).
-            Close runners: GCP n2-standard-4 $148.92 and Azure D4s_v5 $154.20 (both just fetched).
-            Oracle's snapshot is 31h old — flagged stale in the table; say "refetch" for live Oracle prices.
-            <div class="citenote">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on any row to verify the json_path against the source.</div>
+            Cheapest is <b>AWS m5.xlarge</b> at <b>$140.16/mo</b> (eu-central-1, 6h old). Close: Oracle $143.08, GCP $148.92, Azure $154.20.
+            Oracle's snapshot is 31h old — flagged stale in the table; say "refetch" for live Oracle.
+            <div class="cite">Equivalence: vCPU + RAM exact, all general-purpose. Not normalized: CPU generation, network, storage. Open ⌖ on a row to verify json_path against the source.</div>
           </div>
         </div>
-
         <div class="msg user"><div class="bubble">Add a $/vCPU column and drop hourly.</div></div>
-        <div class="msg assistant">
-          <div class="toolcall view">
-            <div class="head"><span class="tick">✓</span> <span class="verb">set_view</span></div>
-            <div class="args mono">+ derived col "usd_per_vcpu" (formula: monthly_usd / vcpu) · − hourly</div>
-          </div>
-          <div class="bubble" style="margin-top:8px">
-            Done — added <b>$/vCPU</b> as a derived column (badged, with its formula) and removed Hourly.
-            The table above updated in place.
-          </div>
+        <div class="msg bot">
+          <div class="tool"><div class="h"><span class="ok">✓</span> <span class="verb">set_view</span></div><div class="a mono">+ derived "usd_per_vcpu" (monthly_usd / vcpu) · − hourly</div></div>
+          <div class="bubble">Done — added <b>$/vCPU</b> as a derived column (badged, with its formula) and removed Hourly. The table updated in place.</div>
         </div>
       </div>
-
       <div class="suggest">
-        <span class="chip">Compare across AWS, GCP, Azure</span>
-        <span class="chip">Show me 2 vCPU / 4 GB</span>
-        <span class="chip">Refetch Oracle</span>
+        <span class="s">Compare AWS · GCP · Azure</span>
+        <span class="s">Try 2 vCPU / 4 GB</span>
+        <span class="s">Refetch Oracle</span>
       </div>
       <div class="composer">
         <textarea placeholder="Ask the co-driver to reshape the table…"></textarea>
         <button class="send">↑</button>
       </div>
-    </div>
+    </aside>
   </div>
-</div>
 </body>
 </html>
