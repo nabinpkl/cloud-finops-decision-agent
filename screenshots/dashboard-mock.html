@@ -163,12 +163,16 @@
   td.price { font-weight: 600; }
   td.price .unit { font-weight: 400; color: var(--muted-foreground); font-size: 11px; margin-left: 1px; }
   .tag-derived { margin-left: 6px; font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 5px; color: var(--derived); background: var(--derived-soft); cursor: help; }
-  /* disclosure toggle for a derived row's composite breakdown sub-rows */
-  .disclose { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-right: 4px;
-    border: none; background: transparent; color: var(--muted-foreground); cursor: pointer; font-size: 9px; border-radius: 4px;
-    vertical-align: middle; transition: transform .15s ease; }
-  .disclose:hover { background: var(--muted); color: var(--foreground); }
+  /* row disclosure: chevron sits in front of the rank number; the whole row is
+     clickable to reveal "more details" (the composite rate breakdown). */
+  td.numcell { white-space: nowrap; }
+  .numcell .chev-slot, .numcell .disclose { display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; margin-right: 5px; vertical-align: middle; }
+  .disclose { color: var(--muted-foreground); font-size: 9px; transition: transform .15s ease; }
   .disclose.open { transform: rotate(90deg); }
+  tr.expandable { cursor: pointer; }
+  tr.expandable:not(.win):hover { background: color-mix(in oklch, var(--muted) 55%, transparent); }
+  tr.expandable:hover .disclose { color: var(--foreground); }
   tr.sub { transition: opacity .15s ease; }
   .age { font-size: 12px; color: var(--muted-foreground); }
   .age.bad { color: var(--stale); background: var(--stale-soft); border-radius: 5px; padding: 1px 7px; font-weight: 500; }
@@ -303,34 +307,36 @@
           </thead>
           <tbody>
             <tr class="win">
-              <td><span class="rank first">1</span></td><td class="prov">AWS</td><td class="mono">m5.xlarge</td>
+              <td class="numcell"><span class="chev-slot"></span><span class="rank first">1</span></td><td class="prov">AWS</td><td class="mono">m5.xlarge</td>
               <td>eu-central-1<span class="region-canon">eu-central</span></td>
               <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.192</td>
               <td class="r price mono">$140.16<span class="unit">/mo</span></td>
               <td><span class="age"><span class="dot"></span>6h</span></td>
               <td><a class="src" href="#">AWS Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
             </tr>
-            <tr>
-              <td><span class="rank">2</span></td><td class="prov">Oracle</td><td class="mono">VM.Standard.E4.Flex<span class="tag-derived" title="agent-derived: OCPU + memory SKUs">derived</span></td>
+            <tr class="expandable" data-rowgroup="oracle" aria-expanded="true" onclick="toggleGroup('oracle')">
+              <td class="numcell"><span class="disclose open">▶</span><span class="rank">2</span></td><td class="prov">Oracle</td><td class="mono">VM.Standard.E4.Flex<span class="tag-derived" title="agent-derived: OCPU + memory SKUs">derived</span></td>
               <td>eu-frankfurt-1<span class="region-canon">eu-central</span></td>
               <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.196</td>
               <td class="r price mono">$143.08<span class="unit">/mo</span></td>
               <td><span class="age bad">31h</span></td>
-              <td><a class="src" href="#">Oracle Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
+              <td onclick="event.stopPropagation()"><a class="src" href="#">Oracle Price List</a><span class="verify" title="verify json_path against source">⌖</span></td>
             </tr>
-            <tr>
-              <td><span class="rank">3</span></td><td class="prov">GCP</td>
-              <td class="mono"><button class="disclose open" aria-expanded="true" title="Show/hide rate breakdown" onclick="toggleGroup('gcp', this)">▶</button>n2-standard-4<span class="tag-derived" title="agent-derived: core·4 + ram·8">derived</span></td>
+            <tr class="sub" data-subof="oracle"><td></td><td></td><td class="indent" colspan="5">↳ OCPU-hour @ $0.085 × 2</td><td class="r mono">$124.10</td><td></td><td><span class="verify">⌖</span></td></tr>
+            <tr class="sub" data-subof="oracle"><td></td><td></td><td class="indent" colspan="5">↳ memory-GB-hour @ $0.00325 × 8</td><td class="r mono">$18.98</td><td></td><td><span class="verify">⌖</span></td></tr>
+            <tr class="expandable" data-rowgroup="gcp" aria-expanded="true" onclick="toggleGroup('gcp')">
+              <td class="numcell"><span class="disclose open">▶</span><span class="rank">3</span></td><td class="prov">GCP</td>
+              <td class="mono">n2-standard-4<span class="tag-derived" title="agent-derived: core·4 + ram·8">derived</span></td>
               <td>europe-west3<span class="region-canon">eu-central</span></td>
               <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.204</td>
               <td class="r price mono">$148.92<span class="unit">/mo</span></td>
               <td><span class="age"><span class="dot"></span>just now</span></td>
-              <td><a class="src" href="#">GCP SKUs</a><span class="verify" title="verify json_path against source">⌖</span></td>
+              <td onclick="event.stopPropagation()"><a class="src" href="#">GCP SKUs</a><span class="verify" title="verify json_path against source">⌖</span></td>
             </tr>
             <tr class="sub" data-subof="gcp"><td></td><td></td><td class="indent" colspan="5">↳ core-hour @ $0.0317 × 4</td><td class="r mono">$92.49</td><td></td><td><span class="verify">⌖</span></td></tr>
             <tr class="sub" data-subof="gcp"><td></td><td></td><td class="indent" colspan="5">↳ ram-GB-hour @ $0.00425 × 8</td><td class="r mono">$56.43</td><td></td><td><span class="verify">⌖</span></td></tr>
             <tr>
-              <td><span class="rank">4</span></td><td class="prov">Azure</td><td class="mono">Standard_D4s_v5</td>
+              <td class="numcell"><span class="chev-slot"></span><span class="rank">4</span></td><td class="prov">Azure</td><td class="mono">Standard_D4s_v5</td>
               <td>westeurope<span class="region-canon">eu-central</span></td>
               <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.211</td>
               <td class="r price mono">$154.20<span class="unit">/mo</span></td>
@@ -338,7 +344,7 @@
               <td><a class="src" href="#">Azure Retail Prices</a><span class="verify" title="verify json_path against source">⌖</span></td>
             </tr>
             <tr>
-              <td><span class="rank">5</span></td><td class="prov">Linode</td><td class="mono">g6-standard-4</td>
+              <td class="numcell"><span class="chev-slot"></span><span class="rank">5</span></td><td class="prov">Linode</td><td class="mono">g6-standard-4</td>
               <td>eu-central</td>
               <td class="r num">4</td><td class="r num">8 GB</td><td class="r mono">$0.072</td>
               <td class="r price mono">$48.00<span class="unit">/mo</span></td>
@@ -417,10 +423,14 @@
       const on = document.body.classList.toggle('agent-open', open);
       document.querySelector('.ask-btn')?.setAttribute('aria-pressed', String(on));
     }
-    // expand/collapse a derived row's composite breakdown sub-rows
-    function toggleGroup(id, btn){
-      const open = btn.classList.toggle('open');
-      btn.setAttribute('aria-expanded', String(open));
+    // expand/collapse a derived row's composite breakdown ("more details").
+    // Driven by clicking anywhere on the row; chevron reflects the state.
+    function toggleGroup(id){
+      const row = document.querySelector(`tr[data-rowgroup="${id}"]`);
+      const chev = row.querySelector('.disclose');
+      const open = !chev.classList.contains('open');
+      chev.classList.toggle('open', open);
+      row.setAttribute('aria-expanded', String(open));
       document.querySelectorAll(`tr[data-subof="${id}"]`).forEach(r => { r.style.display = open ? '' : 'none'; });
     }
   </script>
