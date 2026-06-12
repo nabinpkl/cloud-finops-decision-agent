@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@ag-ui/client':
-        specifier: 0.0.55
-        version: 0.0.55
+        specifier: 0.0.56
+        version: 0.0.56
       '@assistant-ui/react':
         specifier: ^0.14.16
         version: 0.14.16(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
@@ -87,14 +87,26 @@ packages:
   '@ag-ui/client@0.0.55':
     resolution: {integrity: sha512-cyTY0S1UK3ynFCtLh6XPkxECQiYL6XvFcAei5FD4yYzln5agSCZ3cAmdD86mwE4UbS5teS3Nci8Q5tEAjrRRgA==}
 
+  '@ag-ui/client@0.0.56':
+    resolution: {integrity: sha512-dxen4qVnDQB1xC9x1nND9W/plidoy0qwDarUPuasHCrtlkMl1EUlc+rNJM7Lr1NtnRmGHHX8gHrSeUXP3vPVHA==}
+
   '@ag-ui/core@0.0.55':
     resolution: {integrity: sha512-Pj7Ke0NsCxbCFgI3xK5YE56LaMRxnXnyeDUgDFTYxeF6KZDcSf5E0x2gB6/37w6bE0hcn/LRNPFd8Es18eIEzA==}
+
+  '@ag-ui/core@0.0.56':
+    resolution: {integrity: sha512-PD26s7qk8dG6/TOGmOv23ByTaGwJs2Wzm53OwsM40jSjio3xmswGZzDaFpjMNP6FsASNGovCPB8xICAyWhYx8A==}
 
   '@ag-ui/encoder@0.0.55':
     resolution: {integrity: sha512-co4RB8kCatQ/+sBOR+nmNMzuKKWynHD73U/MTn9yG8rdznG51KuAPlQAwTP03VChFgO5GfNqEAzcGf5dR6jyMg==}
 
+  '@ag-ui/encoder@0.0.56':
+    resolution: {integrity: sha512-JkR7OGby8hBUOOlrvli0bArM5qvfCoavj3ajUp8324n20wYMrfN+/TR3GUm7wW1japrV+2dS7JEVX5dylrPF1A==}
+
   '@ag-ui/proto@0.0.55':
     resolution: {integrity: sha512-DNavmWA/dL3u4mpB+g/NPzF7XrYLjVFgmS8CnSOsenrmO64XVoR5RrbQghzaKvP9VNkhvdFI9tllpItfE3Pryw==}
+
+  '@ag-ui/proto@0.0.56':
+    resolution: {integrity: sha512-D72l/Xa3vHRBJtlxa+gG3VcycrEwDCHwCTh8BGkyrnRdraYPFl92eeWSV0tnF9+i7xLyNqCdww+NgCoPlrdhZQ==}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -2681,7 +2693,24 @@ snapshots:
       uuid: 11.1.1
       zod: 3.25.76
 
+  '@ag-ui/client@0.0.56':
+    dependencies:
+      '@ag-ui/core': 0.0.56
+      '@ag-ui/encoder': 0.0.56
+      '@ag-ui/proto': 0.0.56
+      '@types/uuid': 10.0.0
+      compare-versions: 6.1.1
+      fast-json-patch: 3.1.1
+      rxjs: 7.8.1
+      untruncate-json: 0.0.1
+      uuid: 11.1.1
+      zod: 3.25.76
+
   '@ag-ui/core@0.0.55':
+    dependencies:
+      zod: 3.25.76
+
+  '@ag-ui/core@0.0.56':
     dependencies:
       zod: 3.25.76
 
@@ -2690,9 +2719,20 @@ snapshots:
       '@ag-ui/core': 0.0.55
       '@ag-ui/proto': 0.0.55
 
+  '@ag-ui/encoder@0.0.56':
+    dependencies:
+      '@ag-ui/core': 0.0.56
+      '@ag-ui/proto': 0.0.56
+
   '@ag-ui/proto@0.0.55':
     dependencies:
       '@ag-ui/core': 0.0.55
+      '@bufbuild/protobuf': 2.12.0
+      '@protobuf-ts/protoc': 2.11.1
+
+  '@ag-ui/proto@0.0.56':
+    dependencies:
+      '@ag-ui/core': 0.0.56
       '@bufbuild/protobuf': 2.12.0
       '@protobuf-ts/protoc': 2.11.1
 
