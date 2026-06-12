@@ -10,8 +10,8 @@
   Architecture shown (Copilot-style, NOT a modal):
     - MAIN PAGE = the traditional deterministic comparison dashboard
       (navbar + filters + table). It owns the page.
-    - AGENT = a SEPARATE panel summoned on demand from an agent icon (navbar
-      button + a floating launcher). Opening it SHIFTS the layout — the page
+    - AGENT = a SEPARATE panel toggled on demand from the navbar "Ask AI"
+      button (the single agent affordance). Opening it SHIFTS the layout — the page
       reflows left to make room and the panel docks on the right, so BOTH stay
       visible at once. No scrim, no dimming: it is not a modal. Closing it
       returns the dashboard to full width.
@@ -231,21 +231,6 @@
   .composer textarea { flex: 1; resize: none; height: 40px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); color: var(--foreground); padding: 10px 12px; font: inherit; font-size: 13px; }
   .composer .send { width: 40px; height: 40px; border: none; border-radius: var(--radius); background: var(--accent); color: white; cursor: pointer; font-size: 15px; }
 
-  /* Floating launcher — the agent icon that summons the panel when it's closed. */
-  .launcher { position: fixed; z-index: 30; right: 22px; bottom: 22px; display: flex; align-items: center; gap: 10px;
-    transition: opacity .18s ease, transform .18s ease; }
-  body.agent-open .launcher { opacity: 0; transform: scale(.9); pointer-events: none; }
-  .launcher .cap { font-size: 12.5px; font-weight: 500; color: var(--foreground); background: var(--card); border: 1px solid var(--border);
-    box-shadow: var(--shadow); border-radius: var(--radius-pill); padding: 7px 13px; }
-  .launcher .cap kbd { font: inherit; font-size: 11px; color: var(--muted-foreground); margin-left: 6px; }
-  .launcher .fab { width: 56px; height: 56px; border: none; border-radius: 50%; cursor: pointer; color: white;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: inline-flex; align-items: center; justify-content: center;
-    box-shadow: 0 8px 22px -6px color-mix(in oklch, var(--accent) 65%, transparent), var(--shadow);
-    position: relative; }
-  .launcher .fab .spark { width: 26px; height: 26px; }
-  .launcher .fab::after { content: ""; position: absolute; inset: -5px; border-radius: 50%;
-    border: 2px solid color-mix(in oklch, var(--accent) 40%, transparent); opacity: .6; }
-
   .mockflag { height: var(--mockflag-h); line-height: 16px; padding: 5px; font-size: 11px; text-align: center; background: var(--derived-soft); color: var(--derived); }
 </style>
 </head>
@@ -415,14 +400,6 @@
       <button class="send">↑</button>
     </div>
   </aside>
-
-  <!-- floating launcher (agent icon) shown when the panel is closed -->
-  <div class="launcher">
-    <span class="cap">Ask the pricing agent<kbd>⌘J</kbd></span>
-    <button class="fab" onclick="agent(true)" aria-label="Open pricing assistant">
-      <svg class="spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>
-    </button>
-  </div>
 
   <script>
     // agent()      -> toggle (navbar Ask AI button)
