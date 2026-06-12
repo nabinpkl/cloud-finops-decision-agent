@@ -116,6 +116,8 @@
     border: 1px solid color-mix(in oklch, var(--accent) 35%, transparent); background: var(--accent-soft); color: var(--accent);
     font-size: 13px; font-weight: 600; cursor: pointer; }
   .ask-btn .spark { width: 15px; height: 15px; }
+  /* reflect open state: the toggle reads as active while the panel is open */
+  body.agent-open .ask-btn { background: var(--accent); border-color: transparent; color: white; }
   .avatar { width: 30px; height: 30px; border-radius: var(--radius-pill); background: linear-gradient(135deg, var(--accent), oklch(0.7 0.16 200));
     color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; cursor: pointer; }
 
@@ -260,8 +262,8 @@
     <span class="nav-spacer"></span>
     <div class="nav-right">
       <div class="search"><span>⌕</span><span>Search specs, providers…</span><kbd>⌘K</kbd></div>
-      <!-- agent icon (navbar) -->
-      <button class="ask-btn" onclick="agent(true)">
+      <!-- agent icon (navbar) — toggles the panel open/closed -->
+      <button class="ask-btn" onclick="agent()" aria-pressed="false">
         <svg class="spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>
         Ask AI
       </button>
@@ -423,7 +425,13 @@
   </div>
 
   <script>
-    function agent(open){ document.body.classList.toggle('agent-open', open); }
+    // agent()      -> toggle (navbar Ask AI button)
+    // agent(true)  -> force open (launcher)
+    // agent(false) -> force close (X / nothing else)
+    function agent(open){
+      const on = document.body.classList.toggle('agent-open', open);
+      document.querySelector('.ask-btn')?.setAttribute('aria-pressed', String(on));
+    }
   </script>
 </body>
 </html>
