@@ -7,11 +7,12 @@
 <!--
   LAYOUT MOCK, not a price quote.
 
-  This is the HOME PAGE = a manual comparison dashboard the human drives via
-  filters. Beside it sits a pricing assistant that answers questions with cited
-  results. The assistant is a SEPARATE surface from this manual dashboard: it
-  does not reshape the manual table (no set_view coupling here). Refetch is an
-  operator/agent concern, not a user button, so it is absent.
+  One workspace, one page. The traditional deterministic comparison dashboard
+  (navbar + filters + table) is the primary layer the human drives, sitting on
+  top of an agent chat surface that is docked as a PANEL on the same page (not a
+  separate route). The panel is collapsible. The assistant answers questions
+  with cited results; it does not reshape the manual table (no set_view coupling
+  here). Refetch is an operator/agent concern, not a user button, so it is absent.
 
   Clean-design rules applied (synthesised from current SaaS guidance):
     - Sticky full-width navbar, primary elements only: brand left, 3-6 nav
@@ -231,10 +232,11 @@
   .agent { position: sticky; top: 72px; display: flex; flex-direction: column;
            height: calc(100vh - 72px - var(--s6)); border: 1px solid var(--border);
            border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
-  .agent-head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); }
+  .agent-head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border-soft); background: color-mix(in oklch, var(--muted) 35%, transparent); }
   .agent-head .t { font-weight: 600; }
   .agent-head .live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ok) 25%, transparent); }
   .agent-head .state { margin-left: auto; font-size: 11px; }
+  .agent-head .collapse { width: 28px; height: 28px; font-size: 13px; }
   .thread { flex: 1; overflow: auto; padding: var(--s4); display: flex; flex-direction: column; gap: var(--s4); }
   .msg { max-width: 90%; }
   .msg.user { align-self: flex-end; }
@@ -390,6 +392,7 @@
       <div class="agent-head">
         <span class="live"></span><span class="t">Pricing assistant</span>
         <span class="state chip">budget 38%</span>
+        <button class="icon-btn collapse" title="Collapse panel">⟩</button>
       </div>
       <div class="thread">
         <div class="msg user"><div class="bubble">Cheapest 4 vCPU 8 GB general-purpose VM in the EU?</div></div>

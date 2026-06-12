@@ -9,7 +9,7 @@ UI states of the `ComparisonTable` agent tool component, rendered with **real**
 | `comparison-table-fresh.png` | Same rows with fresh snapshots: no stale badge, recent age pills. |
 | `comparison-table-unmet.png` | No/partial match: `unmet_requirements` rendered. |
 | `comparison-table-loading.png` | Loading skeleton (tool call in flight). |
-| `dashboard-mock.png` / `-dark.png` | **Layout mock** of the home page: a manual comparison dashboard the human drives via the filter bar, with a separate **pricing assistant** beside it that answers questions with cited results. The assistant does not reshape the manual table (no `set_view` coupling); the agent UI is its own surface. Refetch is an operator/agent concern, not a user button, so it is absent. Shows what the isolated component shots can't: sticky navbar, page header, filter toolbar, data table, assistant thread, suggestions, composer. Clean-design pass (8pt scale, single accent, 3 weights, data-dense table). |
+| `dashboard-mock.png` / `-dark.png` | **Layout mock** of the home page as one workspace: the traditional deterministic comparison dashboard (navbar + filters + table) is the primary layer, on top of an agent chat surface docked as a collapsible **panel** on the same page (not a separate route). The panel **pricing assistant** answers questions with cited results; it does not reshape the manual table (no `set_view` coupling). Refetch is an operator/agent concern, not a user button, so it is absent. Shows what the isolated component shots can't: sticky navbar, page header, filter toolbar, data table, docked assistant panel, suggestions, composer. Clean-design pass (8pt scale, single accent, 3 weights, data-dense table). |
 
 ## `dashboard-mock.html` — design artifact, NOT a runtime answer
 
