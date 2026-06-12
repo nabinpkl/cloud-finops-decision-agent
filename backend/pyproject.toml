@@ -41,7 +41,7 @@ dependencies = [
 # because the default runtime is langchain; install with
 # `uv sync --extra openai-agents` to run the agent on the Agents SDK.
 openai-agents = [
-    "openai-agents>=0.17.4",
+    "openai-agents>=0.17.5",
 ]
 
 [dependency-groups]
@@ -49,7 +49,7 @@ openai-agents = [
 # runtimes (the gated tests under tests/ import it) even though it is an
 # optional runtime dependency.
 dev = [
-    "openai-agents>=0.17.4",
+    "openai-agents>=0.17.5",
     "pytest>=8.3",
     "ruff>=0.15.16",
     "ty>=0.0.44",
