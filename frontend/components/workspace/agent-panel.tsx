@@ -49,7 +49,7 @@ export function AgentPanel() {
       <aside
         aria-label="Pricing assistant"
         className={cn(
-          "bg-card fixed top-[var(--top-h)] right-0 bottom-0 z-40 flex w-[var(--panel-w)] max-w-[100vw] flex-col border-l shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.16)]",
+          "bg-card fixed top-[var(--top-h)] right-0 bottom-0 z-40 flex w-full flex-col border-l shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.16)] md:w-[var(--panel-w)]",
           "transition-transform duration-[260ms] ease-[cubic-bezier(.32,.72,0,1)]",
           agentOpen ? "translate-x-0" : "translate-x-full",
         )}

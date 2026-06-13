@@ -31,7 +31,9 @@ export default function Home() {
         className={cn(
           "h-full overflow-auto",
           SHIFT,
-          agentOpen && "mr-[var(--panel-w)]",
+          // Shift the page only at md+; on narrow screens the panel overlays
+          // full width instead of squeezing the dashboard.
+          agentOpen && "md:mr-[var(--panel-w)]",
         )}
       >
         <PageHeader />
