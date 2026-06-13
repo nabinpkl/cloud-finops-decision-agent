@@ -1,75 +1,64 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { SessionLimitBanner } from "@/components/SessionLimitBanner";
-import { ComparisonTable } from "@/components/tools/comparison-table";
-import { Thread } from "@/components/assistant-ui/thread";
-import { useAui, AuiProvider, Suggestions } from "@assistant-ui/react";
-import { MyRuntimeProvider } from "./MyRuntimeProvider";
+import { cn } from "@/lib/utils";
+import { useWorkspace } from "@/lib/workspace-store";
+import { PageHeader } from "@/components/workspace/page-header";
 
-// One AuiProvider wrapping the whole app, bound to the transport runtime.
-// useAssistantTransportState (SessionLimitBanner) and useAssistantToolUI
-// (ComparisonTable) read the thread's transport extras off the Aui store, so
-// they must live INSIDE this provider, not as siblings of it. Previously the
-// AuiProvider only wrapped the Thread, so those two threw
-// "...only be called when you are using useAssistantTransportRuntime".
-function AppShell() {
-  const suggestions = useMemo(
-    () =>
-      Suggestions([
-        {
-          title: "Cheapest 4 vCPU / 8 GB",
-          label: "general-purpose VM in the EU",
-          prompt: "Cheapest 4 vCPU 8 GB general-purpose VM in the EU?",
-        },
-        {
-          title: "Compare a spec",
-          label: "across AWS, GCP and Azure",
-          prompt:
-            "Compare a 2 vCPU 4 GB general-purpose VM across AWS, GCP and Azure.",
-        },
-      ]),
-    [],
-  );
-
-  const aui = useAui({
-    suggestions,
-  });
-  return (
-    <AuiProvider value={aui}>
-      {/* Registers the generative-UI renderer for `compare` tool calls; draws
-          nothing itself. */}
-      <ComparisonTable />
-      <div className="flex h-full flex-col">
-        <SessionLimitBanner />
-        <div className="flex-1 overflow-hidden">
-          <Thread />
-        </div>
-      </div>
-    </AuiProvider>
-  );
-}
+// The workspace: a manual deterministic dashboard (primary layer) with the
+// agent docked as a separate, on-demand panel. Opening the panel SHIFTS the
+// page left (Copilot-style, not a modal — no scrim); both stay visible. The
+// navbar (in layout.tsx) stays full width above the panel.
+//
+// S1 lays the shell + layout-shift; the dashboard (S5) and the real agent panel
+// with its AG-UI runtime (S6) replace the placeholders below.
+const SHIFT =
+  "transition-[margin] duration-[260ms] ease-[cubic-bezier(.32,.72,0,1)]";
 
 export default function Home() {
-  // The assistant-transport runtime is client-only: hooks like
-  // useAssistantTransportState (SessionLimitBanner) and useAssistantToolUI
-  // (ComparisonTable) throw during SSR because no runtime exists on the server.
-  // Render nothing until mounted so the runtime tree is client-only; server and
-  // first client render agree (both the placeholder), so there is no hydration
-  // mismatch.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) {
-    return (
-      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-        Loading…
-      </div>
-    );
-  }
+  const agentOpen = useWorkspace((s) => s.agentOpen);
+  const setAgent = useWorkspace((s) => s.setAgent);
 
   return (
-    <MyRuntimeProvider>
-      <AppShell />
-    </MyRuntimeProvider>
+    <div className="relative h-full">
+      <div
+        className={cn(
+          "h-full overflow-auto",
+          SHIFT,
+          agentOpen && "mr-[var(--panel-w)]",
+        )}
+      >
+        <PageHeader />
+        <div className="mx-auto w-full max-w-[1280px] px-5 pb-8">
+          <div className="text-muted-foreground bg-card rounded-lg border p-10 text-center text-sm">
+            Manual comparison dashboard mounts here (S5).
+          </div>
+        </div>
+      </div>
+
+      {/* Agent panel — separate, docked below the navbar, slides in on demand. */}
+      <aside
+        aria-label="Pricing assistant"
+        className={cn(
+          "bg-card fixed top-[var(--top-h)] right-0 bottom-0 z-40 flex w-[var(--panel-w)] max-w-[100vw] flex-col border-l shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.16)]",
+          "transition-transform duration-[260ms] ease-[cubic-bezier(.32,.72,0,1)]",
+          agentOpen ? "translate-x-0" : "translate-x-full",
+        )}
+      >
+        <div className="flex items-center justify-between border-b p-4">
+          <span className="font-semibold">Pricing assistant</span>
+          <button
+            type="button"
+            onClick={() => setAgent(false)}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Close panel"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="text-muted-foreground p-4 text-sm">
+          Agent panel mounts here (S6).
+        </div>
+      </aside>
+    </div>
   );
 }

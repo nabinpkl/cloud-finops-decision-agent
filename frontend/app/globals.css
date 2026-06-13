@@ -40,6 +40,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Workspace brand + semantic-state colors. The shadcn --accent is a neutral
+     grey, so the blue agent/brand accent gets its own token rather than
+     clobbering it. State colors back the stale / derived / fresh signals. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-ok: var(--ok);
+  --color-stale: var(--stale);
+  --color-derived: var(--derived);
 }
 
 :root,
@@ -77,6 +85,15 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
+  /* brand + state (light) */
+  --brand: oklch(0.55 0.16 264);
+  --brand-foreground: oklch(0.985 0 0);
+  --ok: oklch(0.62 0.15 150);
+  --stale: oklch(0.58 0.2 27);
+  --derived: oklch(0.62 0.13 75);
+  /* workspace layout: agent panel width + top-bar (navbar) height */
+  --panel-w: 26rem;
+  --top-h: 3.5rem;
 }
 
 [data-theme="dark"],
@@ -113,6 +130,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.552 0.016 285.938);
+  /* brand + state (dark): brighter so they read on the dark surface */
+  --brand: oklch(0.72 0.15 264);
+  --brand-foreground: oklch(0.21 0.006 285.885);
+  --ok: oklch(0.72 0.15 150);
+  --stale: oklch(0.7 0.19 22);
+  --derived: oklch(0.8 0.12 75);
 }
 
 [data-theme="light"][data-brightness="dim"] {

@@ -21,6 +21,12 @@ const nextConfig = {
         source: "/assistant/:path*",
         destination: `${backendOrigin}/assistant/:path*`,
       },
+      // Deterministic manual-dashboard comparison (wire-stripped); same-origin so
+      // the browser never holds the backend URL.
+      {
+        source: "/compare",
+        destination: `${backendOrigin}/compare`,
+      },
       // Citation excerpt-on-click verification hunk (ADR-0008): same-origin so
       // the browser never holds the backend URL.
       {

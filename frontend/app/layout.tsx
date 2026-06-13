@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ThemeSwitcher } from "@/components/theme/theme-switcher";
+import { Navbar } from "@/components/workspace/navbar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -58,12 +58,7 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         <div className="flex h-screen flex-col">
-          <header className="bg-background flex min-h-13 items-center justify-between gap-3 border-b px-4 py-2">
-            <h1 className="min-w-0 truncate text-lg font-semibold">
-              Cloud FinOps pricing agent
-            </h1>
-            <ThemeSwitcher />
-          </header>
+          <Navbar />
           <main className="flex-1 overflow-hidden">{children}</main>
         </div>
       </body>
