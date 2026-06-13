@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from api.assistant_transport.models import AGUIMessage
-from agent.security.untrusted import wrap_assistant_history, wrap_user_request
+from agent.security.untrusted import (
+    wrap_assistant_history,
+    wrap_user_request,
+    wrap_view_context,
+)
 from agent.runtime import Turn
 from app_config import settings
+from normalize.query.inputs import CompareQueryArgs
 
 SESSION_LIMIT_MESSAGE = (
     "This conversation reached its token limit. "
@@ -72,6 +79,43 @@ def apply_agui_messages(
         )
     state["messages"] = rebuilt
     return bool(rebuilt) and rebuilt[-1]["role"] == "user"
+
+
+def view_context_turn(forwarded_props: dict[str, Any] | None) -> Turn | None:
+    """Build a grounding Turn from the frontend's forwarded current view.
+
+    The view is UNTRUSTED client input. It is re-validated through
+    ``CompareQueryArgs`` (the same strict family Literal + region plain-selector
+    + bound checks the deterministic routes use); anything malformed is dropped
+    and the turn runs ungrounded. The result is a structurally-constrained
+    grounding hint built only from validated fields (no free text), wrapped in
+    its own trust-zone tag. It is ephemeral: prepended to the in-memory turns
+    passed to the runtime, never written to state/messages and never persisted.
+    It also instructs the agent to still issue its own compare tool call, so
+    every quoted price stays bound to a validated tool result (ADR-0013).
+    """
+    if not isinstance(forwarded_props, dict):
+        return None
+    raw = forwarded_props.get("currentView")
+    if not isinstance(raw, dict):
+        return None
+    try:
+        args = CompareQueryArgs(
+            vcpu=raw.get("vcpu"),
+            ram_gb=raw.get("ram_gb"),
+            region=raw.get("region"),
+            family=raw.get("family", "any"),
+        )
+    except (ValidationError, TypeError):
+        return None
+    prose = (
+        "The user is currently viewing this comparison in the dashboard: "
+        f"{args.vcpu} vCPU, {args.ram_gb} GB RAM, family {args.family}, "
+        f"region {args.region}. Treat it as the spec they mean unless they say "
+        "otherwise. Always issue your own compare tool call so every quoted "
+        "price is backed by a fresh cited result."
+    )
+    return Turn(role="user", content=wrap_view_context(prose))
 
 
 def build_turns(state: dict[str, Any]) -> list[Turn]:

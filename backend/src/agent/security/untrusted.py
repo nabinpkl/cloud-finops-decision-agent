@@ -28,6 +28,17 @@ def wrap_assistant_history(text: str) -> str:
     return _wrap("previous_assistant_message", text)
 
 
+def wrap_view_context(text: str) -> str:
+    """Wrap the current dashboard view the user is looking at.
+
+    Distinct from ``wrap_user_request``: this is not a user instruction but a
+    structurally-constrained grounding hint (built only from a validated
+    CompareQueryArgs spec, never free text). Its own tag keeps it out of the
+    user-request zone.
+    """
+    return _wrap("current_view_context", text)
+
+
 def wrap_tool_result_json(tool: str, payload: dict[str, Any]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     escaped = escape_xml_text(encoded)

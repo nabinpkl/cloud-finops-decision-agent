@@ -6,6 +6,33 @@ import { useAgUiRuntime } from "@assistant-ui/react-ag-ui";
 import { useEffect, useMemo, type ReactNode } from "react";
 
 import { publishSessionLimitReached } from "@/lib/session-limit";
+import { useWorkspace } from "@/lib/workspace-store";
+
+type RunInput = Parameters<HttpAgent["run"]>[0];
+
+// HttpAgent that grounds every run in the manual dashboard's committed view by
+// forwarding it as RunAgentInput.forwardedProps.currentView. run(input) is the
+// wire entry point, so this catches every request regardless of how the adapter
+// triggers it; reading the store at run time keeps it current, never stale. The
+// backend RE-VALIDATES this (CompareQueryArgs) and drops anything malformed — it
+// is an untrusted grounding hint, not authoritative, and never mutates the table.
+class GroundedHttpAgent extends HttpAgent {
+  run(input: RunInput) {
+    const view = useWorkspace.getState().view;
+    if (view) {
+      input.forwardedProps = {
+        ...(input.forwardedProps ?? {}),
+        currentView: {
+          vcpu: view.vcpu,
+          ram_gb: view.ram_gb,
+          family: view.family,
+          region: view.region,
+        },
+      };
+    }
+    return super.run(input);
+  }
+}
 
 // AG-UI transport (ADR-0016). The backend is an AG-UI server: POST /assistant
 // streams AG-UI events (RUN_STARTED, TEXT_MESSAGE_*, TOOL_CALL_*, STATE_SNAPSHOT,
@@ -27,7 +54,7 @@ type ViewState = {
 };
 
 export function MyRuntimeProvider({ children }: { children: ReactNode }) {
-  const agent = useMemo(() => new HttpAgent({ url: ASSISTANT_URL }), []);
+  const agent = useMemo(() => new GroundedHttpAgent({ url: ASSISTANT_URL }), []);
 
   const runtime = useAgUiRuntime({
     agent,

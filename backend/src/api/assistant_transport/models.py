@@ -47,7 +47,7 @@ class AGUIMessage(BaseModel):
 
 
 class AssistantRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     # AG-UI RunAgentInput carries the conversation here; the latest user message
     # is the turn trigger. Required: a request with no messages is not a turn.
@@ -58,3 +58,11 @@ class AssistantRequest(BaseModel):
     # is immediately stripped of any client view/selection/enforcement flags;
     # view-state is backend-authoritative.
     state: dict[str, Any] | None = None
+    # AG-UI RunAgentInput.forwardedProps: an untrusted, optional grounding
+    # channel the frontend uses to forward the manual dashboard's current view
+    # ({"currentView": {vcpu, ram_gb, family, region}}). It is NOT authoritative:
+    # the route re-validates it through CompareQueryArgs and drops anything
+    # malformed; it never seeds view-state and is never persisted.
+    forwarded_props: dict[str, Any] | None = Field(
+        default=None, alias="forwardedProps"
+    )

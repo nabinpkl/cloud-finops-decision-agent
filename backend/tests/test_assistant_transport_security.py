@@ -334,3 +334,89 @@ def test_input_guardrail_ambiguous_block_skips_runtime(monkeypatch: pytest.Monke
     assert response.status_code == 200
     assert "cannot safely process" in response.text
     assert runtime.turns == []
+
+
+def test_view_context_is_prepended_and_judge_exempt(monkeypatch: pytest.MonkeyPatch):
+    """Forwarded view grounds the model but bypasses the input judge.
+
+    The committed dashboard view, forwarded by the client, is validated +
+    wrapped and prepended to the runtime turns AFTER the judge ran on the real
+    conversation. So the model sees it, but it is not part of the judged input
+    (it is structurally constrained to a validated CompareQueryArgs spec).
+    """
+    import api.assistant_transport.turn as turn_module
+    import api.main as apimain
+
+    runtime = RecordingRuntime()
+    judged: dict[str, list[Turn]] = {}
+
+    async def _recording_guardrail(turns: list[Turn]):
+        judged["turns"] = list(turns)
+        return result_from_decision(
+            GuardDecision(action="allow", reason="safe", confidence=1.0),
+            source="test",
+            main_model_skipped=False,
+        )
+
+    monkeypatch.setattr(turn_module, "run_input_guardrail", _recording_guardrail)
+    monkeypatch.setattr(turn_module, "get_runtime", lambda: runtime)
+    client = TestClient(apimain.app)
+
+    response = client.post(
+        "/assistant",
+        json={
+            "messages": [_user_msg("which is cheapest?")],
+            "forwardedProps": {
+                "currentView": {
+                    "vcpu": 4,
+                    "ram_gb": 8,
+                    "family": "general-purpose",
+                    "region": "eu-central",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    # grounding prepended for the model, real user request still last
+    assert runtime.turns[0].content.startswith("<current_view_context>")
+    assert "4 vCPU" in runtime.turns[0].content
+    assert runtime.turns[-1].content.startswith("<external_user_request>")
+    # the judge saw only the real conversation, never the grounding context
+    assert judged["turns"]
+    assert all(
+        not turn.content.startswith("<current_view_context>")
+        for turn in judged["turns"]
+    )
+
+
+def test_malformed_view_context_runs_ungrounded(monkeypatch: pytest.MonkeyPatch):
+    """A malformed forwarded view is dropped; the turn still runs, ungrounded."""
+    import api.assistant_transport.turn as turn_module
+    import api.main as apimain
+
+    runtime = RecordingRuntime()
+    monkeypatch.setattr(turn_module, "get_runtime", lambda: runtime)
+    client = TestClient(apimain.app)
+
+    response = client.post(
+        "/assistant",
+        json={
+            "messages": [_user_msg("which is cheapest?")],
+            "forwardedProps": {
+                "currentView": {
+                    "vcpu": 4,
+                    "ram_gb": 8,
+                    "family": "compute-opt",  # not a backend FamilyName literal
+                    "region": "eu-central",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert [turn.role for turn in runtime.turns] == ["user"]
+    assert all(
+        not turn.content.startswith("<current_view_context>")
+        for turn in runtime.turns
+    )

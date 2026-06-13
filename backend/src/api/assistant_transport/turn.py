@@ -21,6 +21,7 @@ from agent.runtime.prompt_assembly import (
     price_agent_prompt_identity,
 )
 from agent.guardrails.input import run_input_guardrail
+from agent.runtime import Turn
 
 
 async def run_agent_turn(
@@ -28,6 +29,7 @@ async def run_agent_turn(
     *,
     session_id: str,
     hashed_id: str,
+    view_context: Turn | None = None,
 ) -> None:
     block = check_session_cap(session_id)
     if block is not None:
@@ -97,7 +99,11 @@ async def run_agent_turn(
             state_emitter = AGUIStateEmitter(controller, msg)
             emitter = PolicyEmitter(state_emitter)
             runtime = get_runtime()
-            await runtime.run(turns, emitter, run_usage)
+            # Prepend the (already validated + wrapped) grounding context AFTER
+            # the input judge ran on the real conversation, so it is judge-exempt
+            # but visible to the model. Ephemeral: not added to controller.state.
+            run_turns = [view_context, *turns] if view_context is not None else turns
+            await runtime.run(run_turns, emitter, run_usage)
             if not emitter.flush_checked():
                 turn_span.set_attribute("finops.policy.final_answer.blocked", True)
                 turn_span.set_attribute(

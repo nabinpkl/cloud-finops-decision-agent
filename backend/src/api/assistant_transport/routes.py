@@ -32,6 +32,7 @@ from api.assistant_transport.state import (
     apply_agui_messages,
     history_text_length,
     prepare_incoming_state,
+    view_context_turn,
 )
 from api.assistant_transport.turn import run_agent_turn
 from api.budget.identity import new_session_id
@@ -65,8 +66,17 @@ async def assistant_endpoint(
     # final answer until it validates (ADR-0013), so streaming-as-we-go vs
     # buffer-then-stream is observationally identical for the hardening surface:
     # no unvalidated price text ever reaches the wire either way.
+    # Optional grounding: the manual dashboard's current view, forwarded by the
+    # client. Re-validated + wrapped here; dropped if malformed. Never seeds
+    # view-state (that stays backend-authoritative) and is not persisted.
+    grounding = view_context_turn(body.forwarded_props)
     if triggered_by_user_message:
-        await run_agent_turn(ctx, session_id=session_id, hashed_id=hashed_id)
+        await run_agent_turn(
+            ctx,
+            session_id=session_id,
+            hashed_id=hashed_id,
+            view_context=grounding,
+        )
     ctx.close()
 
     encoder = EventEncoder(accept=request.headers.get("accept", ""))
