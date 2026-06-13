@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { SessionLimitBanner } from "@/components/SessionLimitBanner";
 import { Thread } from "@/components/assistant-ui/thread";
 import { ComparisonTable } from "@/components/tools/comparison-table";
+import { ContextStrip } from "@/components/workspace/context-strip";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-store";
 
@@ -78,6 +79,7 @@ export function AgentPanel() {
             Cited answers from snapshot data. It reads your current view but does
             not change the table beside it.
           </p>
+          <ContextStrip />
         </header>
 
         <SessionLimitBanner />
