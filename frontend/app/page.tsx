@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-store";
+import { Dashboard } from "@/components/workspace/dashboard";
 import { PageHeader } from "@/components/workspace/page-header";
 
 // The workspace: a manual deterministic dashboard (primary layer) with the
@@ -28,11 +29,7 @@ export default function Home() {
         )}
       >
         <PageHeader />
-        <div className="mx-auto w-full max-w-[1280px] px-5 pb-8">
-          <div className="text-muted-foreground bg-card rounded-lg border p-10 text-center text-sm">
-            Manual comparison dashboard mounts here (S5).
-          </div>
-        </div>
+        <Dashboard />
       </div>
 
       {/* Agent panel — separate, docked below the navbar, slides in on demand. */}
