@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@ag-ui/client": "0.0.55",
-    "@assistant-ui/react": "^0.14.16",
+    "@assistant-ui/react": "^0.14.18",
     "@assistant-ui/react-ag-ui": "^0.0.36",
     "@assistant-ui/react-markdown": "^0.14.2",
     "class-variance-authority": "^0.7.1",
