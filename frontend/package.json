@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
