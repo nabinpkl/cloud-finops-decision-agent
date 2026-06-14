@@ -144,6 +144,16 @@ def _build_model() -> ChatOpenAI:
             + " in .env (see .env.example)."
         )
 
+    # Output cap rides in extra_body as `max_tokens`, NOT the typed `max_tokens=`
+    # kwarg. langchain_openai rewrites the typed kwarg to the OpenAI-newer
+    # `max_completion_tokens`, a param name no OpenRouter provider advertises in
+    # its supported_parameters. With `provider.require_parameters: true` (set in
+    # config/models.yaml so the route only hits providers honoring our tool
+    # schemas), OpenRouter then filters out every provider and 404s with "No
+    # endpoints found that can handle the requested parameters." Sending the
+    # legacy `max_tokens` name that every provider lists keeps the route non-empty.
+    extra_body = llm_model_config.main.request.extra_body.as_request_body()
+    extra_body["max_tokens"] = llm_model_config.main.request.max_tokens
     kwargs: dict[str, Any] = dict(
         base_url=settings.provider_base_url,
         api_key=settings.provider_api_key,
@@ -151,8 +161,7 @@ def _build_model() -> ChatOpenAI:
         disable_streaming=llm_model_config.main.request.disable_streaming,
         stream_usage=llm_model_config.main.request.stream_usage,
         use_responses_api=llm_model_config.main.request.use_responses_api,
-        max_tokens=llm_model_config.main.request.max_tokens,
-        extra_body=llm_model_config.main.request.extra_body.as_request_body(),
+        extra_body=extra_body,
     )
     return ChatOpenAI(**kwargs)
 

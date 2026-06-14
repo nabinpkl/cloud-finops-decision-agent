@@ -8,12 +8,10 @@ main:
     disable_streaming: true
     stream_usage: true
     use_responses_api: false
-    max_tokens: 1200
+    max_tokens: 4000
     extra_body:
       provider:
         require_parameters: true
-      reasoning:
-        effort: low
   structured_output:
     strategy: provider
     schema_name: AnswerPlan

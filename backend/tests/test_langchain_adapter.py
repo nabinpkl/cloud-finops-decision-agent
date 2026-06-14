@@ -124,18 +124,24 @@ def test_emits_tool_call_then_result_and_sums_usage(monkeypatch):
     assert usage.cached_input_tokens == 4
 
 
-def test_model_uses_strict_openrouter_routing_with_reasoning(monkeypatch):
+def test_model_uses_strict_openrouter_routing(monkeypatch):
     monkeypatch.setattr(lc.settings, "provider_base_url", "https://openrouter.ai/api/v1")
     monkeypatch.setattr(lc.settings, "provider_api_key", "sk-test")
     monkeypatch.setattr(lc.settings, "model_name", "deepseek/deepseek-v4-flash")
 
     model = lc._build_model()
 
+    # The output cap rides in extra_body as `max_tokens`, the param name every
+    # OpenRouter provider advertises. It must NOT be passed as the typed
+    # `max_tokens=` kwarg, which langchain_openai rewrites to
+    # `max_completion_tokens` -- a name no provider lists, so with
+    # `provider.require_parameters: true` the route empties and 404s.
     assert model.extra_body == {
         "provider": {"require_parameters": True},
-        "reasoning": {"effort": "low"},
+        "max_tokens": 4000,
     }
-    assert model.max_tokens == 1200
+    # No reasoning on the main model (DeepSeek emits tool calls as DSML markup in
+    # the reasoning channel when reasoning is set, losing the tool_calls).
     assert model.reasoning is None
     assert model.use_responses_api is False
     assert model.disable_streaming is True

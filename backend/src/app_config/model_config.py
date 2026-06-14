@@ -26,10 +26,15 @@ class ReasoningRequestConfig(ModelConfigBase):
 
 class MainExtraBodyConfig(ModelConfigBase):
     provider: ProviderRequestConfig
-    reasoning: ReasoningRequestConfig
+    # Optional: DeepSeek models emit tool calls as DSML markup inside the
+    # `reasoning` channel when `reasoning.effort` is set, which OpenRouter never
+    # parses back into OpenAI `tool_calls` (the call is silently lost). Leave
+    # reasoning unset for tool-calling models; only enable it for models that
+    # emit structured tool_calls alongside a reasoning trace.
+    reasoning: ReasoningRequestConfig | None = None
 
     def as_request_body(self) -> dict[str, Any]:
-        return self.model_dump(mode="json")
+        return self.model_dump(mode="json", exclude_none=True)
 
 
 class MainRequestConfig(ModelConfigBase):
