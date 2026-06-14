@@ -123,6 +123,8 @@ def synthesize_rate_results(
                 "rule": f"flex_rules.{provider}.{flex_family}",
                 "formula": "vcpu_quantity * compute_rate + ram_gb * ram_rate",
             },
+            # Both constituents share this snapshot's age; the max is that value.
+            age_hours=age_hours,
         )
 
         results.append(

@@ -41,6 +41,12 @@ class CompositeCitationEntry(QueryModel):
 class CompositeCitation(QueryModel):
     composite: list[CompositeCitationEntry]
     synthesis: dict[Literal["rule", "formula"], str]
+    # The row's single age, exposed so every result (single or composite) carries
+    # one `citation.age_hours` the agent can copy verbatim into a claim's
+    # `snapshot_age_hours`. A composite row is as fresh as its STALEST input, so
+    # this is the max constituent age (the conservative choice). The answer-plan
+    # age-binding check derives the same max, so the two reconcile.
+    age_hours: float
 
 
 class CandidateBrief(QueryModel):
