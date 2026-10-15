@@ -1,4 +1,11 @@
-"""IBM Global Catalog and deployment-pricing walk."""
+"""IBM Global Catalog and deployment-pricing walk, stored raw.
+
+Three hops, each response its own file:
+  1. catalog pages (`catalog-NNNN.json`): every service, paged by `next`;
+  2. per compute service, its child plans (`children-<service>-NNNN.json`), paged by `next`;
+  3. per plan, `/{plan_id}/pricing/deployment` (`pricing-<plan_id>.json`), which
+     carries that plan's price in every region it is deployed to.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +13,7 @@ import asyncio
 
 import httpx
 
-from ingest._shared import fetch_polite, now_utc
+from ingest._shared import IngestError
 from ingest.config import ingest_settings
 from ingest.ibm.constants import (
     CATALOG_BASE,
@@ -14,115 +21,59 @@ from ingest.ibm.constants import (
     COMPUTE_SERVICE_NAMES,
     PRICING_CONCURRENCY,
 )
-from ingest.ibm.logging import log, on_retry_log
+from ingest.raw_snapshot import RawSnapshot
 
 
-async def fetch_all_services(client: httpx.AsyncClient) -> tuple[list[dict], int]:
-    services: list[dict] = []
-    pages = 0
-    next_url: str | None = CATALOG_FIRST_URL
-    while next_url:
-        pages += 1
-        t0 = now_utc()
-        resp = await fetch_polite(
-            client,
-            next_url,
-            timeout=ingest_settings.http_timeout_seconds,
-            on_retry=on_retry_log,
-        )
-        dt = (now_utc() - t0).total_seconds()
-        page = resp.json()
-        chunk = page.get("resources", [])
-        services.extend(chunk)
-        log(
-            f"catalog page {pages}: 200 in {dt:.2f}s "
-            f"resources+={len(chunk)} total={len(services)}"
-        )
-        next_url = page.get("next") or None
-    return services, pages
+def catalog_page_name(n: int) -> str:
+    return f"catalog-{n:04d}.json"
 
 
-async def fetch_children(client: httpx.AsyncClient, service_id: str) -> list[dict]:
-    plans: list[dict] = []
-    first_url = f"{CATALOG_BASE}/{service_id}/%2A"
-    next_url: str | None = first_url
-    while next_url:
-        resp = await fetch_polite(
-            client,
-            next_url,
-            timeout=ingest_settings.http_timeout_seconds,
-            on_retry=on_retry_log,
-        )
-        page = resp.json()
-        plans.extend(page.get("resources", []))
-        next_url = page.get("next") or None
-    return plans
+def children_page_name(service: str, n: int) -> str:
+    return f"children-{service}-{n:04d}.json"
 
 
-async def fetch_plan_pricing(
-    client: httpx.AsyncClient, plan_id: str, sem: asyncio.Semaphore
-) -> dict:
-    url = f"{CATALOG_BASE}/{plan_id}/pricing/deployment"
-    async with sem:
-        resp = await fetch_polite(
-            client,
-            url,
-            timeout=ingest_settings.http_timeout_seconds,
-            on_retry=on_retry_log,
-        )
-    return resp.json()
+def pricing_name(plan_id: str) -> str:
+    return f"pricing-{plan_id}.json"
 
 
-async def fetch_compute_pricing(
-    client: httpx.AsyncClient, services_by_name: dict[str, dict]
-) -> tuple[dict[str, dict], int, set[str]]:
-    compute: dict[str, dict] = {}
-    total_calls = 0
-    regions: set[str] = set()
+async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
+    services = await _paged_resources(snapshot, client, CATALOG_FIRST_URL, catalog_page_name)
+    by_name = {name: service for service in services if (name := service.get("name"))}
+
     sem = asyncio.Semaphore(PRICING_CONCURRENCY)
-
-    for name in COMPUTE_SERVICE_NAMES:
-        svc = services_by_name.get(name)
-        if svc is None:
-            log(f"compute service {name!r} not found in catalog; skipping")
-            compute[name] = {"service_id": None, "plans": [], "pricing": {}}
-            continue
-        service_id = svc.get("id")
-        if not service_id:
-            log(f"compute service {name!r} has no id in catalog; skipping")
-            compute[name] = {"service_id": None, "plans": [], "pricing": {}}
-            continue
-        plans = await fetch_children(client, service_id)
-        log(f"{name}: {len(plans)} plans, fetching deployment pricing...")
-
-        plan_ids = [pid for plan in plans if (pid := plan.get("id"))]
-        results = await asyncio.gather(
-            *(fetch_plan_pricing(client, pid, sem) for pid in plan_ids),
-            return_exceptions=True,
+    for service_name in COMPUTE_SERVICE_NAMES:
+        service = by_name.get(service_name)
+        if service is None or not service.get("id"):
+            raise IngestError(f"compute service {service_name!r} is not in the IBM catalog (or has no id)")
+        plans = await _paged_resources(
+            snapshot,
+            client,
+            f"{CATALOG_BASE}/{service['id']}/%2A",
+            lambda n, s=service_name: children_page_name(s, n),
         )
-
-        pricing: dict[str, dict] = {}
-        for pid, result in zip(plan_ids, results):
-            if isinstance(result, BaseException):
-                log(f"  plan {pid} pricing failed: {result!r}")
-                pricing[pid] = {"error": str(result)}
-                continue
-            pricing[pid] = result
-            total_calls += 1
-            for dep in result.get("resources", []):
-                region = dep.get("deployment_region")
-                if region:
-                    regions.add(region)
-
-        compute[name] = {"service_id": service_id, "plans": plans, "pricing": pricing}
-        log(f"{name}: priced {len(pricing)} plans")
-
-    return compute, total_calls, regions
+        plan_ids = [plan_id for plan in plans if (plan_id := plan.get("id"))]
+        await asyncio.gather(*(_pricing(snapshot, client, plan_id, sem) for plan_id in plan_ids))
 
 
-async def fetch_all() -> tuple[list[dict], int, dict[str, dict], int, set[str]]:
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        services, page_count = await fetch_all_services(client)
-        services_by_name = {name: service for service in services if (name := service.get("name"))}
-        compute, pricing_calls, regions = await fetch_compute_pricing(client, services_by_name)
-    return services, page_count, compute, pricing_calls, regions
+async def _paged_resources(snapshot: RawSnapshot, client: httpx.AsyncClient, first_url: str, name_for) -> list[dict]:
+    resources: list[dict] = []
+    url: str | None = first_url
+    n = 1
+    while url:
+        name = name_for(n)
+        await snapshot.fetch(client, name, url, timeout=ingest_settings.http_timeout_seconds)
+        page = snapshot.read_json(name)
+        resources.extend(page.get("resources", []))
+        url = page.get("next") or None
+        n += 1
+    return resources
+
+
+async def _pricing(snapshot: RawSnapshot, client: httpx.AsyncClient, plan_id: str, sem: asyncio.Semaphore) -> None:
+    async with sem:
+        await snapshot.fetch(
+            client,
+            pricing_name(plan_id),
+            f"{CATALOG_BASE}/{plan_id}/pricing/deployment",
+            timeout=ingest_settings.http_timeout_seconds,
+        )

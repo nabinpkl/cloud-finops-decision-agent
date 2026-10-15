@@ -46,6 +46,15 @@ class IngestSettings(BaseSettings):
         validation_alias="INGEST_HTTP_MAX_BACKOFF_SECONDS",
     )
 
+    http_max_retry_after_seconds: float = Field(
+        default=300.0,
+        validation_alias="INGEST_HTTP_MAX_RETRY_AFTER_SECONDS",
+    )
+    resume_window_hours: float = Field(
+        default=6.0,
+        validation_alias="INGEST_RESUME_WINDOW_HOURS",
+    )
+
     ibm_pricing_concurrency: int = Field(
         default=8,
         validation_alias="INGEST_IBM_PRICING_CONCURRENCY",

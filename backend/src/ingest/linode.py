@@ -1,135 +1,56 @@
-"""Linode (Akamai) pricing ingest from the public /v4/linode/types endpoint."""
+"""Linode types ingest via the public /v4/linode/types API, stored raw page by page."""
 
 from __future__ import annotations
 
-import argparse
-import asyncio
-import json
-from dataclasses import asdict, dataclass
-
 import httpx
 
-from ingest._shared import (
-    FileRecord,
-    PROJECT_ROOT,
-    emit,
-    fetch_polite,
-    is_fresh,
-    iso_compact,
-    iso_z,
-    latest_receipt_path,
-    now_utc,
-    sha256_bytes,
-    store_root,
-)
+from ingest._shared import IngestError
 from ingest.config import ingest_settings
+from ingest.raw_snapshot import RawSnapshot, run_ingest
 
 PROVIDER = "linode"
 SERVICE = "types"
 TYPES_URL = "https://api.linode.com/v4/linode/types"
-FRESHNESS = ingest_settings.snapshot_freshness
+PAGE_SIZE = 500  # API maximum.
 
-# Linode's /v4/linode/types is no-auth, single page (~75 types, ~42 KB).
-# The schema is distinctive: each type carries a base price.{hourly,monthly} that
-# applies globally, PLUS an explicit region_prices[] list of per-region overrides
-# (id, hourly, monthly) for regions that price differently from the base. No
-# other provider in v0 publishes per-region overrides like this. The agent must
-# read region_prices[] before quoting a region-specific number; the base price is
-# the fallback for any region not listed.
-
-STORE_ROOT = store_root(PROVIDER)
+# /v4/linode/types is no-auth and page-numbered (`page`, `pages`); ~75 types fit on
+# one page today. Each type carries a base price.{hourly,monthly} that applies
+# globally, plus a region_prices[] list of per-region overrides (id, hourly,
+# monthly) for regions that price differently from the base.
 
 
-@dataclass
-class Receipt:
-    success: bool
-    provider: str
-    service: str
-    source_url: str
-    store_dir: str
-    fetched_at: str
-    regions_with_overrides: list[str]
-    type_count: int
-    files: list[FileRecord]
-    total_size_bytes: int
+def page_name(n: int) -> str:
+    return f"types-{n:04d}.json"
 
 
-async def fetch_types() -> dict:
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        resp = await fetch_polite(
+async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
+    n = 1
+    while True:
+        name = page_name(n)
+        await snapshot.fetch(
             client,
+            name,
             TYPES_URL,
+            params={"page": n, "page_size": PAGE_SIZE},
             timeout=ingest_settings.http_timeout_seconds,
         )
-        return resp.json()
+        pages = snapshot.read_json(name).get("pages")
+        if not isinstance(pages, int):
+            raise IngestError(f"{name}: no integer `pages` field; Linode's paging shape changed")
+        if n >= pages:
+            return
+        n += 1
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch Linode pricing snapshot.")
-    parser.add_argument("--force", action="store_true", help="Bypass the 24h freshness rule.")
-    args = parser.parse_args()
-
-    if not args.force:
-        latest = latest_receipt_path(PROVIDER)
-        if latest is not None and is_fresh(latest, FRESHNESS):
-            emit(json.loads(latest.read_text()))
-
-    fetched_at = now_utc()
-    snapshot_dir = STORE_ROOT / iso_compact(fetched_at)
-
-    try:
-        upstream = asyncio.run(fetch_types())
-    except httpx.HTTPError as exc:
-        emit(
-            {
-                "success": False,
-                "provider": PROVIDER,
-                "error": str(exc),
-                "hint": "Check network connectivity and that api.linode.com is reachable.",
-            },
-            code=1,
-        )
-
-    types_ = upstream.get("data", [])
-    regions_with_overrides = sorted(
-        {rp["id"] for t in types_ for rp in t.get("region_prices", []) if "id" in rp}
-    )
-
-    snapshot_payload = {
-        "fetched_at": iso_z(fetched_at),
-        "source_url": TYPES_URL,
-        "type_count": len(types_),
-        "types": types_,
-    }
-    snapshot_bytes = json.dumps(snapshot_payload, indent=2).encode("utf-8")
-
-    snapshot_dir.mkdir(parents=True, exist_ok=True)
-    (snapshot_dir / "types.json").write_bytes(snapshot_bytes)
-
-    files = [
-        FileRecord(
-            name="types.json",
-            hash=sha256_bytes(snapshot_bytes),
-            size_bytes=len(snapshot_bytes),
-            source_url=TYPES_URL,
-        )
-    ]
-
-    receipt = Receipt(
-        success=True,
+    run_ingest(
         provider=PROVIDER,
         service=SERVICE,
         source_url=TYPES_URL,
-        store_dir=str(snapshot_dir.relative_to(PROJECT_ROOT)),
-        fetched_at=iso_z(fetched_at),
-        regions_with_overrides=regions_with_overrides,
-        type_count=len(types_),
-        files=files,
-        total_size_bytes=sum(f.size_bytes for f in files),
+        fetch=fetch,
+        hint="Check network connectivity and that api.linode.com is reachable.",
+        description="Fetch Linode pricing snapshot.",
     )
-
-    (snapshot_dir / "receipt.json").write_text(json.dumps(asdict(receipt), indent=2))
-    emit(asdict(receipt))
 
 
 if __name__ == "__main__":

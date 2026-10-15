@@ -1,16 +1,19 @@
-"""Shared helpers for provider ingest: hashing, timestamps, freshness, env, output, HTTP."""
+"""Shared helpers for provider ingest: timestamps, freshness, env, output, HTTP."""
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import json
+import random
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import NoReturn
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -23,17 +26,29 @@ SRC_ROOT = _SRC_ROOT
 TAXONOMY_DIR = _TAXONOMY_DIR
 ingest_settings = ingest_config.ingest_settings
 
+# Response headers worth keeping in the receipt: when the provider says the data
+# was served or last changed, and what it said about our rate budget.
+KEPT_HEADERS = ("date", "etag", "last-modified", "content-type", "retry-after")
+# Query parameters that may carry a credential; never written to a receipt.
+SECRET_PARAMS = frozenset({"key", "api_key", "apikey", "access_token"})
 
-@dataclass
-class FileRecord:
-    name: str
-    hash: str
+RetryCallback = Callable[[int, str, float], object]
+
+
+class IngestError(Exception):
+    """A fetch cannot continue: the provider answered in a way we refuse to guess past."""
+
+
+@dataclass(frozen=True)
+class FetchedFile:
+    """One response body written to disk byte for byte, with what the provider said."""
+
+    path: Path
+    url: str
+    status: int
+    headers: dict[str, str]
+    sha256: str
     size_bytes: int
-    source_url: str
-
-
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
 
 
 def now_utc() -> datetime:
@@ -42,6 +57,10 @@ def now_utc() -> datetime:
 
 def iso_compact(ts: datetime) -> str:
     return ts.strftime("%Y-%m-%dT%H-%M-%SZ")
+
+
+def parse_iso_compact(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%dT%H-%M-%SZ").replace(tzinfo=timezone.utc)
 
 
 def iso_z(ts: datetime) -> str:
@@ -89,46 +108,128 @@ def emit(payload: dict, code: int = 0) -> NoReturn:
     sys.exit(code)
 
 
+def log(provider: str, msg: str) -> None:
+    print(f"[{provider}] {msg}", file=sys.stderr, flush=True)
+
+
+def retry_after_seconds(value: str | None, now: datetime) -> float | None:
+    """Parse a Retry-After header: delta seconds or an HTTP date (RFC 9110).
+
+    Returns None when absent. A value that is neither form raises ValueError."""
+    if value is None or not value.strip():
+        return None
+    text = value.strip()
+    try:
+        return max(0.0, float(text))
+    except ValueError:
+        pass
+    when = parsedate_to_datetime(text)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (when - now).total_seconds())
+
+
+def receipt_url(url: httpx.URL | str) -> str:
+    """The request URL as a receipt records it: credentials stripped from the query."""
+    parts = urlsplit(str(url))
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k.lower() not in SECRET_PARAMS]
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 async def fetch_polite(
     client: httpx.AsyncClient,
     url: str,
+    dest: Path,
     *,
     params: dict | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
     initial_backoff: float | None = None,
     max_backoff: float | None = None,
-    on_retry: Callable[[int, int, float], object] | None = None,
-) -> httpx.Response:
-    # Honor Retry-After when present, exponential backoff otherwise. Retries on 429
-    # and 5xx; 4xx other than 429 raise immediately. on_retry(attempt, status, wait)
-    # is optional; ingest that want stderr breadcrumbs supply it.
+    max_retry_after: float | None = None,
+    on_retry: RetryCallback | None = None,
+) -> FetchedFile:
+    """GET url and stream the body to dest byte for byte, retrying what is worth retrying.
+
+    Retries 429, 5xx and transport errors (connection reset, timeout, protocol
+    error). Honors Retry-After in either form, refusing a wait longer than
+    max_retry_after; otherwise backs off exponentially with jitter. Other 4xx
+    raise at once. The body lands in `<dest>.part` and is renamed onto dest only
+    when complete, so dest exists only as a whole response.
+    on_retry(attempt, reason, wait) is called before each wait."""
     timeout = ingest_settings.http_timeout_seconds if timeout is None else timeout
     max_retries = ingest_settings.http_max_retries if max_retries is None else max_retries
-    initial_backoff = (
-        ingest_settings.http_initial_backoff_seconds
-        if initial_backoff is None
-        else initial_backoff
-    )
-    max_backoff = (
-        ingest_settings.http_max_backoff_seconds
-        if max_backoff is None
-        else max_backoff
+    delay = ingest_settings.http_initial_backoff_seconds if initial_backoff is None else initial_backoff
+    max_backoff = ingest_settings.http_max_backoff_seconds if max_backoff is None else max_backoff
+    max_retry_after = (
+        ingest_settings.http_max_retry_after_seconds if max_retry_after is None else max_retry_after
     )
 
-    delay = initial_backoff
     for attempt in range(max_retries + 1):
-        resp = await client.get(url, params=params, timeout=timeout)
-        if resp.status_code == 429 or 500 <= resp.status_code < 600:
+        backoff = delay + random.uniform(0, delay / 4)
+        try:
+            async with client.stream("GET", url, params=params, timeout=timeout) as resp:
+                status = resp.status_code
+                if status != 429 and not 500 <= status < 600:
+                    if status >= 400:
+                        await _raise_with_body(resp)
+                    return await _stream_to(resp, dest)
+                if attempt == max_retries:
+                    await _raise_with_body(resp)
+                reason = f"HTTP {status}"
+                header = resp.headers.get("Retry-After")
+                try:
+                    told = retry_after_seconds(header, now_utc())
+                except (TypeError, ValueError):
+                    told = None
+                    reason += f", unreadable Retry-After {header!r}"
+                if told is not None and told > max_retry_after:
+                    raise IngestError(
+                        f"{url}: provider asked to wait {told:.0f}s (Retry-After {header!r}), "
+                        f"over the {max_retry_after:.0f}s cap"
+                    )
+                wait = told if told is not None else backoff
+        except httpx.TransportError as exc:
             if attempt == max_retries:
-                resp.raise_for_status()
-            retry_after = resp.headers.get("Retry-After")
-            wait = float(retry_after) if retry_after else delay
-            if on_retry is not None:
-                on_retry(attempt + 1, resp.status_code, wait)
-            await asyncio.sleep(wait)
-            delay = min(delay * 2, max_backoff)
-            continue
-        resp.raise_for_status()
-        return resp
-    raise httpx.HTTPError(f"exceeded {max_retries} retries fetching {url}")
+                raise
+            reason = f"{type(exc).__name__}: {exc}"
+            wait = backoff
+        if on_retry is not None:
+            on_retry(attempt + 1, reason, wait)
+        await asyncio.sleep(wait)
+        delay = min(delay * 2, max_backoff)
+    raise IngestError(f"exceeded {max_retries} retries fetching {url}")
+
+
+async def _stream_to(resp: httpx.Response, dest: Path) -> FetchedFile:
+    part = dest.with_name(dest.name + ".part")
+    digest = hashlib.sha256()
+    size = 0
+    with part.open("wb") as fh:
+        async for chunk in resp.aiter_bytes():
+            fh.write(chunk)
+            digest.update(chunk)
+            size += len(chunk)
+    part.replace(dest)
+    headers = {
+        name: value
+        for name, value in resp.headers.items()
+        if name.lower() in KEPT_HEADERS or "ratelimit" in name.lower()
+    }
+    return FetchedFile(
+        path=dest,
+        url=receipt_url(resp.request.url),
+        status=resp.status_code,
+        headers=headers,
+        sha256=digest.hexdigest(),
+        size_bytes=size,
+    )
+
+
+async def _raise_with_body(resp: httpx.Response) -> NoReturn:
+    body = (await resp.aread())[:500].decode("utf-8", errors="replace")
+    raise httpx.HTTPStatusError(
+        f"HTTP {resp.status_code} from {receipt_url(resp.request.url)}: {body}",
+        request=resp.request,
+        response=resp,
+    )
