@@ -22,22 +22,30 @@ def latest_snapshot_dir(provider: str) -> Path | None:
 
 
 def previous_fingerprint(provider: str, current: Path) -> list[list[str]] | None:
-    root = store_root(provider)
-    candidates = sorted(
-        path for path in root.glob("*/schema_fingerprint.json") if path.parent != current
-    )
-    return fp_read(candidates[-1]) if candidates else None
+    previous = _previous_accepted(provider, current)
+    return fp_read(previous / "schema_fingerprint.json") if previous is not None else None
 
 
 def previous_row_count(provider: str, current: Path) -> int | None:
+    previous = _previous_accepted(provider, current)
+    if previous is None:
+        return None
+    body = json.loads((previous / "index_report.json").read_text())
+    return body.get("rows_written")
+
+
+def _previous_accepted(provider: str, current: Path) -> Path | None:
+    """The newest snapshot older than `current` whose index was accepted and served.
+    A rejected build is never a baseline, or one bad snapshot would excuse the next."""
     root = store_root(provider)
     candidates = sorted(
-        path for path in root.glob("*/index_report.json") if path.parent != current
+        path.parent
+        for path in root.glob("*/index.parquet")
+        if path.parent.name < current.name
+        and (path.parent / "index_report.json").exists()
+        and (path.parent / "schema_fingerprint.json").exists()
     )
-    if not candidates:
-        return None
-    body = json.loads(candidates[-1].read_text())
-    return body.get("rows_written")
+    return candidates[-1] if candidates else None
 
 
 def load_builder(provider: str):

@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Any
 
 from project_paths import TAXONOMY_DIR
+from normalize.builders import SkipTally
 from normalize.schema import IndexRow
 from normalize.taxonomy.loader import canonical_region
 
@@ -24,23 +25,28 @@ SKU_RE = re.compile(
 )
 
 
-def rows_for_region(
+def rows_for_page(
     *,
-    doc: dict[str, Any],
+    items: list[dict[str, Any]],
+    region_native: str,
     specs: dict[str, Any],
     snapshot_iso: str,
+    source_url: str,
     store_path: str,
+    seen: set[tuple[str, str]],
+    tally: SkipTally,
 ) -> list[IndexRow]:
-    items = doc.get("items", [])
-    source_url = doc.get("source_url", "")
-    region_native = doc.get("region") or first_region(items)
-
+    """Rows for one raw page of one region. `seen` spans every page of the region,
+    so a SKU priced on two pages yields one row."""
     out: list[IndexRow] = []
-    seen: set[tuple[str, str]] = set()
     for item in items:
         if not is_linux_ondemand_vm(item):
             continue
+        tally.candidate()
         sku = item.get("armSkuName", "")
+        if not sku:
+            tally.missing_field("armSkuName")
+            continue
         parsed = parse_sku(sku, specs)
         if parsed is None:
             continue
@@ -51,9 +57,15 @@ def rows_for_region(
         seen.add(key)
 
         hourly = maybe_float(item.get("retailPrice"))
-        if hourly is None or hourly == 0.0:
+        if hourly is None:
+            tally.missing_field("retailPrice")
+            continue
+        if hourly == 0.0:
             continue
         meter_id = item.get("meterId", "")
+        if not meter_id:
+            tally.missing_field("meterId")
+            continue
 
         out.append(
             IndexRow(
@@ -69,7 +81,7 @@ def rows_for_region(
                 monthly_usd=hourly * HOURS_PER_MONTH,
                 source_url=source_url,
                 store_path=store_path,
-                json_path=f"$.items[?(@.meterId=='{meter_id}')].retailPrice",
+                json_path=f"$.Items[?(@.meterId=='{meter_id}')].retailPrice",
                 cited_price_kind="hourly",
             )
         )
@@ -116,14 +128,6 @@ def parse_sku(sku: str, specs: dict[str, Any]) -> tuple[str, int, float] | None:
         if letter in modifiers:
             ram_multiplier *= float(multiplier)
     return rule["family_slug"], vcpu, vcpu * ram_per_vcpu * ram_multiplier
-
-
-def first_region(items: list[dict[str, Any]]) -> str:
-    for item in items:
-        region = item.get("armRegionName")
-        if region:
-            return region
-    return ""
 
 
 def maybe_float(value: Any) -> float | None:

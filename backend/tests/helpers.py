@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Literal
 
 import polars as pl
@@ -106,3 +107,43 @@ def rate_row(
         row_kind="rate",
         rate_unit=rate_unit,
     )
+
+
+def write_raw_snapshot(store: Path, provider: str, iso: str, files: Mapping[str, object]) -> Path:
+    """Write a raw-first snapshot the way ingest leaves one: each response body as its
+    own file plus a receipt (version 2) listing them."""
+    snapshot_dir = store / provider / iso
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for name, body in files.items():
+        data = json.dumps(body).encode()
+        (snapshot_dir / name).write_bytes(data)
+        entries.append(
+            {
+                "name": name,
+                "url": f"https://api.example.test/{provider}/{name}",
+                "status": 200,
+                "headers": {},
+                "sha256": "",
+                "size_bytes": len(data),
+                "fetched_at": iso_hours_ago(1),
+            }
+        )
+    (snapshot_dir / "receipt.json").write_text(
+        json.dumps(
+            {
+                "receipt_version": 2,
+                "success": True,
+                "provider": provider,
+                "service": "test",
+                "source_url": f"https://api.example.test/{provider}",
+                "store_dir": f"store/{provider}/{iso}",
+                "fetched_at": iso_hours_ago(1),
+                "completed_at": iso_hours_ago(1),
+                "resumed": False,
+                "files": entries,
+                "total_size_bytes": sum(e["size_bytes"] for e in entries),
+            }
+        )
+    )
+    return snapshot_dir

@@ -1,15 +1,14 @@
 """IBM index builder.
 
 IBM publishes a global catalog plus per-plan pricing reached via a three-hop
-walk that ingest already collapses into compute.json. The compute.json file
-has top-level shape:
+walk. The snapshot keeps each response as fetched:
 
-    compute.is.instance.{service_id, plans[], pricing.<plan_id>.resources[]}
-    compute.is.bare-metal-server.{...}
-    compute.is.dedicated-host.{...}
+    catalog-NNNN.json                 catalog pages (services)
+    children-<service>-NNNN.json      a compute service's plans, `resources[]`
+    pricing-<plan_id>.json            that plan's deployment pricing
 
-Each pricing.<plan_id>.resources[] entry carries one or more `(deployment_region,
-metrics[])` combinations. The metric whose `metric_id` is
+Each pricing file's resources[] entry carries one `(deployment_region,
+metrics[])` combination. The metric whose `metric_id` is
 `part-is.instance-hours-<plan-name>` is the bare instance-hour price. Other
 metrics in the same resource describe OS license bundles, SW bundles, and
 reservation pricing; we filter those out for v0.
@@ -19,12 +18,11 @@ vCPU, 8 GB). GPU plans append a third segment (gx3-16x80x1l4 = 16 vCPU, 80 GB,
 one L4 GPU); we parse vCPU and RAM and let the family classifier handle the
 gpu tag.
 
-v0 scope: is.instance only. Bare-metal and dedicated-host are deferred to v1.
-Power Systems (power-iaas.pvm-instance) is out of v0 per ADR scope.
+v0 scope: is.instance only. Bare-metal and dedicated-host are fetched but not
+indexed. Power Systems (power-iaas.pvm-instance) is out of v0 per ADR scope.
 
-Per ADR 0003 the citation json_path uses the stable plan_id, deployment_region,
-and metric_id in filter expressions. Dotted dict keys (`is.instance`) use
-bracket-quote syntax to avoid JSONPath dot ambiguity."""
+Per ADR 0003 the citation json_path uses the stable deployment_region and
+metric_id in filter expressions inside the plan's own pricing file."""
 
 from __future__ import annotations
 
@@ -34,17 +32,17 @@ from typing import Any
 
 import orjson
 
-from project_paths import PROJECT_ROOT
-from normalize.builders import BuilderOutput
+from normalize.builders import BuilderOutput, SkipTally, merged_fingerprint
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow
+from normalize.snapshot_files import SnapshotError, SnapshotFile, snapshot_files
 from normalize.taxonomy.loader import canonical_region, classify_family
 
 PROVIDER = "ibm"
-COMPUTE_FILE = "compute.json"
 
 # is.instance is v0; the other two are scoped out.
 V0_SERVICE = "is.instance"
+CHILDREN_PREFIX = f"children-{V0_SERVICE}-"
 
 # Plan-name pattern: family - vcpu 'x' ram (optional GPU suffix).
 PLAN_NAME_RE = re.compile(r"^(?P<family>[a-z0-9]+)-(?P<vcpu>\d+)x(?P<ram>\d+)(?:x.*)?$")
@@ -54,74 +52,82 @@ HOURS_PER_MONTH = 730.0
 
 
 def build(snapshot_dir: Path) -> BuilderOutput:
-    compute_path = snapshot_dir / COMPUTE_FILE
-    doc = orjson.loads(compute_path.read_bytes())
+    files = {f.name: f for f in snapshot_files(snapshot_dir)}
     snapshot_iso = snapshot_dir.name
-    store_path = _relpath(compute_path)
-    # IBM's source_url in the receipt is templated; the actual compute slice
-    # came from the catalog children + per-plan pricing endpoints. We surface
-    # the catalog URL as the entry point and let the json_path resolve to the
-    # specific leaf inside the per-plan pricing payload.
-    source_url = "https://globalcatalog.cloud.ibm.com/api/v1?q=kind:service"
-
-    svc = doc.get("compute", {}).get(V0_SERVICE, {})
-    plans = svc.get("plans", [])
-    pricing = svc.get("pricing", {})
-
+    tally = SkipTally()
     rows: list[IndexRow] = []
-    for plan in plans:
-        rows.extend(
-            _rows_for_plan(
-                plan=plan,
-                pricing=pricing,
-                snapshot_iso=snapshot_iso,
-                source_url=source_url,
-                store_path=store_path,
-            )
-        )
+    source_files: list[str] = []
+    fingerprints: list[list[list[str]]] = []
 
-    return BuilderOutput(
-        rows=rows,
-        fingerprint=fp_walk(doc),
-        source_files=[store_path],
-    )
+    for name in sorted(n for n in files if n.startswith(CHILDREN_PREFIX)):
+        children = files[name]
+        source_files.append(children.store_path)
+        doc = orjson.loads(children.path.read_bytes())
+        fingerprints.append(fp_walk(doc))
+        for plan in doc.get("resources", []):
+            plan_name = plan.get("name") or ""
+            plan_id = plan.get("id") or ""
+            m = PLAN_NAME_RE.match(plan_name)
+            if not m or not plan_id:
+                continue
+            pricing = files.get(f"pricing-{plan_id}.json")
+            if pricing is None:
+                raise SnapshotError(f"{children.store_path}: plan {plan_id} has no pricing file in the receipt")
+            pricing_doc = orjson.loads(pricing.path.read_bytes())
+            source_files.append(pricing.store_path)
+            fingerprints.append(fp_walk(pricing_doc))
+            rows.extend(
+                _rows_for_plan(
+                    plan_name=plan_name,
+                    vcpu=int(m.group("vcpu")),
+                    ram_gb=float(m.group("ram")),
+                    pricing_doc=pricing_doc,
+                    pricing=pricing,
+                    snapshot_iso=snapshot_iso,
+                    tally=tally,
+                )
+            )
+
+    return tally.output(rows=rows, fingerprint=merged_fingerprint(fingerprints), source_files=source_files)
 
 
 def _rows_for_plan(
     *,
-    plan: dict[str, Any],
-    pricing: dict[str, Any],
+    plan_name: str,
+    vcpu: int,
+    ram_gb: float,
+    pricing_doc: dict[str, Any],
+    pricing: SnapshotFile,
     snapshot_iso: str,
-    source_url: str,
-    store_path: str,
+    tally: SkipTally,
 ) -> list[IndexRow]:
-    plan_name = plan.get("name") or ""
-    plan_id = plan.get("id") or ""
-    m = PLAN_NAME_RE.match(plan_name)
-    if not m:
-        return []
-    vcpu = int(m.group("vcpu"))
-    ram_gb = float(m.group("ram"))
     if vcpu <= 0 or ram_gb <= 0:
         return []
 
     family = classify_family(PROVIDER, plan_name)
     target_metric_id = f"part-is.instance-hours-{plan_name}"
 
-    pricing_block = pricing.get(plan_id, {})
     out: list[IndexRow] = []
     seen_regions: set[str] = set()
 
-    for resource in pricing_block.get("resources", []):
+    for resource in pricing_doc.get("resources", []):
         region_native = resource.get("deployment_region") or ""
         # Some IBM deployment responses carry a DEFAULT entry; skip it (no
         # actual region to price against).
         if not region_native or region_native == "DEFAULT" or region_native in seen_regions:
             continue
         seen_regions.add(region_native)
+        metrics = resource.get("metrics", [])
+        # IBM sometimes lists only another plan's instance-hours metric for a region
+        # (nxf-2x1 carried nxf-1x4's in May 2026); that region is not priced for this
+        # plan, which is IBM's data, not a field we failed to read.
+        if not any(metric.get("metric_id") == target_metric_id for metric in metrics):
+            continue
+        tally.candidate()
 
-        hourly = _find_hourly_price(resource.get("metrics", []), target_metric_id)
+        hourly = _find_hourly_price(metrics, target_metric_id)
         if hourly is None:
+            tally.missing_field("metrics[instance-hours].amounts[USA/USD].prices[0].price")
             continue
 
         out.append(
@@ -136,11 +142,10 @@ def _rows_for_plan(
                 ram_gb=ram_gb,
                 hourly_usd=hourly,
                 monthly_usd=hourly * HOURS_PER_MONTH,
-                source_url=source_url,
-                store_path=store_path,
+                source_url=pricing.url,
+                store_path=pricing.store_path,
                 json_path=(
-                    f"$.compute['{V0_SERVICE}'].pricing['{plan_id}']"
-                    f".resources[?(@.deployment_region=='{region_native}')]"
+                    f"$.resources[?(@.deployment_region=='{region_native}')]"
                     f".metrics[?(@.metric_id=='{target_metric_id}')]"
                     f".amounts[?(@.country=='USA' & @.currency=='USD')]"
                     f".prices[0].price"
@@ -168,7 +173,3 @@ def _find_hourly_price(metrics: list[dict[str, Any]], target_metric_id: str) -> 
             except (TypeError, ValueError):
                 return None
     return None
-
-
-def _relpath(path: Path) -> str:
-    return str(path.relative_to(PROJECT_ROOT))

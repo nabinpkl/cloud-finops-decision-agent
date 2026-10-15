@@ -24,10 +24,11 @@ from typing import Any
 
 import orjson
 
-from project_paths import PROJECT_ROOT, TAXONOMY_DIR
-from normalize.builders import BuilderOutput
+from project_paths import TAXONOMY_DIR
+from normalize.builders import BuilderOutput, SkipTally
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow
+from normalize.snapshot_files import SnapshotError, snapshot_files
 
 PROVIDER = "oracle"
 PRODUCTS_FILE = "products.json"
@@ -47,11 +48,14 @@ DISPLAY_RE = re.compile(
 
 
 def build(snapshot_dir: Path) -> BuilderOutput:
-    products_path = snapshot_dir / PRODUCTS_FILE
-    doc = orjson.loads(products_path.read_bytes())
+    files = [f for f in snapshot_files(snapshot_dir) if f.name == PRODUCTS_FILE]
+    if not files:
+        raise SnapshotError(f"{snapshot_dir}: receipt lists no {PRODUCTS_FILE}")
+    products = files[0]
+    doc = orjson.loads(products.path.read_bytes())
     snapshot_iso = snapshot_dir.name
-    store_path = _relpath(products_path)
     rules = _load_oracle_rules()
+    tally = SkipTally()
 
     rows: list[IndexRow] = []
     for item in doc.get("items", []):
@@ -59,12 +63,13 @@ def build(snapshot_dir: Path) -> BuilderOutput:
             item=item,
             rules=rules,
             snapshot_iso=snapshot_iso,
-            store_path=store_path,
+            store_path=products.store_path,
+            tally=tally,
         )
         if row is not None:
             rows.append(row)
 
-    return BuilderOutput(rows=rows, fingerprint=fp_walk(doc), source_files=[store_path])
+    return tally.output(rows=rows, fingerprint=fp_walk(doc), source_files=[products.store_path])
 
 
 def _maybe_row(
@@ -73,6 +78,7 @@ def _maybe_row(
     rules: dict[str, Any],
     snapshot_iso: str,
     store_path: str,
+    tally: SkipTally,
 ) -> IndexRow | None:
     if item.get("serviceCategory") != "Compute - Virtual Machine":
         return None
@@ -91,12 +97,17 @@ def _maybe_row(
     if resource == "Memory" and "gigabyte" not in metric:
         return None
 
+    tally.candidate()
     rate = _extract_usd_payg(item.get("currencyCodeLocalizations", []))
-    if rate is None or rate <= 0:
+    if rate is None:
+        tally.missing_field("currencyCodeLocalizations[USD].prices[PAY_AS_YOU_GO].value")
+        return None
+    if rate <= 0:
         return None
 
     part_number = item.get("partNumber", "")
     if not part_number:
+        tally.missing_field("partNumber")
         return None
 
     rate_unit = "per_ocpu_hour" if resource == "OCPU" else "per_gb_ram_hour"
@@ -145,7 +156,3 @@ def _extract_usd_payg(localizations: list[dict[str, Any]]) -> float | None:
 def _load_oracle_rules() -> dict[str, Any]:
     doc = json.loads(FLEX_RULES_PATH.read_text())
     return doc.get("oracle", {})
-
-
-def _relpath(path: Path) -> str:
-    return str(path.relative_to(PROJECT_ROOT))

@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ingest.config import ingest_settings
 from project_paths import PROJECT_ROOT
+from normalize.indexing.artifacts import latest_snapshot_dir as newest_complete_snapshot
 from normalize.query.loader import latest_snapshot_dir
 from normalize.schema import DriftFlag
 from normalize.snapshot_time import snapshot_age_hours
@@ -71,12 +72,16 @@ def compute_envelope(providers: list[str]) -> dict[str, Any]:
 
 def _quality_for(provider: str) -> ProviderQuality:
     snapshot_dir = latest_snapshot_dir(provider)
+    rejected = _newer_rejected_report(provider, served=snapshot_dir)
     if snapshot_dir is None:
+        summary = f"No usable {provider} snapshot found; the provider was excluded from this response."
+        if rejected is not None:
+            summary = f"{rejected['human_summary']} No earlier {provider} index exists, so the provider was excluded."
         return ProviderQuality(
             status="broken",
             snapshot_age_hours=None,
             flags=[DriftFlag.PROVIDER_UNAVAILABLE],
-            human_summary=f"No usable {provider} snapshot found; the provider was excluded from this response.",
+            human_summary=summary,
         )
 
     receipt_path = snapshot_dir / "receipt.json"
@@ -90,9 +95,16 @@ def _quality_for(provider: str) -> ProviderQuality:
     if age_hours is not None and age_hours > STALENESS_THRESHOLD_HOURS:
         if DriftFlag.SNAPSHOT_STALE not in flags:
             flags.append(DriftFlag.SNAPSHOT_STALE)
+    if rejected is not None:
+        flags.append(DriftFlag.INDEX_REBUILD_FAILED_FELL_BACK)
 
     status = _derive_status(flags=flags, age_hours=age_hours)
-    if status == "stale":
+    if rejected is not None:
+        human_summary = (
+            f"{rejected['human_summary']} Answers use the earlier {provider} snapshot "
+            f"{snapshot_dir.name} instead of {rejected['snapshot_iso']}."
+        )
+    elif status == "stale":
         human_summary = (
             f"{provider} snapshot is {age_hours:.1f}h old, past the "
             f"{STALENESS_THRESHOLD_HOURS:g}h freshness threshold. "
@@ -118,6 +130,19 @@ def _quality_for(provider: str) -> ProviderQuality:
             if k in report
         },
     )
+
+
+def _newer_rejected_report(provider: str, *, served: Path | None) -> dict[str, Any] | None:
+    """The index report of the newest complete snapshot when its build was rejected
+    and something older (or nothing) is served instead."""
+    newest = newest_complete_snapshot(provider)
+    if newest is None or newest == served:
+        return None
+    report_path = newest / "index_report.json"
+    if not report_path.exists():
+        return None
+    report = json.loads(report_path.read_text())
+    return report if report.get("accepted") is False else None
 
 
 def _age_hours_from_receipt(receipt_path: Path) -> float | None:

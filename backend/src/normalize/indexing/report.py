@@ -12,6 +12,8 @@ from normalize.taxonomy.loader import UNCLASSIFIED, families_for_provider
 ROW_DROP_HARD_FAIL_PCT = normalize_settings.row_drop_hard_fail_pct
 ROW_DROP_WARN_PCT = normalize_settings.row_drop_warn_pct
 CITATION_FAIL_HARD_FAIL_PCT = normalize_settings.citation_fail_hard_fail_pct
+MISSING_FIELD_HARD_FAIL_PCT = normalize_settings.missing_field_hard_fail_pct
+MISSING_FIELD_WARN_PCT = normalize_settings.missing_field_warn_pct
 
 
 def build_report(
@@ -19,10 +21,14 @@ def build_report(
     provider: str,
     snapshot_iso: str,
     rows: list[IndexRow],
+    candidates: int,
+    missing_fields: dict[str, int],
     prev_rows: int | None,
     citation: CitationVerification,
     fp_change: dict[str, list[list[str]]] | None,
 ) -> IndexReport:
+    """The coverage report for one build. `accepted` is the hard-gate verdict: only an
+    accepted build's parquet is promoted to `index.parquet` and served."""
     rows_by_family: dict[str, int] = {}
     unclassified_samples: list[dict[str, Any]] = []
     for row in rows:
@@ -48,18 +54,35 @@ def build_report(
     if prev_rows is not None and prev_rows > 0:
         delta_pct = (len(rows) - prev_rows) / prev_rows * 100.0
 
+    missing_pct: float | None = None
+    if candidates > 0:
+        missing_pct = sum(missing_fields.values()) / candidates * 100.0
+
     flags = _report_flags(
         unclassified_count=unclassified_count,
         families_with_zero_coverage=families_with_zero_coverage,
         delta_pct=delta_pct,
         citation=citation,
         fp_change=fp_change,
+        candidates=candidates,
+        missing_pct=missing_pct,
+    )
+    failures = _hard_failures(
+        rows=len(rows),
+        candidates=candidates,
+        missing_pct=missing_pct,
+        delta_pct=delta_pct,
+        citation=citation,
     )
 
     return IndexReport(
         provider=provider,
         snapshot_iso=snapshot_iso,
         rows_written=len(rows),
+        candidates=candidates,
+        missing_fields=missing_fields,
+        missing_field_pct=missing_pct,
+        accepted=not failures,
         rows_by_family=rows_by_family,
         unclassified_count=unclassified_count,
         unclassified_samples=unclassified_samples,
@@ -76,21 +99,40 @@ def build_report(
             delta_pct=delta_pct,
             citation=citation,
             fp_change=fp_change,
+            missing_fields=missing_fields,
+            missing_pct=missing_pct,
+            failures=failures,
         ),
     )
 
 
-def passes_hard_gates(report: IndexReport, citation: CitationVerification) -> bool:
-    if (
-        report.row_count_delta_pct is not None
-        and report.row_count_delta_pct <= -ROW_DROP_HARD_FAIL_PCT
-    ):
-        return False
+def _hard_failures(
+    *,
+    rows: int,
+    candidates: int,
+    missing_pct: float | None,
+    delta_pct: float | None,
+    citation: CitationVerification,
+) -> list[str]:
+    failures: list[str] = []
+    if candidates == 0:
+        failures.append("no record matched the builder's filters; a filter field may have been renamed")
+    elif rows == 0:
+        failures.append("no rows were written")
+    if missing_pct is not None and missing_pct > MISSING_FIELD_HARD_FAIL_PCT:
+        failures.append(
+            f"{missing_pct:.1f}% of candidates lacked a required field (limit {MISSING_FIELD_HARD_FAIL_PCT:g}%)"
+        )
+    if delta_pct is not None and delta_pct <= -ROW_DROP_HARD_FAIL_PCT:
+        failures.append(f"row count dropped {abs(delta_pct):.1f}% (limit {ROW_DROP_HARD_FAIL_PCT:g}%)")
     if citation.sampled > 0:
         fail_pct = citation.failed / citation.sampled * 100.0
         if fail_pct > CITATION_FAIL_HARD_FAIL_PCT:
-            return False
-    return True
+            failures.append(
+                f"citation verification failed on {fail_pct:.1f}% of sampled rows "
+                f"(limit {CITATION_FAIL_HARD_FAIL_PCT:g}%)"
+            )
+    return failures
 
 
 def compose_summary(
@@ -102,8 +144,16 @@ def compose_summary(
     delta_pct: float | None,
     citation: CitationVerification,
     fp_change: dict[str, list[list[str]]] | None,
+    missing_fields: dict[str, int],
+    missing_pct: float | None,
+    failures: list[str],
 ) -> str:
     parts: list[str] = []
+    if failures:
+        parts.append(f"{provider} index rejected, not served: {'; '.join(failures)}.")
+    if missing_pct is not None and missing_pct > MISSING_FIELD_WARN_PCT:
+        worst = ", ".join(f"{name} ({count})" for name, count in sorted(missing_fields.items(), key=lambda kv: -kv[1])[:3])
+        parts.append(f"{missing_pct:.1f}% of {provider} candidates lacked a required field: {worst}.")
     if unclassified > 0:
         parts.append(
             f"{unclassified} {provider} shapes in this snapshot are not yet in our taxonomy; "
@@ -134,8 +184,14 @@ def _report_flags(
     delta_pct: float | None,
     citation: CitationVerification,
     fp_change: dict[str, list[list[str]]] | None,
+    candidates: int,
+    missing_pct: float | None,
 ) -> list[str]:
     flags: list[str] = []
+    if candidates == 0:
+        flags.append(DriftFlag.NO_CANDIDATES)
+    if missing_pct is not None and missing_pct > MISSING_FIELD_WARN_PCT:
+        flags.append(DriftFlag.FIELDS_MISSING)
     if fp_change and (fp_change["added"] or fp_change["removed"] or fp_change["type_changed"]):
         flags.append(DriftFlag.SCHEMA_DRIFT)
     if unclassified_count > 0:

@@ -27,6 +27,14 @@ class NormalizeSettings(BaseSettings):
         default=1.0,
         validation_alias="NORMALIZE_CITATION_FAIL_HARD_FAIL_PCT",
     )
+    missing_field_hard_fail_pct: float = Field(
+        default=5.0,
+        validation_alias="NORMALIZE_MISSING_FIELD_HARD_FAIL_PCT",
+    )
+    missing_field_warn_pct: float = Field(
+        default=1.0,
+        validation_alias="NORMALIZE_MISSING_FIELD_WARN_PCT",
+    )
     citation_verifier_sample_cap: int = Field(
         default=50,
         validation_alias="NORMALIZE_CITATION_VERIFIER_SAMPLE_CAP",

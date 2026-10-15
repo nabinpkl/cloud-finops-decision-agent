@@ -152,7 +152,7 @@ def test_price_claim_binds_to_latest_tool_result_only():
                     "snapshot": {
                         "provider": "gcp",
                         "snapshot_iso": "2026-06-05T10-00-00Z",
-                        "filename": "skus.json",
+                        "filename": "skus-0001.json",
                     },
                 },
             }

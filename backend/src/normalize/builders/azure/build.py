@@ -1,7 +1,8 @@
 """Azure index builder.
 
-Azure publishes per-region snapshot files (eastus.json, westeurope.json,
-southeastasia.json) filtered to `serviceName=Virtual Machines` + `priceType=
+Azure snapshots hold the Retail Prices API's raw pages per region
+(`eastus-0001.json`, `westeurope-0002.json`, ...; each `{Items: [...],
+NextPageLink, ...}`), filtered to `serviceName=Virtual Machines` + `priceType=
 Consumption`. Spot and Low-Priority rows are mixed in under Consumption and
 must be post-filtered by meterName. Windows rows are filtered out (Linux/no-OS
 only for v0 to avoid licensing-bundled prices).
@@ -21,12 +22,12 @@ from pathlib import Path
 
 import orjson
 
-from project_paths import PROJECT_ROOT
-from normalize.builders import BuilderOutput
+from normalize.builders import BuilderOutput, SkipTally, merged_fingerprint
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow
+from normalize.snapshot_files import snapshot_files
 
-from .rows import load_specs, rows_for_region
+from .rows import load_specs, rows_for_page
 
 PROVIDER = "azure"
 
@@ -34,35 +35,29 @@ PROVIDER = "azure"
 def build(snapshot_dir: Path) -> BuilderOutput:
     specs = load_specs()
     snapshot_iso = snapshot_dir.name
+    tally = SkipTally()
 
     rows: list[IndexRow] = []
     source_files: list[str] = []
-    # Combined fingerprint across all per-region files so drift detection sees
-    # the whole snapshot, not just one region.
-    fp_acc: list[list[str]] = []
+    fingerprints: list[list[list[str]]] = []
+    seen_by_region: dict[str, set[tuple[str, str]]] = {}
 
-    for region_file in sorted(snapshot_dir.glob("*.json")):
-        if region_file.name in ("receipt.json", "index_report.json", "schema_fingerprint.json"):
-            continue
-        doc = orjson.loads(region_file.read_bytes())
-        store_path = _relpath(region_file)
-        source_files.append(store_path)
+    for page in snapshot_files(snapshot_dir):
+        region_native = page.name.rsplit("-", 1)[0]
+        doc = orjson.loads(page.path.read_bytes())
+        source_files.append(page.store_path)
         rows.extend(
-            rows_for_region(
-                doc=doc,
+            rows_for_page(
+                items=doc.get("Items", []),
+                region_native=region_native,
                 specs=specs,
                 snapshot_iso=snapshot_iso,
-                store_path=store_path,
+                source_url=page.url,
+                store_path=page.store_path,
+                seen=seen_by_region.setdefault(region_native, set()),
+                tally=tally,
             )
         )
-        fp_acc.extend(fp_walk(doc))
+        fingerprints.append(fp_walk(doc))
 
-    # Dedup fingerprint entries (same path may appear in each region file).
-    fp_dedup = sorted({tuple(e) for e in fp_acc})
-    fingerprint = [list(e) for e in fp_dedup]
-
-    return BuilderOutput(rows=rows, fingerprint=fingerprint, source_files=source_files)
-
-
-def _relpath(path: Path) -> str:
-    return str(path.relative_to(PROJECT_ROOT))
+    return tally.output(rows=rows, fingerprint=merged_fingerprint(fingerprints), source_files=source_files)

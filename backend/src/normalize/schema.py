@@ -88,6 +88,8 @@ class DriftFlag(StrEnum):
     SNAPSHOT_STALE                 = "snapshot_stale"
     INDEX_REBUILD_FAILED_FELL_BACK = "index_rebuild_failed_fell_back"
     PROVIDER_UNAVAILABLE           = "provider_unavailable"
+    FIELDS_MISSING                 = "fields_missing"
+    NO_CANDIDATES                  = "no_candidates"
 
 
 class CitationVerification(SchemaModel):
@@ -103,6 +105,10 @@ class IndexReport(SchemaModel):
     provider: str
     snapshot_iso: str
     rows_written: int
+    candidates: int
+    missing_fields: dict[str, int]
+    missing_field_pct: float | None
+    accepted: bool
     rows_by_family: dict[str, int]
     unclassified_count: int
     unclassified_samples: list[dict[str, Any]]

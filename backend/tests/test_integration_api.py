@@ -48,7 +48,7 @@ COMPOSITE_RESULT = {
                 "kind": "rate", "rate_unit": "per_vcpu_hour", "rate": 0.02, "quantity": 4.0,
                 "contribution_usd": 0.08,
                 "source_url": "https://billing.example/skus",
-                "store_path": "store/gcp/2026-05-27T06-32-56Z/skus.json",
+                "store_path": "store/gcp/2026-05-27T06-32-56Z/skus-0001.json",
                 "json_path": "$.skus[?(@.skuId=='A')].rate",
                 "fetched_at": "2026-05-27T06:32:56Z", "age_hours": 4.0,
             },
@@ -56,7 +56,7 @@ COMPOSITE_RESULT = {
                 "kind": "rate", "rate_unit": "per_gb_ram_hour", "rate": 0.005, "quantity": 16.0,
                 "contribution_usd": 0.08,
                 "source_url": "https://billing.example/skus",
-                "store_path": "store/gcp/2026-05-27T06-32-56Z/skus.json",
+                "store_path": "store/gcp/2026-05-27T06-32-56Z/skus-0001.json",
                 "json_path": "$.skus[?(@.skuId=='B')].rate",
                 "fetched_at": "2026-05-27T06:32:56Z", "age_hours": 4.0,
             },
@@ -125,7 +125,7 @@ def test_compare_strips_store_path_and_adds_ref(monkeypatch):
         "filename": "eu-central-1.json",
     }
     gcp_ref = data["results"][1]["citation"]["composite"][0]["snapshot"]
-    assert gcp_ref["provider"] == "gcp" and gcp_ref["filename"] == "skus.json"
+    assert gcp_ref["provider"] == "gcp" and gcp_ref["filename"] == "skus-0001.json"
     assert data["data_quality"]["per_provider"]["aws"]["report"] == {
         "provider": "aws",
         "snapshot_iso": "2026-05-27T04-23-36Z",

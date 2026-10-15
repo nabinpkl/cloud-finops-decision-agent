@@ -62,7 +62,7 @@ cases:
         snapshot:
           provider: gcp
           snapshot_iso: 2026-06-05T09-00-00Z
-          filename: skus.json
+          filename: skus-0001.json
     - provider: azure
       instance_type: Standard_D4s_v5
       region_native: westeurope
@@ -111,7 +111,7 @@ cases:
         snapshot:
           provider: gcp
           snapshot_iso: 2026-06-05T09-00-00Z
-          filename: skus.json
+          filename: skus-0001.json
     - provider: azure
       instance_type: Standard_D4s_v5
       region_native: westeurope
@@ -226,7 +226,7 @@ cases:
         snapshot:
           provider: gcp
           snapshot_iso: 2026-06-05T09-00-00Z
-          filename: skus.json
+          filename: skus-0001.json
     ranked_by: monthly_usd
     unmet_requirements: []
   final_answer: |
@@ -261,7 +261,7 @@ cases:
         snapshot:
           provider: gcp
           snapshot_iso: 2026-06-05T09-00-00Z
-          filename: skus.json
+          filename: skus-0001.json
     candidate_claims:
     - provider: aws
       instance_type: t3.medium

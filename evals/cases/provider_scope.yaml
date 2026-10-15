@@ -61,7 +61,7 @@ cases:
         snapshot:
           provider: gcp
           snapshot_iso: 2026-06-05T09-00-00Z
-          filename: skus.json
+          filename: skus-0001.json
     - provider: azure
       instance_type: Standard_E8s_v5
       region_native: westeurope
@@ -110,7 +110,7 @@ cases:
         snapshot:
           provider: gcp
           snapshot_iso: 2026-06-05T09-00-00Z
-          filename: skus.json
+          filename: skus-0001.json
     - provider: azure
       instance_type: Standard_E8s_v5
       region_native: westeurope

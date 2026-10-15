@@ -35,13 +35,14 @@ from typing import Any
 
 import orjson
 
-from project_paths import PROJECT_ROOT
-from normalize.builders import BuilderOutput
+from normalize.builders import BuilderOutput, SkipTally, merged_fingerprint
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow
+from normalize.snapshot_files import snapshot_files
 from normalize.taxonomy.loader import canonical_region, classify_family
 
 PROVIDER = "aws"
+REGION_INDEX_FILE = "region_index.json"
 
 HOURS_PER_MONTH = 730.0
 
@@ -52,55 +53,66 @@ MEMORY_UNIT_TO_GB = {"gib": 1.0, "tib": 1024.0, "mib": 1.0 / 1024.0}
 
 def build(snapshot_dir: Path) -> BuilderOutput:
     snapshot_iso = snapshot_dir.name
+    tally = SkipTally()
     rows: list[IndexRow] = []
     source_files: list[str] = []
-    fp_acc: list[list[str]] = []
+    fingerprints: list[list[list[str]]] = []
 
-    for region_file in sorted(snapshot_dir.glob("*.json")):
-        if region_file.name in ("receipt.json", "index_report.json", "schema_fingerprint.json", "region_index.json"):
+    for region_file in snapshot_files(snapshot_dir):
+        if region_file.name == REGION_INDEX_FILE:
             continue
-        doc = orjson.loads(region_file.read_bytes())
-        store_path = _relpath(region_file)
-        source_files.append(store_path)
-        rows.extend(_rows_for_region(doc=doc, snapshot_iso=snapshot_iso, store_path=store_path))
-        fp_acc.extend(fp_walk(doc))
+        doc = orjson.loads(region_file.path.read_bytes())
+        source_files.append(region_file.store_path)
+        rows.extend(
+            _rows_for_region(
+                doc=doc,
+                snapshot_iso=snapshot_iso,
+                source_url=region_file.url,
+                store_path=region_file.store_path,
+                tally=tally,
+            )
+        )
+        fingerprints.append(fp_walk(doc))
 
-    fp_dedup = sorted({tuple(e) for e in fp_acc})
-    fingerprint = [list(e) for e in fp_dedup]
-
-    return BuilderOutput(rows=rows, fingerprint=fingerprint, source_files=source_files)
+    return tally.output(rows=rows, fingerprint=merged_fingerprint(fingerprints), source_files=source_files)
 
 
 def _rows_for_region(
     *,
     doc: dict[str, Any],
     snapshot_iso: str,
+    source_url: str,
     store_path: str,
+    tally: SkipTally,
 ) -> list[IndexRow]:
     products = doc.get("products", {})
     terms = doc.get("terms", {}).get("OnDemand", {})
-    source_url = (
-        "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/"
-        + Path(store_path).name.replace(".json", "")
-        + "/index.json"
-    )
 
     out: list[IndexRow] = []
     for sku, product in products.items():
         if not _is_linux_ondemand_vm(product):
             continue
+        tally.candidate()
         attrs = product["attributes"]
         instance_type = attrs.get("instanceType", "")
         if not instance_type:
+            tally.missing_field("attributes.instanceType")
             continue
 
         vcpu = _parse_int(attrs.get("vcpu"))
+        if vcpu is None or vcpu <= 0:
+            tally.missing_field("attributes.vcpu")
+            continue
         ram_gb = _parse_memory(attrs.get("memory"))
-        if vcpu is None or vcpu <= 0 or ram_gb is None or ram_gb <= 0:
+        if ram_gb is None or ram_gb <= 0:
+            tally.missing_field("attributes.memory")
             continue
 
         hourly = _resolve_ondemand_price(terms.get(sku, {}))
-        if hourly is None or hourly == 0.0:
+        if hourly is None:
+            tally.missing_field("terms.OnDemand price")
+            continue
+        if hourly == 0.0:
             continue
 
         region_native = attrs.get("regionCode") or ""
@@ -144,7 +156,9 @@ def _is_linux_ondemand_vm(product: dict[str, Any]) -> bool:
 def _resolve_ondemand_price(sku_terms: dict[str, Any]) -> float | None:
     """Walk terms.OnDemand[sku].<offer_code>.priceDimensions.<rate_code>.pricePerUnit.USD.
     There is typically exactly one offer code and one priceDimension per SKU; if
-    there are multiple, we take the first non-zero hourly rate."""
+    there are multiple, we take the first non-zero hourly rate. Returns 0.0 when
+    only zero rates exist and None when there is no readable hourly rate at all."""
+    found_zero = False
     for offer in sku_terms.values():
         for rate in offer.get("priceDimensions", {}).values():
             unit = (rate.get("unit") or "").lower()
@@ -158,7 +172,8 @@ def _resolve_ondemand_price(sku_terms: dict[str, Any]) -> float | None:
                 continue
             if value > 0:
                 return value
-    return None
+            found_zero = True
+    return 0.0 if found_zero else None
 
 
 def _parse_int(value: Any) -> int | None:
@@ -179,7 +194,3 @@ def _parse_memory(value: Any) -> float | None:
     number = float(m.group(1).replace(",", ""))
     unit = m.group(2).lower()
     return number * MEMORY_UNIT_TO_GB[unit]
-
-
-def _relpath(path: Path) -> str:
-    return str(path.relative_to(PROJECT_ROOT))

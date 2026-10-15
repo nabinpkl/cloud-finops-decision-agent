@@ -1,7 +1,8 @@
 """Linode index builder.
 
-Linode publishes one /v4/linode/types catalog with a base price plus optional
-per-region overrides under types[].region_prices[]. For every type we emit:
+Linode publishes one /v4/linode/types catalog, stored as numbered pages
+(`types-NNNN.json`, each `{data: [...], page, pages, results}`), with a base
+price plus optional per-region overrides under data[].region_prices[]. For every type we emit:
 - one base-price row keyed at the canonical 'us-east' / 'eu-central' / 'ap-southeast'
   region the base price applies to (we emit a row per canonical bucket since the
   base price is global), and
@@ -20,13 +21,14 @@ from typing import Any
 
 import orjson
 
-from normalize.builders import BuilderOutput
+from normalize.builders import BuilderOutput, SkipTally, merged_fingerprint
 from normalize.indexing.fingerprint import fingerprint as fp_walk
 from normalize.schema import IndexRow
+from normalize.snapshot_files import snapshot_files
 from normalize.taxonomy.loader import canonical_region, classify_family
 
 PROVIDER = "linode"
-TYPES_FILE = "types.json"
+PAGE_PREFIX = "types-"
 
 # v0 canonical buckets where we want a base-price row even if Linode does not
 # split by region. (Linode publishes one global price; we surface it at every
@@ -36,24 +38,30 @@ CANONICAL_BUCKETS = ["us-east", "eu-central", "ap-southeast"]
 
 
 def build(snapshot_dir: Path) -> BuilderOutput:
-    types_path = snapshot_dir / TYPES_FILE
-    raw_bytes = types_path.read_bytes()
-    doc = orjson.loads(raw_bytes)
-    types_ = doc.get("types", [])
-
     snapshot_iso = snapshot_dir.name
-    source_url = doc.get("source_url", "")
-    store_path = _relpath(types_path)
-
+    tally = SkipTally()
     rows: list[IndexRow] = []
-    for t in types_:
-        rows.extend(_rows_for_type(t, snapshot_iso=snapshot_iso, source_url=source_url, store_path=store_path))
+    fingerprints: list[list[list[str]]] = []
+    source_files: list[str] = []
 
-    return BuilderOutput(
-        rows=rows,
-        fingerprint=fp_walk(doc),
-        source_files=[store_path],
-    )
+    for page in snapshot_files(snapshot_dir):
+        if not page.name.startswith(PAGE_PREFIX):
+            continue
+        doc = orjson.loads(page.path.read_bytes())
+        source_files.append(page.store_path)
+        fingerprints.append(fp_walk(doc))
+        for t in doc.get("data", []):
+            rows.extend(
+                _rows_for_type(
+                    t,
+                    snapshot_iso=snapshot_iso,
+                    source_url=page.url,
+                    store_path=page.store_path,
+                    tally=tally,
+                )
+            )
+
+    return tally.output(rows=rows, fingerprint=merged_fingerprint(fingerprints), source_files=source_files)
 
 
 def _rows_for_type(
@@ -62,14 +70,29 @@ def _rows_for_type(
     snapshot_iso: str,
     source_url: str,
     store_path: str,
+    tally: SkipTally,
 ) -> list[IndexRow]:
+    tally.candidate()
     type_id = t.get("id", "")
-    vcpu = int(t.get("vcpus", 0))
-    ram_gb = float(t.get("memory", 0)) / 1024.0  # Linode publishes memory in MB
-    family = classify_family(PROVIDER, type_id)
+    vcpu = _maybe_int(t.get("vcpus"))
+    memory = _maybe_float(t.get("memory"))
     base_price = t.get("price") or {}
     base_hourly = _maybe_float(base_price.get("hourly"))
     base_monthly = _maybe_float(base_price.get("monthly"))
+    if not type_id:
+        tally.missing_field("id")
+        return []
+    if vcpu is None:
+        tally.missing_field("vcpus")
+        return []
+    if memory is None:
+        tally.missing_field("memory")
+        return []
+    if base_monthly is None:
+        tally.missing_field("price.monthly")
+        return []
+    ram_gb = memory / 1024.0  # Linode publishes memory in MB
+    family = classify_family(PROVIDER, type_id)
 
     out: list[IndexRow] = []
 
@@ -96,8 +119,8 @@ def _rows_for_type(
                     monthly_usd=base_monthly,
                     source_url=source_url,
                     store_path=store_path,
-                    # Base price lives at types[?(@.id==<id>)].price.monthly
-                    json_path=f"$.types[?(@.id=='{type_id}')].price.monthly",
+                    # Base price lives at data[?(@.id==<id>)].price.monthly
+                    json_path=f"$.data[?(@.id=='{type_id}')].price.monthly",
                     cited_price_kind="monthly",
                 )
             )
@@ -124,7 +147,7 @@ def _rows_for_type(
                 source_url=source_url,
                 store_path=store_path,
                 json_path=(
-                    f"$.types[?(@.id=='{type_id}')]"
+                    f"$.data[?(@.id=='{type_id}')]"
                     f".region_prices[?(@.id=='{region_id}')].monthly"
                 ),
                 cited_price_kind="monthly",
@@ -148,7 +171,10 @@ def _maybe_float(value: Any) -> float | None:
         return None
 
 
-def _relpath(path: Path) -> str:
-    from project_paths import PROJECT_ROOT
-
-    return str(path.relative_to(PROJECT_ROOT))
+def _maybe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

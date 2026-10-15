@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Any
 
 from project_paths import TAXONOMY_DIR
+from normalize.builders import SkipTally
 from normalize.schema import IndexRow
 from normalize.taxonomy.loader import canonical_region
 
@@ -35,6 +36,7 @@ def maybe_rate_row(
     snapshot_iso: str,
     source_url: str,
     store_path: str,
+    tally: SkipTally,
 ) -> IndexRow | None:
     category = sku.get("category", {})
     if category.get("resourceFamily") != "Compute":
@@ -65,15 +67,21 @@ def maybe_rate_row(
     if region_native is None:
         return None
 
+    tally.candidate()
     pricing_info = sku.get("pricingInfo", [])
     if not pricing_info:
+        tally.missing_field("pricingInfo")
         return None
     rate = extract_hourly_rate(pricing_info[0])
-    if rate is None or rate <= 0:
+    if rate is None:
+        tally.missing_field("pricingInfo[0].pricingExpression.tieredRates[0].unitPrice")
+        return None
+    if rate <= 0:
         return None
 
     sku_id = sku.get("skuId", "")
     if not sku_id:
+        tally.missing_field("skuId")
         return None
 
     rule = rules[family_key]

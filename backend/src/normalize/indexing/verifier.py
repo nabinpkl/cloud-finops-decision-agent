@@ -16,9 +16,9 @@ from typing import Any
 import orjson
 from jsonpath_ng.ext import parse as jsonpath_parse
 
-from project_paths import PROJECT_ROOT
 from normalize.config import normalize_settings
 from normalize.schema import CitationVerification, IndexRow
+from normalize.snapshot_files import resolve_store_path
 
 # Sampling: every snapshot's index is verified on up to N rows, deterministic
 # per (provider, snapshot_iso) so a re-run reproduces the same sample.
@@ -73,7 +73,7 @@ def verify(rows: list[IndexRow], *, sample_cap: int = SAMPLE_CAP) -> CitationVer
 def _load_doc(store_path: str, cache: dict[str, Any]) -> Any:
     if store_path in cache:
         return cache[store_path]
-    abs_path = PROJECT_ROOT / store_path
+    abs_path = resolve_store_path(store_path)
     cache[store_path] = orjson.loads(abs_path.read_bytes())
     return cache[store_path]
 
