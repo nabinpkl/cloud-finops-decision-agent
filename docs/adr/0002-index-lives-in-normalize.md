@@ -1,6 +1,6 @@
 # ADR 0002: Index builder lives in `normalize/`, not in ingest
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by [0018](0018-raw-first-ingest.md))
 - **Date:** 2026-05-26
 - **Supersedes:** N/A
 

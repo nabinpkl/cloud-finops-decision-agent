@@ -1,6 +1,6 @@
 # ADR 0004: Schema drift detection via fingerprint plus coverage report
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by [0018](0018-raw-first-ingest.md))
 - **Date:** 2026-05-26
 - **Supersedes:** N/A
 
@@ -81,6 +81,8 @@ citation_verification_partial      some sampled json_paths failed to resolve
 snapshot_stale                     age_hours > 24
 index_rebuild_failed_fell_back     today's snapshot unparseable; previous in use
 provider_unavailable               no usable index for this provider at all
+fields_missing                     >1% of candidates lacked a field the builder needs (ADR 0018)
+no_candidates                      no record matched the builder's filters (ADR 0018)
 ```
 
 These are the only drift identifiers the system uses. Free-text goes in `human_summary` per ADR 0005; flags are enum-like so eval can assert on them.

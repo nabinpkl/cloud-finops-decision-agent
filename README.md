@@ -77,11 +77,16 @@ Three layers live in one repo. `SPEC.md` owns their contracts.
 Each provider module:
 
 - fetches a compute pricing catalog,
-- writes a timestamped snapshot under `store/<provider>/<ISO>/`,
-- prints a JSON receipt to stdout.
+- stores every response exactly as sent, one file per request or page, under
+  `store/<provider>/<ISO>/`,
+- writes `receipt.json` last, listing each file's URL, status, headers and sha256,
+- prints the receipt to stdout.
 
-Shared HTTP behavior, including polite retry handling, lives in
-`backend/src/ingest/_shared.py`.
+A fetch that fails partway resumes from its last complete file when run again.
+All parsing happens offline in `backend/src/normalize/`, so a parser fix is an
+index rebuild, never a refetch. Retry handling (429, 5xx, dropped connections,
+Retry-After) lives in `backend/src/ingest/_shared.py`; the snapshot writer in
+`backend/src/ingest/raw_snapshot.py`.
 
 ### Normalize
 
@@ -192,9 +197,10 @@ sessions are not weighted down by runtime pricing rules.
 uv sync --project backend   # one-time: create backend/.venv and install deps
 cp .env.example .env        # one-time: fill in GCP_API_KEY (see below)
 
-just fetch-all              # fetch fresh snapshots for all providers
-just fetch aws              # fetch one provider
-just fetch-force gcp        # bypass the 24h freshness rule
+just refresh-all            # fetch fresh snapshots for all providers, then index them
+just refresh aws            # fetch and index one provider
+just fetch-force gcp        # fetch only, bypassing the 24h freshness rule
+just index-force gcp        # rebuild an index from the snapshot already on disk
 ```
 
 Then open a Claude Code session in this repo and ask a pricing question naturally. The contract in `AGENTS.md` drives the rest.
@@ -211,7 +217,7 @@ public. Set `GCP_API_KEY` in `.env` per `.env.example`.
 
 - `backend/src/ingest/`: per-provider fetchers.
 - `backend/src/ingest/_shared.py`: timestamps, freshness checks, env loading, and retry-aware HTTP.
-- `store/<provider>/<ISO>/`: timestamped raw snapshot directories plus `receipt.json`.
+- `store/<provider>/<ISO>/`: timestamped snapshot directories: provider responses as sent, `receipt.json`, and the derived index files.
 - `backend/src/normalize/`: query layer, FastAPI wrapper, CLI, and citation-backed ranking.
 - `backend/src/normalize/taxonomy/`: editable JSON taxonomies for family and region equivalence.
 - `backend/src/api/`: FastAPI app, middleware, deterministic routes, and assistant transport.

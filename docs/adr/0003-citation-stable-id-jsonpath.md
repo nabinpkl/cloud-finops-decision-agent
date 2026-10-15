@@ -1,6 +1,6 @@
 # ADR 0003: Citations use stable-ID JSONPath, verified at index build
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by [0018](0018-raw-first-ingest.md))
 - **Date:** 2026-05-26
 - **Supersedes:** N/A
 

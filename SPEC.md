@@ -122,8 +122,8 @@ When no candidate satisfies the request (e.g. user asked 256 vCPU but no provide
       "hourly_usd": 0.055,
       "considered_count": 21,
       "citation": {
-        "source_url": "https://api.vultr.com/v2/plans",
-        "store_path": "store/vultr/2026-05-25T21-00-46Z/plans.json",
+        "source_url": "https://api.vultr.com/v2/plans?per_page=500",
+        "store_path": "store/vultr/2026-05-25T21-00-46Z/plans-0001.json",
         "json_path": "$.plans[?(@.id=='vc2-4c-8gb')].monthly_cost",
         "fetched_at": "2026-05-25T21:00:46.211738Z",
         "age_hours": 6.2
@@ -139,7 +139,7 @@ When no candidate satisfies the request (e.g. user asked 256 vCPU but no provide
       "hourly_usd": 0.1164,
       "considered_count": 208,
       "citation": {
-        "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/eu-central-1/index.json",
+        "source_url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/<offer-version>/eu-central-1/index.json",
         "store_path": "store/aws/2026-05-25T04-23-36Z/eu-central-1.json",
         "json_path": "$.terms.OnDemand['4AQFBS47E7Y26RTA'].*.priceDimensions.*.pricePerUnit.USD",
         "fetched_at": "2026-05-25T04:23:36.466029Z",
@@ -169,9 +169,9 @@ The citation block on every result entry is the project's only ground-truth cont
 
 ```json
 {
-  "source_url": "string, the upstream URL the snapshot came from",
-  "store_path": "string, relative path to the file inside store/<provider>/<ISO>/",
-  "json_path": "string, JSONPath into the file pointing at the price node",
+  "source_url": "string, the request URL that fetched the cited raw file (credentials stripped)",
+  "store_path": "string, store/<provider>/<ISO>/<file>, the raw provider response holding the price",
+  "json_path": "string, JSONPath into that file pointing at the price node",
   "fetched_at": "string, ISO 8601 UTC with trailing Z",
   "age_hours": "number, computed at response time"
 }
@@ -193,7 +193,7 @@ GCP and Oracle price compute per resource (per vCPU or OCPU + per GB RAM) rather
       "quantity":          4,
       "contribution_usd":  0.1224,
       "source_url":        "https://cloudbilling.googleapis.com/...",
-      "store_path":        "store/gcp/<ISO>/skus.json",
+      "store_path":        "store/gcp/<ISO>/skus-0001.json",
       "json_path":         "$.skus[?(@.skuId=='ABCD-1234-EFGH')].pricingInfo[0].pricingExpression.tieredRates[0].unitPrice",
       "fetched_at":        "2026-05-27T03:00:00Z",
       "age_hours":         3.1
@@ -215,6 +215,38 @@ GCP and Oracle price compute per resource (per vCPU or OCPU + per GB RAM) rather
 ```
 
 The corresponding result entry sets `synthesized: true` so the agent's prose can disclose the composition. Each `composite[]` entry is a fully-verifiable citation: open `store_path`, walk `json_path`, confirm the rate. Sum of `contribution_usd` equals the result's `hourly_usd` within rounding.
+
+### Snapshot files and receipt
+
+Ingest stores every provider response byte for byte, one file per request or page, in `store/<provider>/<ISO>/` (ADR 0018). File names are flat and per provider (AGENTS.md, "Snapshot layout per provider"). `receipt.json` is written last; a directory without it is an unfinished fetch, which `fetch_progress.jsonl` lets the next run resume.
+
+```json
+{
+  "receipt_version":  2,
+  "success":          true,
+  "provider":         "gcp",
+  "service":          "compute",
+  "source_url":       "https://cloudbilling.googleapis.com/v1/services/6F81-5844-456A/skus",
+  "store_dir":        "store/gcp/<ISO>",
+  "fetched_at":       "2026-10-15T08:00:00Z",
+  "completed_at":     "2026-10-15T08:01:12Z",
+  "resumed":          false,
+  "files": [
+    {
+      "name":       "skus-0001.json",
+      "url":        "https://cloudbilling.googleapis.com/v1/services/6F81-5844-456A/skus?pageSize=5000",
+      "status":     200,
+      "headers":    {"date": "...", "content-type": "application/json; charset=UTF-8"},
+      "sha256":     "<hex of the bytes as received>",
+      "size_bytes": 21474836,
+      "fetched_at": "2026-10-15T08:00:31Z"
+    }
+  ],
+  "total_size_bytes": 21474836
+}
+```
+
+Builders read only the files the receipt lists, and refuse a receipt without `receipt_version: 2` or a file whose size differs from its entry. The index build writes `index_report.json` beside them; besides the ADR 0004 coverage fields it carries `candidates` (records the builder's policy wants priced), `missing_fields` (field name to count of candidates it could not price because that field was absent or empty), `missing_field_pct`, and `accepted`. Only an accepted build becomes `index.parquet`; a rejected one is kept as `index.rejected.parquet` and the previous accepted snapshot keeps serving.
 
 ### data_quality envelope
 

@@ -11,9 +11,9 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | Number | Title | Status |
 |---|---|---|
 | [0001](0001-python-parquet-index.md) | Python plus cached parquet index, not Rust, not raw-JSON-per-query | Accepted |
-| [0002](0002-index-lives-in-normalize.md) | Index builder lives in `normalize/`, not in ingest | Accepted |
-| [0003](0003-citation-stable-id-jsonpath.md) | Citations use stable-ID JSONPath, verified at index build | Accepted |
-| [0004](0004-schema-drift-detection.md) | Schema drift detection via fingerprint plus coverage report | Accepted |
+| [0002](0002-index-lives-in-normalize.md) | Index builder lives in `normalize/`, not in ingest | Accepted (amended by 0018) |
+| [0003](0003-citation-stable-id-jsonpath.md) | Citations use stable-ID JSONPath, verified at index build | Accepted (amended by 0018) |
+| [0004](0004-schema-drift-detection.md) | Schema drift detection via fingerprint plus coverage report | Accepted (amended by 0018) |
 | [0005](0005-data-quality-envelope.md) | `data_quality` envelope on normalize responses | Accepted |
 | [0006](0006-flex-rules-over-shape-catalog.md) | Flex-rules JSON over a fetched shape catalog for GCP and Oracle (v0) | Accepted |
 | [0007](0007-rate-rows-composite-citations.md) | Rate rows and composite citations for resource-priced providers | Accepted |
@@ -27,6 +27,7 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | [0015](0015-rail-based-agent-guardrails.md) | Rail-based agent guardrails (in-house rail taxonomy, mandatory input judge) | Accepted |
 | [0016](0016-ag-ui-transport.md) | AG-UI transport for the agent surface; FastAPI as an AG-UI server; assistant-ui via the AG-UI adapter | Accepted (implementation pending) |
 | [0017](0017-agent-composed-query-shapes.md) | Agent-composed query shapes over aggregation primitives in normalize | Accepted (implementation pending) |
+| [0018](0018-raw-first-ingest.md) | Ingest stores provider bytes unchanged; parsing happens offline | Accepted |
 
 ## When to write an ADR
 

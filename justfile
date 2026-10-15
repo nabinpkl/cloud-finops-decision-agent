@@ -20,6 +20,14 @@ fetch-all:
 fetch-force provider:
     just -f {{backend_just}} -d {{backend}} fetch-force {{provider}}
 
+# Fetch one provider (unless fresh) and build its index, so no snapshot sits unindexed.
+refresh provider:
+    just -f {{backend_just}} -d {{backend}} refresh {{provider}}
+
+# Refresh every provider in the v0 set.
+refresh-all:
+    just -f {{backend_just}} -d {{backend}} refresh-all
+
 # Build the parquet index for one provider's latest snapshot.
 index provider:
     just -f {{backend_just}} -d {{backend}} index {{provider}}

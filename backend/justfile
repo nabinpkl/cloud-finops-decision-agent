@@ -12,6 +12,12 @@ fetch-all: (fetch "aws") (fetch "gcp") (fetch "azure") (fetch "oracle") (fetch "
 fetch-force provider:
     uv run python -m ingest.{{provider}} --force
 
+# Fetch one provider (unless fresh) and build its index, so no snapshot sits unindexed.
+refresh provider: (fetch provider) (index provider)
+
+# Refresh every provider in the v0 set.
+refresh-all: (refresh "aws") (refresh "gcp") (refresh "azure") (refresh "oracle") (refresh "vultr") (refresh "linode") (refresh "ibm")
+
 # Build the parquet index for one provider's latest snapshot.
 index provider:
     uv run python -m normalize.index {{provider}}

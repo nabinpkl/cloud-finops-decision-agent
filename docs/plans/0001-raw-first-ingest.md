@@ -1,6 +1,6 @@
 # Plan 0001: raw-first ingest, parse offline
 
-Status: planned (2026-10-15). Nothing below is built yet.
+Status: steps 1 to 11 built (2026-10-15); step 12, the live run, not yet done. See Outcome at the end.
 
 ## Why
 
@@ -44,8 +44,8 @@ One snapshot directory per fetch, `store/<provider>/<ISO>/`:
 
 ```
 store/gcp/2026-10-15T08-00-00Z/
-  raw/skus-0001.json          # response body, byte for byte
-  raw/skus-0002.json
+  skus-0001.json              # response body, byte for byte
+  skus-0002.json
   ...
   receipt.json                # written last; its presence means the fetch completed
   index.parquet               # written by normalize, only after the gates pass
@@ -143,3 +143,35 @@ taxonomy change for a later plan), new providers or regions, scheduling fetches.
 All seven providers fetch into raw files with a per-file receipt, a killed paged fetch
 resumes, a gate failure leaves the previous index served, `just check` is green, and the
 live comparison in step 12 cites raw files that resolve.
+
+## Outcome (2026-10-15)
+
+Steps 1 to 11 are built; `just check` is green (lint, types, 236 mocked tests, evals). The
+separate e2e lane against the May indexes still on disk passes 2 of 3; the third,
+`test_citation_excerpt_resolves_to_quoted_price`, fails identically on the code before this
+change: the excerpt route returns 413 for a cited file over its size cap. Raw pages are
+smaller than the old merged files, so the live run may clear it; if not, it is its own fix.
+Step 12 was held back on purpose: no live fetch has run against the new code.
+
+Where the build differs from the plan above:
+
+- **Flat file names, no `raw/` folder.** The citation excerpt route
+  (`api/routes/citations.py`) refuses a `filename` containing a slash, so raw files sit
+  directly in the snapshot directory beside the derived files. Builders tell them apart by
+  reading the receipt, never by globbing.
+- **Vultr was dropping plans.** `/v2/plans` pages at 100 by default and the old fetcher read
+  one page; the API listed 138 plans on 2026-10-15. The fetcher now pages with
+  `per_page=500` and the cursor.
+- **IBM candidates.** IBM sometimes lists only another plan's instance-hours metric for a
+  region (nxf-2x1 carried nxf-1x4's in May). Such a region is not a candidate, so the
+  missing-field gate measures fields we failed to read, not IBM's catalog gaps.
+- **Thresholds from data.** The May snapshots, converted offline to the raw layout, built
+  with identical row counts for all seven providers (aws 2880, azure 2598, gcp 1022, ibm
+  1255, linode 337, vultr 271, oracle 14), every sampled citation resolving, and 0% missing
+  fields. The gates are 1% to warn and 5% to reject.
+- **Not changed:** the AWS schema fingerprint is per SKU key (~1.5 GB per snapshot) and
+  dominates AWS index time (~5 minutes); ADR 0018 records it as a follow-up.
+
+Step 12 remains: `just refresh-all`, then `just compare 4 16 us-east`, one `lookup` per
+provider, and one citation walked by hand per provider. The May directories then move out
+of `store/` (the owner decides on deleting them).
