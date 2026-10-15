@@ -6,7 +6,7 @@ import httpx
 
 from ingest._shared import IngestError
 from ingest.config import ingest_settings
-from ingest.raw_snapshot import RawSnapshot, run_ingest
+from ingest.raw_snapshot import PageGuard, RawSnapshot, run_ingest
 
 PROVIDER = "vultr"
 SERVICE = "plans"
@@ -26,6 +26,7 @@ def page_name(n: int) -> str:
 
 async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
     params: dict[str, str | int] = {"per_page": PER_PAGE}
+    guard = PageGuard("vultr plans")
     n = 1
     while True:
         name = page_name(n)
@@ -36,6 +37,7 @@ async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
         cursor = links["next"]
         if not cursor:
             return
+        guard.follow(cursor)
         params = {"per_page": PER_PAGE, "cursor": cursor}
         n += 1
 
@@ -46,6 +48,7 @@ def main() -> None:
         service=SERVICE,
         source_url=PLANS_URL,
         fetch=fetch,
+        allowed_hosts=frozenset({httpx.URL(PLANS_URL).host}),
         hint="Check network connectivity and that api.vultr.com is reachable.",
         description="Fetch Vultr pricing snapshot.",
     )

@@ -7,7 +7,7 @@ from urllib.parse import quote
 import httpx
 
 from ingest.config import ingest_settings
-from ingest.raw_snapshot import RawSnapshot, run_ingest
+from ingest.raw_snapshot import PageGuard, RawSnapshot, run_ingest
 
 PROVIDER = "azure"
 SERVICE = "virtual-machines"
@@ -42,11 +42,14 @@ def page_name(region: str, n: int) -> str:
 async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
     for region in REGIONS:
         url: str | None = first_url_for(region)
+        guard = PageGuard(f"azure {region}")
         n = 1
         while url:
             name = page_name(region, n)
             await snapshot.fetch(client, name, url, timeout=ingest_settings.http_timeout_seconds)
             url = snapshot.read_json(name).get("NextPageLink") or None
+            if url:
+                guard.follow(url)
             n += 1
 
 
@@ -56,6 +59,7 @@ def main() -> None:
         service=SERVICE,
         source_url=RETAIL_PRICES_BASE,
         fetch=fetch,
+        allowed_hosts=frozenset({httpx.URL(RETAIL_PRICES_BASE).host}),
         hint="Check network connectivity and that the Retail Prices API endpoint is reachable.",
         description="Fetch Azure Virtual Machines pricing snapshot.",
     )

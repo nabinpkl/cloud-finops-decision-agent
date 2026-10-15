@@ -7,6 +7,7 @@ import hashlib
 import json
 import random
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -37,6 +38,50 @@ RetryCallback = Callable[[int, str, float], object]
 
 class IngestError(Exception):
     """A fetch cannot continue: the provider answered in a way we refuse to guess past."""
+
+
+class HostPacer:
+    """Request pacing for one host, shared by every request of a fetch run.
+
+    Requests start at least `min_interval` apart, and none starts while the host is
+    paused. Any request that is told to back off (429, 5xx, a spent rate-limit
+    budget) pauses the host for all of them, so parallel requests slow down
+    together instead of each retrying on its own."""
+
+    def __init__(self, min_interval: float, clock: Callable[[], float] = time.monotonic) -> None:
+        self._min_interval = min_interval
+        self._clock = clock
+        self._next_start = 0.0
+        self._paused_until = 0.0
+        self._lock = asyncio.Lock()
+
+    async def wait_turn(self) -> None:
+        async with self._lock:
+            now = self._clock()
+            start = max(now, self._next_start, self._paused_until)
+            if start > now:
+                await asyncio.sleep(start - now)
+            self._next_start = start + self._min_interval
+
+    def pause(self, seconds: float) -> None:
+        self._paused_until = max(self._paused_until, self._clock() + seconds)
+
+
+class Pacer:
+    """One HostPacer per host for a fetch run."""
+
+    def __init__(self, min_interval: float | None = None, clock: Callable[[], float] = time.monotonic) -> None:
+        self._min_interval = (
+            ingest_settings.min_request_interval_seconds if min_interval is None else min_interval
+        )
+        self._clock = clock
+        self._hosts: dict[str, HostPacer] = {}
+
+    def host(self, url: httpx.URL | str) -> HostPacer:
+        host = httpx.URL(str(url)).host
+        if host not in self._hosts:
+            self._hosts[host] = HostPacer(self._min_interval, self._clock)
+        return self._hosts[host]
 
 
 @dataclass(frozen=True)
@@ -129,6 +174,32 @@ def retry_after_seconds(value: str | None, now: datetime) -> float | None:
     return max(0.0, (when - now).total_seconds())
 
 
+def rate_limit_wait(headers: httpx.Headers, now_epoch: float) -> float | None:
+    """Seconds to hold off when a response says its rate-limit budget is spent.
+
+    Reads `X-RateLimit-Remaining`/`RateLimit-Remaining` and the matching `Reset`,
+    which providers send either as seconds to wait (Vultr) or as an epoch time
+    (Linode). None while budget remains or when the headers are absent."""
+    remaining = _header_number(headers, "ratelimit-remaining")
+    if remaining is None or remaining > 0:
+        return None
+    reset = _header_number(headers, "ratelimit-reset")
+    if reset is None:
+        return None
+    seconds = reset - now_epoch if reset > 1_000_000_000 else reset
+    return max(0.0, seconds)
+
+
+def _header_number(headers: httpx.Headers, suffix: str) -> float | None:
+    for name, value in headers.items():
+        if name.lower().endswith(suffix):
+            try:
+                return float(value.strip())
+            except ValueError:
+                return None
+    return None
+
+
 def receipt_url(url: httpx.URL | str) -> str:
     """The request URL as a receipt records it: credentials stripped from the query."""
     parts = urlsplit(str(url))
@@ -141,6 +212,7 @@ async def fetch_polite(
     url: str,
     dest: Path,
     *,
+    pacer: Pacer,
     params: dict | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
@@ -151,12 +223,15 @@ async def fetch_polite(
 ) -> FetchedFile:
     """GET url and stream the body to dest byte for byte, retrying what is worth retrying.
 
-    Retries 429, 5xx and transport errors (connection reset, timeout, protocol
-    error). Honors Retry-After in either form, refusing a wait longer than
-    max_retry_after; otherwise backs off exponentially with jitter. Other 4xx
-    raise at once. The body lands in `<dest>.part` and is renamed onto dest only
-    when complete, so dest exists only as a whole response.
-    on_retry(attempt, reason, wait) is called before each wait."""
+    Every attempt waits its turn on the host's pacer. Retries 429, 5xx and
+    transport errors (connection reset, timeout, protocol error). A 429 or 5xx
+    pauses the whole host for the wait, honoring Retry-After in either form but
+    never waiting less than our own backoff, and refusing a wait longer than
+    max_retry_after. A response whose rate-limit headers say the budget is spent
+    pauses the host until the reset. Other 4xx raise at once. The body lands in
+    `<dest>.part` and is renamed onto dest only when complete, so dest exists only
+    as a whole response. on_retry(attempt, reason, wait) is called before each
+    wait."""
     timeout = ingest_settings.http_timeout_seconds if timeout is None else timeout
     max_retries = ingest_settings.http_max_retries if max_retries is None else max_retries
     delay = ingest_settings.http_initial_backoff_seconds if initial_backoff is None else initial_backoff
@@ -165,11 +240,16 @@ async def fetch_polite(
         ingest_settings.http_max_retry_after_seconds if max_retry_after is None else max_retry_after
     )
 
+    host = pacer.host(url)
     for attempt in range(max_retries + 1):
         backoff = delay + random.uniform(0, delay / 4)
+        await host.wait_turn()
         try:
             async with client.stream("GET", url, params=params, timeout=timeout) as resp:
                 status = resp.status_code
+                spent = rate_limit_wait(resp.headers, time.time())
+                if spent is not None:
+                    host.pause(min(spent, max_retry_after))
                 if status != 429 and not 500 <= status < 600:
                     if status >= 400:
                         await _raise_with_body(resp)
@@ -188,15 +268,17 @@ async def fetch_polite(
                         f"{url}: provider asked to wait {told:.0f}s (Retry-After {header!r}), "
                         f"over the {max_retry_after:.0f}s cap"
                     )
-                wait = told if told is not None else backoff
+                wait = max(told, backoff) if told is not None else backoff
+            host.pause(wait)
+            if on_retry is not None:
+                on_retry(attempt + 1, reason, wait)
         except httpx.TransportError as exc:
             if attempt == max_retries:
                 raise
             reason = f"{type(exc).__name__}: {exc}"
-            wait = backoff
-        if on_retry is not None:
-            on_retry(attempt + 1, reason, wait)
-        await asyncio.sleep(wait)
+            if on_retry is not None:
+                on_retry(attempt + 1, reason, backoff)
+            await asyncio.sleep(backoff)
         delay = min(delay * 2, max_backoff)
     raise IngestError(f"exceeded {max_retries} retries fetching {url}")
 

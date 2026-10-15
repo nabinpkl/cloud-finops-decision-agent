@@ -30,6 +30,7 @@ def main() -> None:
         service=SERVICE,
         source_url=PRICELIST_URL,
         fetch=fetch,
+        allowed_hosts=frozenset({httpx.URL(PRICELIST_URL).host}),
         hint="Check network connectivity and that the Oracle price list endpoint is reachable.",
         description="Fetch Oracle Cloud pricing snapshot.",
     )

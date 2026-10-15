@@ -8,7 +8,7 @@ import httpx
 
 from ingest._shared import emit, load_dotenv_if_present
 from ingest.config import ingest_settings
-from ingest.raw_snapshot import RawSnapshot, run_ingest
+from ingest.raw_snapshot import PageGuard, RawSnapshot, run_ingest
 
 PROVIDER = "gcp"
 SERVICE = "compute"
@@ -26,6 +26,7 @@ def page_name(n: int) -> str:
 
 async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
     params: dict[str, str | int] = {"pageSize": PAGE_SIZE}
+    guard = PageGuard("gcp skus")
     n = 1
     while True:
         name = page_name(n)
@@ -33,6 +34,7 @@ async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
         token = snapshot.read_json(name).get("nextPageToken")
         if not token:
             return
+        guard.follow(token)
         params = {"pageSize": PAGE_SIZE, "pageToken": token}
         n += 1
 
@@ -60,6 +62,7 @@ def main() -> None:
         service=SERVICE,
         source_url=CATALOG_BASE,
         fetch=fetch,
+        allowed_hosts=frozenset({httpx.URL(CATALOG_BASE).host}),
         hint="Check GCP_API_KEY validity and Cloud Billing API quota.",
         description="Fetch GCP Compute Engine pricing snapshot.",
         client_headers={"X-goog-api-key": os.environ.get("GCP_API_KEY", "")},

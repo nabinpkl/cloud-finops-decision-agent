@@ -21,7 +21,7 @@ from ingest.ibm.constants import (
     COMPUTE_SERVICE_NAMES,
     PRICING_CONCURRENCY,
 )
-from ingest.raw_snapshot import RawSnapshot
+from ingest.raw_snapshot import PageGuard, RawSnapshot
 
 
 def catalog_page_name(n: int) -> str:
@@ -58,6 +58,7 @@ async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
 async def _paged_resources(snapshot: RawSnapshot, client: httpx.AsyncClient, first_url: str, name_for) -> list[dict]:
     resources: list[dict] = []
     url: str | None = first_url
+    guard = PageGuard(f"ibm {name_for(1)}")
     n = 1
     while url:
         name = name_for(n)
@@ -65,6 +66,8 @@ async def _paged_resources(snapshot: RawSnapshot, client: httpx.AsyncClient, fir
         page = snapshot.read_json(name)
         resources.extend(page.get("resources", []))
         url = page.get("next") or None
+        if url:
+            guard.follow(url)
         n += 1
     return resources
 

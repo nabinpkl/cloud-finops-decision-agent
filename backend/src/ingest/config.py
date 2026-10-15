@@ -50,6 +50,11 @@ class IngestSettings(BaseSettings):
         default=300.0,
         validation_alias="INGEST_HTTP_MAX_RETRY_AFTER_SECONDS",
     )
+    min_request_interval_seconds: float = Field(
+        default=0.2,
+        validation_alias="INGEST_MIN_REQUEST_INTERVAL_SECONDS",
+    )
+    max_pages: int = Field(default=1000, validation_alias="INGEST_MAX_PAGES")
     resume_window_hours: float = Field(
         default=6.0,
         validation_alias="INGEST_RESUME_WINDOW_HOURS",

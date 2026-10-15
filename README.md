@@ -85,7 +85,7 @@ Each provider module:
 A fetch that fails partway resumes from its last complete file when run again.
 All parsing happens offline in `backend/src/normalize/`, so a parser fix is an
 index rebuild, never a refetch. Retry handling (429, 5xx, dropped connections,
-Retry-After) lives in `backend/src/ingest/_shared.py`; the snapshot writer in
+Retry-After) and per-host pacing live in `backend/src/ingest/_shared.py`; the snapshot writer in
 `backend/src/ingest/raw_snapshot.py`.
 
 ### Normalize

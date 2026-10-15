@@ -6,7 +6,8 @@ from ingest.config import ingest_settings
 
 PROVIDER = "ibm"
 SERVICE = "global-catalog+compute-pricing"
-CATALOG_BASE = "https://globalcatalog.cloud.ibm.com/api/v1"
+CATALOG_HOST = "globalcatalog.cloud.ibm.com"
+CATALOG_BASE = f"https://{CATALOG_HOST}/api/v1"
 CATALOG_FIRST_URL = f"{CATALOG_BASE}?q=kind:service"
 
 COMPUTE_SERVICE_NAMES: list[str] = [

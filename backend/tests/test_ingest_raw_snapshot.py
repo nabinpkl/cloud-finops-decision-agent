@@ -13,7 +13,7 @@ import pytest
 import ingest._shared as shared
 import ingest.raw_snapshot as raw_snapshot
 from ingest._shared import IngestError
-from ingest.raw_snapshot import PROGRESS_FILE, RECEIPT_FILE, RawSnapshot
+from ingest.raw_snapshot import PROGRESS_FILE, RECEIPT_FILE, PageGuard, RawSnapshot, make_client
 
 
 @pytest.fixture
@@ -30,6 +30,7 @@ def store(monkeypatch, tmp_path):
     monkeypatch.setattr(shared.ingest_settings, "store_root", str(root))
     monkeypatch.setattr(shared.ingest_settings, "http_initial_backoff_seconds", 0.0)
     monkeypatch.setattr(shared.ingest_settings, "http_max_retries", 0)
+    monkeypatch.setattr(shared.ingest_settings, "min_request_interval_seconds", 0.0)
     return root
 
 
@@ -117,3 +118,57 @@ def test_refuses_names_that_could_escape_or_clobber(store):
 def test_finish_without_files_fails_loud(store):
     with pytest.raises(IngestError):
         RawSnapshot.start("oracle").finish(service="x", source_url="https://x.test")
+
+
+def test_page_guard_stops_a_repeated_next_page():
+    guard = PageGuard("test")
+    guard.follow("token-2")
+    with pytest.raises(IngestError, match="same next page twice"):
+        guard.follow("token-2")
+
+
+def test_page_guard_stops_at_the_page_cap():
+    guard = PageGuard("test", max_pages=3)
+    guard.follow("2")
+    guard.follow("3")
+    with pytest.raises(IngestError, match="more than 3 pages"):
+        guard.follow("4")
+
+
+def get_via(client_hosts: frozenset[str], handler, url: str):
+    async def go():
+        async with make_client(client_hosts, {"X-goog-api-key": "k"}, transport=httpx.MockTransport(handler)) as client:
+            return await client.get(url)
+
+    return asyncio.run(go())
+
+
+def test_client_refuses_other_hosts_and_plain_http():
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200)
+
+    for url in ("https://evil.test/x", "http://api.example.test/x"):
+        with pytest.raises(IngestError, match="refusing request"):
+            get_via(frozenset({"api.example.test"}), handler, url)
+    assert seen == []
+
+
+def test_client_follows_a_redirect_only_on_the_same_host():
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if request.url.path == "/moved-here":
+            return httpx.Response(302, headers={"Location": "https://api.example.test/new"})
+        if request.url.path == "/moved-away":
+            return httpx.Response(302, headers={"Location": "https://evil.test/steal"})
+        return httpx.Response(200)
+
+    hosts = frozenset({"api.example.test"})
+    assert get_via(hosts, handler, "https://api.example.test/moved-here").status_code == 200
+    with pytest.raises(IngestError, match="evil.test"):
+        get_via(hosts, handler, "https://api.example.test/moved-away")
+    assert not any("evil.test" in url for url in seen)

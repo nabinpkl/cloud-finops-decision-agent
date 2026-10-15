@@ -27,6 +27,7 @@ import orjson
 from ingest._shared import (
     PROJECT_ROOT,
     IngestError,
+    Pacer,
     RetryCallback,
     emit,
     fetch_polite,
@@ -81,6 +82,8 @@ class RawSnapshot:
         self.directory = directory
         self.resumed = resumed
         self._done = done
+        # One pacer for the whole run, so every request to a host shares its pace and pauses.
+        self.pacer = Pacer()
 
     @classmethod
     def start(cls, provider: str, *, fresh: bool = False) -> RawSnapshot:
@@ -140,6 +143,7 @@ class RawSnapshot:
             client,
             url,
             self.path(name),
+            pacer=self.pacer,
             params=params,
             timeout=timeout,
             on_retry=self._on_retry(name),
@@ -188,6 +192,43 @@ class RawSnapshot:
         return report
 
 
+class PageGuard:
+    """Stops a paging loop the provider would otherwise keep going: a next token or
+    link seen before (a loop) or more pages than INGEST_MAX_PAGES."""
+
+    def __init__(self, label: str, max_pages: int | None = None) -> None:
+        self._label = label
+        self._max_pages = ingest_settings.max_pages if max_pages is None else max_pages
+        self._seen: set[str] = set()
+
+    def follow(self, next_ref: str) -> None:
+        """Call before requesting the page `next_ref` points at."""
+        if next_ref in self._seen:
+            raise IngestError(f"{self._label}: the provider sent the same next page twice ({next_ref[:80]!r})")
+        self._seen.add(next_ref)
+        if len(self._seen) >= self._max_pages:
+            raise IngestError(f"{self._label}: more than {self._max_pages} pages; raise INGEST_MAX_PAGES if real")
+
+
+def make_client(allowed_hosts: frozenset[str], headers: dict[str, str] | None = None, **kwargs: Any) -> httpx.AsyncClient:
+    """A client that sends requests only over https to the provider's own hosts.
+
+    Redirects and provider-supplied next links are followed only while they stay on
+    those hosts, so a header credential (GCP's X-goog-api-key, which httpx does not
+    strip on a cross-host redirect the way it strips Authorization) never leaves."""
+
+    async def check_host(request: httpx.Request) -> None:
+        if request.url.scheme != "https" or request.url.host not in allowed_hosts:
+            raise IngestError(f"refusing request to {request.url.scheme}://{request.url.host}: not in {sorted(allowed_hosts)}")
+
+    return httpx.AsyncClient(
+        headers=headers or {},
+        follow_redirects=True,
+        event_hooks={"request": [check_host]},
+        **kwargs,
+    )
+
+
 FetchFn = Callable[[RawSnapshot, httpx.AsyncClient], Awaitable[None]]
 
 
@@ -197,6 +238,7 @@ def run_ingest(
     service: str,
     source_url: str,
     fetch: FetchFn,
+    allowed_hosts: frozenset[str],
     hint: str,
     description: str,
     client_headers: dict[str, str] | None = None,
@@ -223,7 +265,7 @@ def run_ingest(
     snapshot = RawSnapshot.start(provider, fresh=args.fresh)
 
     async def go() -> None:
-        async with httpx.AsyncClient(headers=client_headers or {}, follow_redirects=True) as client:
+        async with make_client(allowed_hosts, client_headers) as client:
             await fetch(snapshot, client)
 
     try:

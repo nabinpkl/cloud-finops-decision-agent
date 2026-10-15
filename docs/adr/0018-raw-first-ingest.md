@@ -47,16 +47,28 @@ the first 100 of 138 plans because it ignored paging.
    provider's own shape (`$.Items[...]` for Azure, `$.data[...]` for Linode,
    the plan's own `pricing-<plan_id>.json` for IBM). `source_url` is the request
    that fetched that file.
-4. **Retries cover 429, 5xx and transport errors.** `Retry-After` is read as
-   seconds or an HTTP date; a wait over `INGEST_HTTP_MAX_RETRY_AFTER_SECONDS`
-   (300) fails the fetch rather than stalling it. Backoff has jitter.
-5. **Only an accepted index is served.** The build writes `index.parquet.part`,
+4. **Retries cover 429, 5xx and transport errors, and the host slows down as a
+   whole.** Every request of a run goes through one pacer per host: request
+   starts are at least `INGEST_MIN_REQUEST_INTERVAL_SECONDS` (0.2) apart, a 429
+   or 5xx pauses every request to that host (not just the one that was told),
+   and a response whose `RateLimit-Remaining` reaches 0 pauses the host until
+   its `RateLimit-Reset` (seconds or epoch). `Retry-After` is read as seconds or
+   an HTTP date and never waits less than our own backoff, so `Retry-After: 0`
+   is not a burst; a wait over `INGEST_HTTP_MAX_RETRY_AFTER_SECONDS` (300) fails
+   the fetch rather than stalling it. Backoff has jitter.
+5. **Paging cannot run away, and requests stay on the provider's hosts.** Every
+   paging loop refuses a next token or link it has seen before and stops past
+   `INGEST_MAX_PAGES` (1000). The client sends requests only over https to the
+   provider's own hosts, so a redirect or a provider-supplied next link that
+   points elsewhere fails the fetch before anything (GCP's `X-goog-api-key`
+   header included, which httpx keeps on cross-host redirects) is sent.
+6. **Only an accepted index is served.** The build writes `index.parquet.part`,
    runs the gates, and renames it to `index.parquet` only on pass; a rejected
    build is kept as `index.rejected.parquet`, the previous accepted snapshot
    keeps serving, and the data-quality envelope says so with
    `index_rebuild_failed_fell_back`. Row-count and fingerprint baselines come
    only from accepted snapshots.
-6. **Builders account for what they skip.** A *candidate* is a record the
+7. **Builders account for what they skip.** A *candidate* is a record the
    builder's policy wants priced; a candidate missing a field it needs counts
    against that field. More than 1% missing flags `fields_missing`; more than 5%
    rejects the build. Zero candidates (`no_candidates`) or zero rows also reject

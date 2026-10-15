@@ -6,7 +6,7 @@ import httpx
 
 from ingest._shared import IngestError
 from ingest.config import ingest_settings
-from ingest.raw_snapshot import RawSnapshot, run_ingest
+from ingest.raw_snapshot import PageGuard, RawSnapshot, run_ingest
 
 PROVIDER = "linode"
 SERVICE = "types"
@@ -24,6 +24,7 @@ def page_name(n: int) -> str:
 
 
 async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
+    guard = PageGuard("linode types")
     n = 1
     while True:
         name = page_name(n)
@@ -40,6 +41,7 @@ async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
         if n >= pages:
             return
         n += 1
+        guard.follow(str(n))
 
 
 def main() -> None:
@@ -48,6 +50,7 @@ def main() -> None:
         service=SERVICE,
         source_url=TYPES_URL,
         fetch=fetch,
+        allowed_hosts=frozenset({httpx.URL(TYPES_URL).host}),
         hint="Check network connectivity and that api.linode.com is reachable.",
         description="Fetch Linode pricing snapshot.",
     )

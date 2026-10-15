@@ -59,6 +59,7 @@ def main() -> None:
         service=SERVICE,
         source_url=REGION_INDEX_URL,
         fetch=fetch,
+        allowed_hosts=frozenset({httpx.URL(PRICING_HOST).host}),
         hint="Check network connectivity and that REGIONS matches AWS region_index.json.",
         description="Fetch AWS EC2 pricing snapshot.",
     )

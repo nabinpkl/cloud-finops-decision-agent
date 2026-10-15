@@ -23,6 +23,7 @@ def store(monkeypatch, tmp_path):
     monkeypatch.setattr(shared.ingest_settings, "store_root", str(root))
     monkeypatch.setattr(shared.ingest_settings, "http_initial_backoff_seconds", 0.0)
     monkeypatch.setattr(shared.ingest_settings, "http_max_retries", 0)
+    monkeypatch.setattr(shared.ingest_settings, "min_request_interval_seconds", 0.0)
     return root
 
 
@@ -166,3 +167,28 @@ def test_ibm_walks_catalog_children_and_pricing(store):
 def test_ibm_fails_loud_when_a_compute_service_is_gone(store):
     with pytest.raises(IngestError, match="not in the IBM catalog"):
         run(ibm.fetch, "ibm", lambda r: body({"resources": [], "next": None}))
+
+
+def test_gcp_stops_when_the_provider_repeats_a_page_token(store):
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return body({"skus": [], "nextPageToken": "same"})
+
+    with pytest.raises(IngestError, match="same next page twice"):
+        run(gcp.fetch, "gcp", handler)
+    assert len(calls) == 2
+
+
+def test_azure_stops_when_next_links_never_end(store, monkeypatch):
+    monkeypatch.setattr(shared.ingest_settings, "max_pages", 5)
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return body({"Items": [], "NextPageLink": f"https://prices.azure.com/api/retail/prices?page={len(calls) + 1}"})
+
+    with pytest.raises(IngestError, match="more than 5 pages"):
+        run(azure.fetch, "azure", handler)
+    assert len(calls) == 5

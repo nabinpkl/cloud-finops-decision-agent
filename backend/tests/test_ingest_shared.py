@@ -12,7 +12,15 @@ import httpx
 import pytest
 
 import ingest._shared as shared
-from ingest._shared import IngestError, fetch_polite, receipt_url, retry_after_seconds
+from ingest._shared import (
+    HostPacer,
+    IngestError,
+    Pacer,
+    fetch_polite,
+    rate_limit_wait,
+    receipt_url,
+    retry_after_seconds,
+)
 
 NOW = datetime(2026, 10, 15, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -30,10 +38,16 @@ def no_waiting(monkeypatch):
     return slept
 
 
-def run(handler, dest: Path, **kwargs):
+def frozen_pacer() -> Pacer:
+    """No spacing between requests and a clock that never moves, so every recorded
+    sleep is exactly the pause the code asked for."""
+    return Pacer(min_interval=0.0, clock=lambda: 1000.0)
+
+
+def run(handler, dest: Path, *, pacer: Pacer | None = None, url: str = "https://api.example.test/prices", **kwargs):
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            return await fetch_polite(client, "https://api.example.test/prices", dest, **kwargs)
+            return await fetch_polite(client, url, dest, pacer=pacer or frozen_pacer(), **kwargs)
 
     return asyncio.run(go())
 
@@ -152,3 +166,52 @@ def test_receipt_url_drops_credentials():
     url = receipt_url("https://api.example.test/skus?pageSize=5000&key=SECRET&pageToken=abc")
     assert "SECRET" not in url
     assert "pageToken=abc" in url
+
+
+def test_retry_after_zero_still_waits_our_backoff(tmp_path, no_waiting):
+    handler = sequence(httpx.Response(503, headers={"Retry-After": "0"}), httpx.Response(200, content=b"{}"))
+
+    run(handler, tmp_path / "p.json", initial_backoff=2.0)
+
+    assert len(no_waiting) == 1 and 2.0 <= no_waiting[0] <= 2.5
+
+
+def test_a_429_pauses_every_request_to_that_host(tmp_path, no_waiting):
+    pacer = frozen_pacer()
+    run(sequence(httpx.Response(429, headers={"Retry-After": "7"}), httpx.Response(200, content=b"{}")), tmp_path / "a.json", pacer=pacer)
+    no_waiting.clear()
+
+    run(sequence(httpx.Response(200, content=b"{}")), tmp_path / "b.json", pacer=pacer, url="https://api.example.test/other")
+    run(sequence(httpx.Response(200, content=b"{}")), tmp_path / "c.json", pacer=pacer, url="https://elsewhere.test/x")
+
+    assert no_waiting == [7.0]  # the same host waits out the pause; another host does not
+
+
+def test_a_spent_rate_limit_budget_pauses_the_host(tmp_path, no_waiting):
+    pacer = frozen_pacer()
+    spent = httpx.Response(200, content=b"{}", headers={"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "3"})
+    run(sequence(spent), tmp_path / "a.json", pacer=pacer)
+
+    run(sequence(httpx.Response(200, content=b"{}")), tmp_path / "b.json", pacer=pacer)
+
+    assert no_waiting == [3.0]
+
+
+def test_rate_limit_headers():
+    assert rate_limit_wait(httpx.Headers({"X-RateLimit-Remaining": "5", "X-RateLimit-Reset": "1"}), 0) is None
+    assert rate_limit_wait(httpx.Headers({"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "2"}), 0) == 2.0
+    epoch = httpx.Headers({"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1792046473"})
+    assert rate_limit_wait(epoch, 1792046463.0) == 10.0
+    assert rate_limit_wait(httpx.Headers({}), 0) is None
+
+
+def test_host_pacer_spaces_request_starts(no_waiting):
+    pacer = HostPacer(min_interval=0.5, clock=lambda: 100.0)
+
+    async def three():
+        for _ in range(3):
+            await pacer.wait_turn()
+
+    asyncio.run(three())
+
+    assert no_waiting == [0.5, 1.0]
