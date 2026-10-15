@@ -8,8 +8,9 @@ price plus optional per-region overrides under data[].region_prices[]. For every
   base price is global), and
 - one row per explicit region_prices[] override (currently br-gru and id-cgk).
 
-Memory is published in MB; we convert to GB. Plans with zero monthly_cost
-(the legacy 'g6-nanode-1-free' tier) are dropped.
+Memory is published in MB; we convert to GB. A type without a monthly price
+(dedicated and GPU since October 2026) is cited by its hourly price, with
+monthly = hourly x 730 for ranking.
 
 Per ADR 0003 the citation json_path uses the stable type id and optional
 region id in filter expressions, never array positions."""
@@ -17,7 +18,7 @@ region id in filter expressions, never array positions."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import orjson
 
@@ -35,6 +36,7 @@ PAGE_PREFIX = "types-"
 # bucket so cross-provider compare() can find it.) The native code lookup is
 # done via taxonomy_loader so the mapping stays in one place.
 CANONICAL_BUCKETS = ["us-east", "eu-central", "ap-southeast"]
+HOURS_PER_MONTH = 730.0
 
 
 def build(snapshot_dir: Path) -> BuilderOutput:
@@ -88,8 +90,9 @@ def _rows_for_type(
     if memory is None:
         tally.missing_field("memory")
         return []
-    if base_monthly is None:
-        tally.missing_field("price.monthly")
+    base = _cited_price(base_hourly, base_monthly, f"$.data[?(@.id=='{type_id}')].price")
+    if base is None:
+        tally.missing_field("price.hourly")
         return []
     ram_gb = memory / 1024.0  # Linode publishes memory in MB
     family = classify_family(PROVIDER, type_id)
@@ -100,7 +103,8 @@ def _rows_for_type(
     # emit a row for a region that has a region_prices[] override (handled below)
     # since the override takes precedence.
     overrides = {rp["id"]: rp for rp in t.get("region_prices", []) if "id" in rp}
-    if base_hourly is not None and base_monthly is not None:
+    if base is not None:
+        hourly_usd, monthly_usd, json_path, kind = base
         for canonical in CANONICAL_BUCKETS:
             native = _native_for(canonical)
             if native is None or native in overrides:
@@ -115,23 +119,26 @@ def _rows_for_type(
                     region_canonical=canonical,
                     vcpu=vcpu,
                     ram_gb=ram_gb,
-                    hourly_usd=base_hourly,
-                    monthly_usd=base_monthly,
+                    hourly_usd=hourly_usd,
+                    monthly_usd=monthly_usd,
                     source_url=source_url,
                     store_path=store_path,
-                    # Base price lives at data[?(@.id==<id>)].price.monthly
-                    json_path=f"$.data[?(@.id=='{type_id}')].price.monthly",
-                    cited_price_kind="monthly",
+                    json_path=json_path,
+                    cited_price_kind=kind,
                 )
             )
 
     # Override rows: one per region_prices[] entry. The canonical region may be
     # None if the override is for a region outside our 3 v0 buckets.
     for region_id, rp in overrides.items():
-        hourly = _maybe_float(rp.get("hourly"))
-        monthly = _maybe_float(rp.get("monthly"))
-        if hourly is None or monthly is None:
+        price = _cited_price(
+            _maybe_float(rp.get("hourly")),
+            _maybe_float(rp.get("monthly")),
+            f"$.data[?(@.id=='{type_id}')].region_prices[?(@.id=='{region_id}')]",
+        )
+        if price is None:
             continue
+        hourly_usd, monthly_usd, json_path, kind = price
         out.append(
             IndexRow(
                 provider=PROVIDER,
@@ -142,19 +149,33 @@ def _rows_for_type(
                 region_canonical=canonical_region(PROVIDER, region_id),
                 vcpu=vcpu,
                 ram_gb=ram_gb,
-                hourly_usd=hourly,
-                monthly_usd=monthly,
+                hourly_usd=hourly_usd,
+                monthly_usd=monthly_usd,
                 source_url=source_url,
                 store_path=store_path,
-                json_path=(
-                    f"$.data[?(@.id=='{type_id}')]"
-                    f".region_prices[?(@.id=='{region_id}')].monthly"
-                ),
-                cited_price_kind="monthly",
+                json_path=json_path,
+                cited_price_kind=kind,
             )
         )
 
     return out
+
+
+def _cited_price(
+    hourly: float | None, monthly: float | None, price_path: str
+) -> tuple[float | None, float, str, Literal["hourly", "monthly"]] | None:
+    """The price a row cites, as (hourly, monthly, json_path, cited kind).
+
+    Linode's own monthly price is cited when it publishes one. Since October 2026
+    it publishes `monthly: null` for dedicated and GPU types; those cite the
+    hourly price, and their monthly figure is hourly x 730, as for the providers
+    that only ever publish hourly (AWS, Azure, IBM), so compare() ranks them on
+    the same footing. None when neither price is there."""
+    if monthly is not None:
+        return hourly, monthly, f"{price_path}.monthly", "monthly"
+    if hourly is not None:
+        return hourly, hourly * HOURS_PER_MONTH, f"{price_path}.hourly", "hourly"
+    return None
 
 
 def _native_for(canonical: str) -> str | None:

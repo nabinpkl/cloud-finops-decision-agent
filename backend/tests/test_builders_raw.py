@@ -241,3 +241,28 @@ def test_store_paths_resolve_against_the_configured_root(store):
     for bad in ("store/aws/../x/y.json", "aws/x/y.json", "store/aws/x/y/z.json"):
         with pytest.raises(SnapshotError):
             resolve_store_path(bad)
+
+
+def test_linode_type_without_a_monthly_price_cites_its_hourly_price(store):
+    gpu = {
+        "id": "g1-gpu-rtx6000-1",
+        "vcpus": 8,
+        "memory": 32768,
+        "price": {"hourly": 1.5, "monthly": None},
+        "region_prices": [{"id": "br-gru", "hourly": 1.8, "monthly": None}],
+    }
+    write_raw_snapshot(store, "linode", ISO, {"types-0001.json": {"data": [gpu], "page": 1, "pages": 1, "results": 1}})
+    import polars as pl
+
+    result = build_provider("linode")
+    df = pl.read_parquet(store / "linode" / ISO / "index.parquet")
+
+    assert result.success and result.report.missing_fields == {}
+    assert set(df["cited_price_kind"]) == {"hourly"}
+    assert set(df["json_path"]) == {
+        "$.data[?(@.id=='g1-gpu-rtx6000-1')].price.hourly",
+        "$.data[?(@.id=='g1-gpu-rtx6000-1')].region_prices[?(@.id=='br-gru')].hourly",
+    }
+    base = df.filter(pl.col("region_native") != "br-gru")
+    assert set(base["monthly_usd"]) == {1.5 * 730}
+    assert result.report.citation_verification.failed == 0
