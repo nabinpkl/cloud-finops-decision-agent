@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from project_paths import TAXONOMY_DIR
 from normalize.builders import SkipTally
@@ -33,14 +33,15 @@ def rows_for_page(
     snapshot_iso: str,
     source_url: str,
     store_path: str,
-    seen: set[tuple[str, str]],
+    seen: set[tuple[str, str, str]],
     tally: SkipTally,
 ) -> list[IndexRow]:
     """Rows for one raw page of one region. `seen` spans every page of the region,
     so a SKU priced on two pages yields one row."""
     out: list[IndexRow] = []
     for item in items:
-        if not is_linux_ondemand_vm(item):
+        pricing = linux_vm_pricing(item)
+        if pricing is None:
             continue
         tally.candidate()
         sku = item.get("armSkuName", "")
@@ -51,7 +52,7 @@ def rows_for_page(
         if parsed is None:
             continue
         family_slug, vcpu, ram_gb = parsed
-        key = (sku, region_native)
+        key = (sku, region_native, pricing)
         if key in seen:
             continue
         seen.add(key)
@@ -83,31 +84,37 @@ def rows_for_page(
                 store_path=store_path,
                 json_path=f"$.Items[?(@.meterId=='{meter_id}')].retailPrice",
                 cited_price_kind="hourly",
+                pricing=pricing,
             )
         )
 
     return out
 
 
-def is_linux_ondemand_vm(item: dict[str, Any]) -> bool:
+def linux_vm_pricing(item: dict[str, Any]) -> Literal["on_demand", "spot"] | None:
+    """"on_demand" or "spot" for a Linux VM meter we price, None for anything else
+    (Windows, low priority, non-VM, non-primary meter regions). Spot meters are the
+    Consumption items whose meterName or skuName ends in "Spot"."""
     if item.get("serviceFamily") != "Compute":
-        return False
+        return None
     if item.get("serviceName") != "Virtual Machines":
-        return False
+        return None
     if item.get("type") != "Consumption":
-        return False
+        return None
     if not item.get("isPrimaryMeterRegion", False):
-        return False
+        return None
     product = item.get("productName", "") or ""
     meter = item.get("meterName", "") or ""
     sku_name = item.get("skuName", "") or ""
     if "Windows" in product:
-        return False
-    if "Spot" in meter or "Spot" in sku_name:
-        return False
+        return None
     if "Low Priority" in meter:
-        return False
-    return True
+        return None
+    if meter.endswith(" Spot") or sku_name.endswith(" Spot"):
+        return "spot"
+    if "Spot" in meter or "Spot" in sku_name:
+        return None
+    return "on_demand"
 
 
 def parse_sku(sku: str, specs: dict[str, Any]) -> tuple[str, int, float] | None:

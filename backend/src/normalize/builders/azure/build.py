@@ -3,8 +3,8 @@
 Azure snapshots hold the Retail Prices API's raw pages per region
 (`eastus-0001.json`, `westeurope-0002.json`, ...; each `{Items: [...],
 NextPageLink, ...}`), filtered to `serviceName=Virtual Machines` + `priceType=
-Consumption`. Spot and Low-Priority rows are mixed in under Consumption and
-must be post-filtered by meterName. Windows rows are filtered out (Linux/no-OS
+Consumption`. Spot and Low-Priority rows are mixed in under Consumption: spot
+meters become `pricing="spot"` rows, low-priority meters are dropped. Windows rows are filtered out (Linux/no-OS
 only for v0 to avoid licensing-bundled prices).
 
 Unlike Linode/Vultr/IBM/AWS, Azure pricing rows do NOT carry vCPU or RAM. The
@@ -40,7 +40,7 @@ def build(snapshot_dir: Path) -> BuilderOutput:
     rows: list[IndexRow] = []
     source_files: list[str] = []
     fingerprints: list[list[list[str]]] = []
-    seen_by_region: dict[str, set[tuple[str, str]]] = {}
+    seen_by_region: dict[str, set[tuple[str, str, str]]] = {}
 
     for page in snapshot_files(snapshot_dir):
         region_native = page.name.rsplit("-", 1)[0]

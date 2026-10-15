@@ -84,6 +84,7 @@ class CompareRequest(QueryModel):
     region: str
     family: str
     providers: list[str]
+    pricing: Literal["on_demand", "spot"]
 
 
 class UnmetRequirement(QueryModel):
@@ -132,6 +133,7 @@ class LookupRequest(QueryModel):
     provider: str
     instance_type: str
     region: str
+    pricing: Literal["on_demand", "spot"]
 
 
 class LookupResult(QueryModel):

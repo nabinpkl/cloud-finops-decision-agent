@@ -23,6 +23,7 @@ def post_compare(req: CompareQueryArgs) -> dict[str, Any]:
         family=req.family,
         providers=list(req.providers) if req.providers is not None else None,
         expand=req.expand,
+        pricing=req.pricing,
     )
     return wire_response(result)
 
@@ -33,5 +34,6 @@ def get_lookup(req: Annotated[LookupQueryArgs, Query()]) -> dict[str, Any]:
         provider=req.provider,
         instance_type=req.instance_type,
         region=req.region,
+        pricing=req.pricing,
     )
     return wire_response(result)

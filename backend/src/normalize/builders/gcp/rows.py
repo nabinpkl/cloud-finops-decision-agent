@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from project_paths import TAXONOMY_DIR
 from normalize.builders import SkipTally
@@ -25,6 +25,10 @@ SKIP_TOKENS = (
     "Preemptible",
     "Commit",
 )
+# Every GCP Spot VM SKU has usageType "Preemptible" and this description prefix
+# ("Spot Preemptible N2 Instance Core running in Virginia"); stripping it leaves
+# the on-demand SKU's description, which the family match and skip tokens read.
+SPOT_PREFIX = "Spot Preemptible "
 FAMILY_RE_CACHE: dict[str, re.Pattern] = {}
 
 
@@ -41,7 +45,14 @@ def maybe_rate_row(
     category = sku.get("category", {})
     if category.get("resourceFamily") != "Compute":
         return None
-    if category.get("usageType") != "OnDemand":
+    description = sku.get("description", "") or ""
+    usage = category.get("usageType")
+    if usage == "OnDemand":
+        pricing: Literal["on_demand", "spot"] = "on_demand"
+    elif usage == "Preemptible" and description.startswith(SPOT_PREFIX):
+        pricing = "spot"
+        description = description.removeprefix(SPOT_PREFIX)
+    else:
         return None
 
     resource_group = category.get("resourceGroup", "")
@@ -52,7 +63,6 @@ def maybe_rate_row(
     else:
         return None
 
-    description = sku.get("description", "") or ""
     if any(skip in description for skip in SKIP_TOKENS):
         return None
 
@@ -106,6 +116,7 @@ def maybe_rate_row(
         cited_price_kind="rate_hourly",
         row_kind="rate",
         rate_unit=rate_unit,
+        pricing=pricing,
     )
 
 

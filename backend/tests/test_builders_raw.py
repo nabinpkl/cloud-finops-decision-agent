@@ -68,11 +68,11 @@ def azure_item(sku, price, meter_id, region="eastus", meter=None):
     }
 
 
-def gcp_sku(sku_id, description, group, region, nanos):
+def gcp_sku(sku_id, description, group, region, nanos, usage="OnDemand"):
     return {
         "skuId": sku_id,
         "description": description,
-        "category": {"resourceFamily": "Compute", "resourceGroup": group, "usageType": "OnDemand"},
+        "category": {"resourceFamily": "Compute", "resourceGroup": group, "usageType": usage},
         "serviceRegions": [region],
         "pricingInfo": [
             {"pricingExpression": {"tieredRates": [{"unitPrice": {"currencyCode": "USD", "units": "0", "nanos": nanos}}]}}
@@ -147,7 +147,9 @@ SNAPSHOTS: dict[str, dict[str, Any]] = {
         "skus-0002.json": {
             "skus": [
                 gcp_sku("A-2", "N2 Instance Ram running in Virginia", "RAM", "us-east4", 4_237_000),
-                gcp_sku("A-3", "Spot Preemptible N2 Instance Core running in Virginia", "CPU", "us-east4", 7_000_000),
+                gcp_sku("A-3", "Spot Preemptible N2 Instance Core running in Virginia", "CPU", "us-east4", 7_000_000, "Preemptible"),
+                gcp_sku("A-4", "Spot Preemptible N2 Instance Ram running in Virginia", "RAM", "us-east4", 900_000, "Preemptible"),
+                gcp_sku("A-5", "Preemptible N2 Instance Core running in Virginia", "CPU", "us-east4", 6_000_000, "Preemptible"),
             ],
             "nextPageToken": "",
         },
@@ -185,7 +187,9 @@ SNAPSHOTS: dict[str, dict[str, Any]] = {
     },
 }
 
-EXPECTED_ROWS = {"oracle": 2, "vultr": 6, "linode": 4, "azure": 3, "gcp": 2, "ibm": 2, "aws": 1}
+# Azure and GCP each include their spot rows (one Azure spot meter, a GCP spot CPU
+# and RAM rate); GCP's legacy "Preemptible" SKU without the Spot prefix is skipped.
+EXPECTED_ROWS = {"oracle": 2, "vultr": 6, "linode": 4, "azure": 4, "gcp": 4, "ibm": 2, "aws": 1}
 
 
 @pytest.mark.parametrize("provider", sorted(SNAPSHOTS))
@@ -266,3 +270,39 @@ def test_linode_type_without_a_monthly_price_cites_its_hourly_price(store):
     base = df.filter(pl.col("region_native") != "br-gru")
     assert set(base["monthly_usd"]) == {1.5 * 730}
     assert result.report.citation_verification.failed == 0
+
+
+def test_spot_rows_are_marked_and_never_mixed_with_on_demand(store):
+    import polars as pl
+
+    from normalize.query.service import compare
+
+    for provider in ("azure", "gcp"):
+        write_raw_snapshot(store, provider, ISO, SNAPSHOTS[provider])
+        build_provider(provider)
+    azure = pl.read_parquet(store / "azure" / ISO / "index.parquet")
+    gcp = pl.read_parquet(store / "gcp" / ISO / "index.parquet")
+
+    assert azure.filter(pl.col("pricing") == "spot")["instance_type"].to_list() == ["Standard_D2s_v5"]
+    assert sorted(gcp.filter(pl.col("pricing") == "spot")["json_path"].to_list()) == [
+        "$.skus[?(@.skuId=='A-3')].pricingInfo[0].pricingExpression.tieredRates[0].unitPrice",
+        "$.skus[?(@.skuId=='A-4')].pricingInfo[0].pricingExpression.tieredRates[0].unitPrice",
+    ]
+
+    on_demand = compare(vcpu=2, ram_gb=8, region="us-east", providers=["azure"])
+    spot = compare(vcpu=2, ram_gb=8, region="us-east", providers=["azure"], pricing="spot")
+    assert on_demand["results"][0]["hourly_usd"] == 0.096
+    assert spot["results"][0]["hourly_usd"] == 0.02
+    assert spot["request"]["pricing"] == "spot"
+
+
+def test_a_spot_request_names_providers_without_spot_prices(store):
+    from normalize.query.service import compare
+
+    for provider in ("azure", "vultr"):
+        write_raw_snapshot(store, provider, ISO, SNAPSHOTS[provider])
+        build_provider(provider)
+
+    spot = compare(vcpu=2, ram_gb=4, region="us-east", providers=["azure", "vultr"], pricing="spot")
+
+    assert spot["unmet_requirements"] == [{"provider": "vultr", "reason": "no spot prices indexed"}]

@@ -32,12 +32,14 @@ def main(argv: list[str] | None = None) -> None:
     p_compare.add_argument("--family", default=ANY_FAMILY, help='Family slug from taxonomy/families.json or "any".')
     p_compare.add_argument("--providers", default=None, help="Comma-separated list. Default: aws,azure,ibm,linode,vultr.")
     p_compare.add_argument("--expand", default="cheapest", choices=["cheapest", "full"])
+    p_compare.add_argument("--pricing", default="on_demand", choices=["on_demand", "spot"])
     p_compare.add_argument("--pretty", default="true", choices=["true", "false"])
 
     p_lookup = sub.add_parser("lookup", help="Look up one instance type's price.")
     p_lookup.add_argument("--provider", required=True)
     p_lookup.add_argument("--instance-type", required=True)
     p_lookup.add_argument("--region", required=True, help="Canonical bucket or provider-native code.")
+    p_lookup.add_argument("--pricing", default="on_demand", choices=["on_demand", "spot"])
     p_lookup.add_argument("--pretty", default="true", choices=["true", "false"])
 
     args = parser.parse_args(argv)
@@ -51,12 +53,14 @@ def main(argv: list[str] | None = None) -> None:
             family=args.family,
             providers=providers,
             expand=args.expand,
+            pricing=args.pricing,
         )
     elif args.cmd == "lookup":
         result = lookup(
             provider=args.provider,
             instance_type=args.instance_type,
             region=args.region,
+            pricing=args.pricing,
         )
     else:
         parser.error(f"unknown command {args.cmd!r}")

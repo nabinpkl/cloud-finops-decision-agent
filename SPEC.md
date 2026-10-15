@@ -62,13 +62,26 @@ result = compare(
     family="general-purpose",        # optional; defaults to "any"
     providers=None,                  # optional; default all 7
     expand="cheapest",               # "cheapest" or "full"
+    pricing="on_demand",             # "on_demand" (default) or "spot"
 )
 
 result = lookup(
     provider="aws",
     instance_type="m5.xlarge",
     region="eu-central-1",
+    pricing="on_demand",             # "on_demand" (default) or "spot"
 )
+```
+
+`pricing` picks the market: every index row carries `pricing` ("on_demand" or
+"spot") and only rows of the requested market compete, so a spot price never
+answers an on-demand question. Spot prices are indexed for GCP (Spot VM rates,
+usage type `Preemptible` with the "Spot Preemptible" description prefix) and
+Azure (meters whose name ends in "Spot"); for the other providers a spot request
+reports `no spot prices indexed` under `unmet_requirements`. The response's
+`request.pricing` echoes the market.
+
+```
 ```
 
 ### FastAPI
@@ -81,16 +94,18 @@ POST /compare
   "region": "eu-central",
   "family": "general-purpose",
   "providers": null,
-  "expand": "cheapest"
+  "expand": "cheapest",
+  "pricing": "on_demand"
 }
 
-GET /lookup?provider=aws&instance_type=m5.xlarge&region=eu-central-1
+GET /lookup?provider=aws&instance_type=m5.xlarge&region=eu-central-1&pricing=on_demand
 ```
 
 ### CLI
 
 ```
 uv run python -m normalize compare --vcpu 4 --ram 8 --region eu-central --family general-purpose
+uv run python -m normalize compare --vcpu 4 --ram 16 --region us-east --pricing spot
 uv run python -m normalize lookup --provider aws --instance-type m5.xlarge --region eu-central-1
 ```
 

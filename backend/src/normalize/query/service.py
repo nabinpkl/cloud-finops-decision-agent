@@ -24,6 +24,7 @@ from normalize.citations.build import build_citation
 from normalize.data_quality import compute_envelope
 from normalize.index import SUPPORTED_PROVIDERS
 from normalize.query.flex_synthesis import load_flex_rules
+from normalize.query.inputs import PricingMode
 from normalize.query.flex_synthesis import synthesize_rate_results
 from normalize.query.instance_ranking import (
     candidate_brief,
@@ -57,12 +58,14 @@ def compare(
     family: str = ANY_FAMILY,
     providers: list[str] | None = None,
     expand: str = "cheapest",
+    pricing: PricingMode = "on_demand",
 ) -> dict[str, Any]:
     """Return cheapest-per-provider results meeting the closest-larger policy.
 
     Match policy (per SPEC.md): the chosen candidate satisfies
     vcpu_actual >= vcpu AND ram_gb_actual >= ram_gb, smallest first, ties broken
-    by lower monthly_usd.
+    by lower monthly_usd. Only rows of the requested `pricing` market compete:
+    on-demand by default, or spot (GCP and Azure publish spot prices).
     """
     providers = _validated_providers(providers or DEFAULT_PROVIDERS)
     results: list[CompareResult] = []
@@ -74,6 +77,10 @@ def compare(
             unmet.append(UnmetRequirement(provider=provider, reason="no usable index"))
             continue
         df, snapshot_dir = loaded
+        df = df.filter(pl.col("pricing") == pricing)
+        if df.is_empty():
+            unmet.append(UnmetRequirement(provider=provider, reason=f"no {pricing} prices indexed"))
+            continue
         receipt = _read_receipt(snapshot_dir)
 
         # Atomic-instance path: filter by closest-larger and rank.
@@ -155,6 +162,7 @@ def compare(
             region=region,
             family=family,
             providers=providers,
+            pricing=pricing,
         ),
         results=results,
         unmet_requirements=unmet,
@@ -168,6 +176,7 @@ def lookup(
     provider: str,
     instance_type: str,
     region: str,
+    pricing: PricingMode = "on_demand",
 ) -> dict[str, Any]:
     """Return a single instance's price for a specific region.
 
@@ -180,6 +189,7 @@ def lookup(
         provider=provider,
         instance_type=instance_type,
         region=region,
+        pricing=pricing,
     )
     if loaded is None:
         return LookupResponse(
@@ -198,6 +208,7 @@ def lookup(
         (pl.col("instance_type") == instance_type)
         & region_filter
         & (pl.col("row_kind") == "instance")
+        & (pl.col("pricing") == pricing)
     )
 
     if matches.is_empty():
@@ -208,7 +219,7 @@ def lookup(
             unmet_requirements=[
                 UnmetRequirement(
                     provider=provider,
-                    reason=f"no priced row for {instance_type} in {region}",
+                    reason=f"no {pricing} price for {instance_type} in {region}",
                 )
             ],
         ).to_public_dict()

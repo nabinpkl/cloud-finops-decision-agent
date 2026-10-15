@@ -63,6 +63,7 @@ def _compare_tool() -> StructuredTool:
         family: str = "any",
         providers: list[str] | None = None,
         expand: str = "cheapest",
+        pricing: str = "on_demand",
     ) -> tuple[str, dict[str, Any]]:
         return run_compare_for_model(
             vcpu=vcpu,
@@ -71,6 +72,7 @@ def _compare_tool() -> StructuredTool:
             family=family,
             providers=providers,
             expand=expand,
+            pricing=pricing,
         )
 
     return StructuredTool.from_function(

@@ -19,6 +19,7 @@ from agent.security.untrusted import wrap_tool_result_json
 from agent.tools.pricing import (
     ExpandMode,
     FamilyName,
+    PricingMode,
     ProviderName,
     run_compare as _run_compare,
 )
@@ -43,6 +44,7 @@ def _compare_for_model(
     family: FamilyName = "any",
     providers: list[ProviderName] | None = None,
     expand: ExpandMode = "cheapest",
+    pricing: PricingMode = "on_demand",
 ) -> str:
     result = _run_compare(
         vcpu=vcpu,
@@ -51,6 +53,7 @@ def _compare_for_model(
         family=family,
         providers=providers,
         expand=expand,
+        pricing=pricing,
     )
     return wrap_tool_result_json("compare", result)
 
@@ -63,6 +66,7 @@ def compare(
     family: FamilyName = "any",
     providers: list[ProviderName] | None = None,
     expand: ExpandMode = "cheapest",
+    pricing: PricingMode = "on_demand",
 ) -> str:
     """Rank cloud providers by cheapest instance matching a vCPU/RAM spec.
 
@@ -82,6 +86,9 @@ def compare(
             set (aws, gcp, azure, oracle, vultr, linode, ibm).
         expand: "cheapest" returns one result per provider; "full" also includes
             the per-provider ranked candidate list under `considered`.
+        pricing: "on_demand" (default) or "spot". Spot prices exist only for gcp
+            and azure, and spot capacity can be reclaimed at any time; use it
+            only when the user asks for spot or interruptible capacity.
     """
     return _compare_for_model(
         vcpu=vcpu,
@@ -90,6 +97,7 @@ def compare(
         family=family,
         providers=providers,
         expand=expand,
+        pricing=pricing,
     )
 
 

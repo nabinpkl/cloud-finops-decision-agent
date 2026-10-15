@@ -48,7 +48,7 @@ def test_renamed_price_field_is_rejected_and_the_old_index_keeps_serving(store):
     result = build_provider("azure")
 
     assert not result.success
-    assert result.report.missing_fields == {"retailPrice": 3}
+    assert result.report.missing_fields == {"retailPrice": 4}
     assert "fields_missing" in result.report.flags
     assert not (store / "azure" / NEW / "index.parquet").exists()
     assert (store / "azure" / NEW / "index.rejected.parquet").exists()

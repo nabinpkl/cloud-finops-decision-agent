@@ -13,7 +13,9 @@ normalize/taxonomy/flex_rules.json.
 Filter:
 - category.resourceFamily == "Compute"
 - category.resourceGroup IN ("CPU", "RAM")
-- category.usageType == "OnDemand"
+- category.usageType == "OnDemand" (pricing "on_demand"), or "Preemptible" with
+  the "Spot Preemptible " description prefix (pricing "spot"; the prefix is
+  stripped before the checks below)
 - description: NOT containing "Sole Tenancy", "Custom", "DWS Defined Duration",
   "Reserved", "Spot", "Sustained Use Discount", "Preemptible"
 - description matches a known family from flex_rules.json

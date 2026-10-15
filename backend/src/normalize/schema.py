@@ -28,6 +28,10 @@ class SchemaModel(BaseModel):
 #   - "rate" rows (GCP, Oracle): hourly_usd is a per-unit rate (per vCPU/hour or
 #     per GB-RAM/hour). vcpu and ram_gb are null. rate_unit names the unit.
 # Readers MUST branch on row_kind before aggregating prices.
+#
+# `pricing` says which market the price is for: "on_demand" (pay as you go) or
+# "spot" (GCP Spot and Azure Spot capacity, reclaimable at any time). Readers
+# MUST filter on it; a spot price is never an answer to an on-demand question.
 INDEX_SCHEMA: dict[str, DataTypeClass] = {
     "provider":             pl.String,
     "snapshot_iso":         pl.String,
@@ -36,6 +40,7 @@ INDEX_SCHEMA: dict[str, DataTypeClass] = {
     "region_native":        pl.String,
     "region_canonical":     pl.String,        # nullable; null when outside the 3 v0 buckets
     "row_kind":             pl.String,        # "instance" or "rate" (ADR 0007)
+    "pricing":              pl.String,        # "on_demand" | "spot"
     "rate_unit":            pl.String,        # null for instance rows; "per_vcpu_hour"|"per_gb_ram_hour"|"per_ocpu_hour" for rate rows
     "vcpu":                 pl.Int32,         # null for rate rows
     "ram_gb":               pl.Float64,       # null for rate rows
@@ -70,6 +75,7 @@ class IndexRow(SchemaModel):
     vcpu: int | None = None
     ram_gb: float | None = None
     row_kind: Literal["instance", "rate"] = "instance"
+    pricing: Literal["on_demand", "spot"] = "on_demand"
     rate_unit: Literal["per_vcpu_hour", "per_ocpu_hour", "per_gb_ram_hour"] | None = None
 
     def as_record(self) -> dict[str, Any]:

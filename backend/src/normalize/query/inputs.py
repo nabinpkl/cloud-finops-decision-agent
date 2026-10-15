@@ -11,6 +11,8 @@ from normalize.index import SUPPORTED_PROVIDERS
 ProviderName = Literal["aws", "gcp", "azure", "oracle", "vultr", "linode", "ibm"]
 FamilyName = Literal["any", "general-purpose", "compute-optimized", "memory-optimized"]
 ExpandMode = Literal["cheapest", "full"]
+# "spot" prices exist for GCP and Azure only; other providers report no candidate.
+PricingMode = Literal["on_demand", "spot"]
 
 PLAIN_SELECTOR_FORBIDDEN = ("/", "\\", "..", "<", ">")
 
@@ -30,13 +32,14 @@ class CompareQueryArgs(PricingInputModel):
         max_length=len(SUPPORTED_PROVIDERS),
     )
     expand: ExpandMode = "cheapest"
+    pricing: PricingMode = "on_demand"
 
     @field_validator("region", mode="before")
     @classmethod
     def _strip_region(cls, value: object) -> object:
         return _strip_string(value)
 
-    @field_validator("family", "expand", mode="before")
+    @field_validator("family", "expand", "pricing", mode="before")
     @classmethod
     def _strip_literal(cls, value: object) -> object:
         return _strip_string(value)
@@ -72,8 +75,9 @@ class LookupQueryArgs(PricingInputModel):
     provider: ProviderName
     instance_type: str = Field(min_length=1, max_length=128)
     region: str = Field(min_length=1, max_length=64)
+    pricing: PricingMode = "on_demand"
 
-    @field_validator("provider", "instance_type", "region", mode="before")
+    @field_validator("provider", "instance_type", "region", "pricing", mode="before")
     @classmethod
     def _strip_string_fields(cls, value: object) -> object:
         return _strip_string(value)
