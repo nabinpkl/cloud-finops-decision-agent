@@ -192,3 +192,36 @@ def test_azure_stops_when_next_links_never_end(store, monkeypatch):
     with pytest.raises(IngestError, match="more than 5 pages"):
         run(azure.fetch, "azure", handler)
     assert len(calls) == 5
+
+
+def test_ibm_fetches_a_plan_listed_twice_once(store):
+    pricing_calls: list[str] = []
+
+    def handler(request):
+        path = request.url.path
+        if path.endswith("/api/v1"):
+            return body({"resources": [{"name": n, "id": n} for n in ibm.COMPUTE_SERVICE_NAMES], "next": None})
+        if path.endswith("/pricing/deployment"):
+            pricing_calls.append(path)
+            return body({"resources": []})
+        return body({"resources": [{"id": "dup"}, {"id": "dup"}], "next": None})
+
+    run(ibm.fetch, "ibm", handler)
+
+    assert pricing_calls.count("/api/v1/dup/pricing/deployment") == 1
+
+
+def test_oracle_refuses_a_200_that_is_not_json(store):
+    with pytest.raises(IngestError, match="not JSON"):
+        run(oracle.fetch, "oracle", lambda r: httpx.Response(200, content=b"oops"))
+
+
+def test_gcp_key_is_trimmed_and_checked(monkeypatch, capsys):
+    monkeypatch.setattr(gcp, "load_dotenv_if_present", lambda: None)
+    monkeypatch.setenv("GCP_API_KEY", "AIzaGoodKey_123-x \n")
+    assert gcp.api_key() == "AIzaGoodKey_123-x"
+
+    monkeypatch.setenv("GCP_API_KEY", "AIza bad key")
+    with pytest.raises(SystemExit):
+        gcp.api_key()
+    assert "AIza bad key" not in capsys.readouterr().out

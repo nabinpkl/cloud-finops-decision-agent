@@ -29,6 +29,7 @@ from ingest._shared import (
     IngestError,
     Pacer,
     RetryCallback,
+    register_secret,
     emit,
     fetch_polite,
     ingest_settings,
@@ -82,6 +83,9 @@ class RawSnapshot:
         self.directory = directory
         self.resumed = resumed
         self._done = done
+        # One download per file name at a time: a second caller for the same name
+        # (IBM listing a plan twice) waits for the first instead of racing it.
+        self._name_locks: dict[str, asyncio.Lock] = {}
         # One pacer for the whole run, so every request to a host shares its pace and pauses.
         self.pacer = Pacer()
 
@@ -97,6 +101,8 @@ class RawSnapshot:
                 window = timedelta(hours=ingest_settings.resume_window_hours)
                 if now_utc() - started < window:
                     done = _read_progress(unfinished)
+                    for partial in unfinished.glob("*.part"):
+                        partial.unlink()
                     log(provider, f"resuming {_display(unfinished)} with {len(done)} files already fetched")
                     return cls(provider=provider, directory=unfinished, done=done, resumed=True)
                 log(provider, f"leaving unfinished fetch {_display(unfinished)}: started over {window} ago")
@@ -120,10 +126,18 @@ class RawSnapshot:
         return self.directory / name
 
     def read_json(self, name: str) -> Any:
-        """Parse a stored response. Fetchers use this only for the next request's input."""
+        """Parse a stored response. Fetchers use this only for the next request's input.
+
+        A file that is not JSON (a maintenance page served with 200) is taken off the
+        done list and deleted before the error, so the next run fetches it again
+        instead of resuming past it forever."""
         if name not in self._done:
             raise IngestError(f"{name} has not been fetched into {_display(self.directory)}")
-        return orjson.loads(self.path(name).read_bytes())
+        try:
+            return orjson.loads(self.path(name).read_bytes())
+        except orjson.JSONDecodeError as exc:
+            self._forget(name)
+            raise IngestError(f"{name}: the provider's response is not JSON ({exc}); it will be fetched again") from exc
 
     async def fetch(
         self,
@@ -133,12 +147,26 @@ class RawSnapshot:
         *,
         params: dict | None = None,
         timeout: float | None = None,
+        deadline: float | None = None,
     ) -> RawFile:
         """Fetch url into `name` unless an earlier run of this snapshot already did."""
-        if name in self._done:
-            return self._done[name]
         if not FILE_NAME_RE.match(name) or name in (PROGRESS_FILE, RECEIPT_FILE):
             raise IngestError(f"refusing raw file name {name!r}")
+        async with self._name_locks.setdefault(name, asyncio.Lock()):
+            if name in self._done:
+                return self._done[name]
+            return await self._fetch_new(client, name, url, params=params, timeout=timeout, deadline=deadline)
+
+    async def _fetch_new(
+        self,
+        client: httpx.AsyncClient,
+        name: str,
+        url: str,
+        *,
+        params: dict | None,
+        timeout: float | None,
+        deadline: float | None,
+    ) -> RawFile:
         fetched = await fetch_polite(
             client,
             url,
@@ -146,8 +174,16 @@ class RawSnapshot:
             pacer=self.pacer,
             params=params,
             timeout=timeout,
+            deadline=deadline,
             on_retry=self._on_retry(name),
         )
+        content_type = fetched.headers.get("content-type", "")
+        if fetched.size_bytes == 0 or content_type.lower().startswith("text/html"):
+            fetched.path.unlink()
+            raise IngestError(
+                f"{name}: provider answered {fetched.status} with "
+                f"{'an empty body' if fetched.size_bytes == 0 else 'an HTML page'}, not data"
+            )
         record = RawFile(
             name=name,
             url=fetched.url,
@@ -185,6 +221,14 @@ class RawSnapshot:
         self.path(PROGRESS_FILE).unlink()
         return receipt
 
+    def _forget(self, name: str) -> None:
+        """Take a stored file off the done list and the progress log, and delete it."""
+        self._done.pop(name, None)
+        self.path(name).unlink(missing_ok=True)
+        tmp = self.path(PROGRESS_FILE + ".part")
+        tmp.write_text("".join(json.dumps(asdict(record)) + "\n" for record in self._done.values()))
+        tmp.replace(self.path(PROGRESS_FILE))
+
     def _on_retry(self, name: str) -> RetryCallback:
         def report(attempt: int, reason: str, wait: float) -> None:
             log(self.provider, f"{name} attempt {attempt}: {reason}; waiting {wait:.1f}s")
@@ -221,9 +265,12 @@ def make_client(allowed_hosts: frozenset[str], headers: dict[str, str] | None = 
         if request.url.scheme != "https" or request.url.host not in allowed_hosts:
             raise IngestError(f"refusing request to {request.url.scheme}://{request.url.host}: not in {sorted(allowed_hosts)}")
 
+    for value in (headers or {}).values():
+        register_secret(value)
     return httpx.AsyncClient(
         headers=headers or {},
         follow_redirects=True,
+        max_redirects=ingest_settings.http_max_redirects,
         event_hooks={"request": [check_host]},
         **kwargs,
     )
@@ -241,10 +288,12 @@ def run_ingest(
     allowed_hosts: frozenset[str],
     hint: str,
     description: str,
-    client_headers: dict[str, str] | None = None,
-    check_ready: Callable[[], object] | None = None,
+    client_headers: Callable[[], dict[str, str]] | None = None,
 ) -> NoReturn:
-    """The CLI every provider module shares: freshness rule, fetch, receipt, JSON out."""
+    """The CLI every provider module shares: freshness rule, fetch, receipt, JSON out.
+
+    `client_headers` is a factory, called once the freshness rule has decided a fetch
+    is needed; it may emit an error and exit (GCP's missing key)."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--force", action="store_true", help="Bypass the 24h freshness rule.")
     parser.add_argument(
@@ -259,23 +308,26 @@ def run_ingest(
         if latest is not None and is_fresh(latest, ingest_settings.snapshot_freshness):
             emit(json.loads(latest.read_text()))
 
-    if check_ready is not None:
-        check_ready()
+    # Built only after the freshness check, so a fresh snapshot needs no credentials.
+    headers = client_headers() if client_headers is not None else {}
 
-    snapshot = RawSnapshot.start(provider, fresh=args.fresh)
+    try:
+        snapshot = RawSnapshot.start(provider, fresh=args.fresh)
+    except IngestError as exc:
+        emit({"success": False, "provider": provider, "error": str(exc), "hint": "pass --fresh to start a new snapshot"}, code=1)
 
     async def go() -> None:
-        async with make_client(allowed_hosts, client_headers) as client:
+        async with make_client(allowed_hosts, headers) as client:
             await fetch(snapshot, client)
 
     try:
         asyncio.run(go())
-    except (httpx.HTTPError, IngestError) as exc:
+    except (httpx.HTTPError, IngestError, TimeoutError) as exc:
         emit(
             {
                 "success": False,
                 "provider": provider,
-                "error": str(exc),
+                "error": str(exc) or type(exc).__name__,
                 "hint": hint,
                 "store_dir": _display(snapshot.directory),
                 "files_fetched": snapshot.file_count,
@@ -302,12 +354,21 @@ def _newest_unfinished(root: Path) -> Path | None:
 
 def _read_progress(directory: Path) -> dict[str, RawFile]:
     done: dict[str, RawFile] = {}
-    for line in (directory / PROGRESS_FILE).read_text().splitlines():
+    for number, line in enumerate((directory / PROGRESS_FILE).read_text().splitlines(), start=1):
         if not line.strip():
             continue
-        record = RawFile(**json.loads(line))
+        try:
+            record = RawFile(**json.loads(line))
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise IngestError(
+                f"{_display(directory / PROGRESS_FILE)} line {number} is unreadable ({exc}); "
+                "pass --fresh to start a new snapshot"
+            ) from exc
         if not (directory / record.name).is_file():
-            raise IngestError(f"{_display(directory)}: progress lists {record.name} but the file is missing")
+            raise IngestError(
+                f"{_display(directory)}: progress lists {record.name} but the file is missing; "
+                "pass --fresh to start a new snapshot"
+            )
         done[record.name] = record
     return done
 

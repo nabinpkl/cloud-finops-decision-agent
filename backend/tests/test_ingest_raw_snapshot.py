@@ -172,3 +172,94 @@ def test_client_follows_a_redirect_only_on_the_same_host():
     with pytest.raises(IngestError, match="evil.test"):
         get_via(hosts, handler, "https://api.example.test/moved-away")
     assert not any("evil.test" in url for url in seen)
+
+
+def test_two_fetches_of_one_name_send_one_request(store):
+    snapshot = RawSnapshot.start("ibm")
+    calls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        await asyncio.sleep(0.01)
+        return httpx.Response(200, content=b'{"resources": []}')
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await asyncio.gather(
+                snapshot.fetch(client, "pricing-p1.json", "https://x.test/p1"),
+                snapshot.fetch(client, "pricing-p1.json", "https://x.test/p1"),
+            )
+
+    asyncio.run(go())
+
+    assert len(calls) == 1
+    receipt = snapshot.finish(service="x", source_url="https://x.test")
+    import hashlib
+
+    assert receipt.files[0].sha256 == hashlib.sha256(snapshot.path("pricing-p1.json").read_bytes()).hexdigest()
+
+
+def test_an_html_page_with_200_is_not_stored(store):
+    snapshot = RawSnapshot.start("oracle")
+    page = httpx.Response(200, content=b"<html>Down for maintenance</html>", headers={"Content-Type": "text/html"})
+
+    with pytest.raises(IngestError, match="HTML page"):
+        fetch_all(snapshot, lambda r: page, [("products.json", "https://x.test/p")])
+    assert snapshot.done("products.json") is None
+    assert not snapshot.path("products.json").exists()
+
+
+def test_a_page_that_is_not_json_is_fetched_again_on_the_next_run(store):
+    first = RawSnapshot.start("azure")
+    fetch_all(first, lambda r: httpx.Response(200, content=b"not json"), [("eastus-0001.json", "https://x.test/a")])
+    with pytest.raises(IngestError, match="not JSON"):
+        first.read_json("eastus-0001.json")
+
+    second = RawSnapshot.start("azure")
+    calls: list[str] = []
+
+    def good(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, content=b'{"Items": []}')
+
+    fetch_all(second, good, [("eastus-0001.json", "https://x.test/a")])
+
+    assert second.resumed and calls == ["https://x.test/a"]
+    assert second.read_json("eastus-0001.json") == {"Items": []}
+
+
+def test_resume_clears_partial_files(store):
+    first = RawSnapshot.start("gcp")
+    (first.directory / "skus-0002.json.part").write_bytes(b"half")
+
+    RawSnapshot.start("gcp")
+
+    assert not (first.directory / "skus-0002.json.part").exists()
+
+
+def test_a_corrupt_progress_log_names_the_way_out(store):
+    first = RawSnapshot.start("gcp")
+    (first.directory / PROGRESS_FILE).write_text('{"name": "skus-0001.json", "url"\n')
+
+    with pytest.raises(IngestError, match="--fresh"):
+        RawSnapshot.start("gcp")
+
+
+def test_redirect_chains_are_short(store):
+    calls: list[str] = []
+
+    def loop(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(302, headers={"Location": "https://api.example.test/again"})
+
+    with pytest.raises(httpx.TooManyRedirects):
+        get_via(frozenset({"api.example.test"}), loop, "https://api.example.test/start")
+    assert len(calls) == shared.ingest_settings.http_max_redirects + 1
+
+
+def test_an_empty_body_is_not_stored(store):
+    snapshot = RawSnapshot.start("vultr")
+
+    with pytest.raises(IngestError, match="empty body"):
+        fetch_all(snapshot, lambda r: httpx.Response(204), [("plans-0001.json", "https://x.test/p")])
+    assert snapshot.done("plans-0001.json") is None

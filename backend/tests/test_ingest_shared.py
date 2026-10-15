@@ -215,3 +215,115 @@ def test_host_pacer_spaces_request_starts(no_waiting):
     asyncio.run(three())
 
     assert no_waiting == [0.5, 1.0]
+
+
+def test_a_pause_that_lands_while_waiting_is_honored(monkeypatch):
+    pacer = HostPacer(min_interval=0.0, clock=lambda: 100.0)
+    pacer.pause(2.0)
+    slept: list[float] = []
+
+    async def sleep_while_a_sibling_gets_a_429(seconds: float) -> None:
+        slept.append(seconds)
+        if len(slept) == 1:
+            pacer.pause(9.0)
+
+    monkeypatch.setattr(shared.asyncio, "sleep", sleep_while_a_sibling_gets_a_429)
+
+    asyncio.run(pacer.wait_turn())
+
+    assert slept == [2.0, 9.0]
+
+
+def test_the_final_429_still_pauses_the_host(tmp_path, no_waiting):
+    pacer = frozen_pacer()
+    with pytest.raises(httpx.HTTPStatusError):
+        run(sequence(httpx.Response(429, headers={"Retry-After": "7"})), tmp_path / "a.json", pacer=pacer, max_retries=0)
+
+    run(sequence(httpx.Response(200, content=b"{}")), tmp_path / "b.json", pacer=pacer)
+
+    assert no_waiting == [7.0]
+
+
+def test_a_retry_after_over_the_cap_still_pauses_the_host(tmp_path, no_waiting):
+    pacer = frozen_pacer()
+    with pytest.raises(IngestError):
+        run(sequence(httpx.Response(429, headers={"Retry-After": "3600"})), tmp_path / "a.json", pacer=pacer, max_retry_after=300)
+
+    run(sequence(httpx.Response(200, content=b"{}")), tmp_path / "b.json", pacer=pacer)
+
+    assert no_waiting == [300.0]
+
+
+def test_a_transport_error_pauses_the_host(tmp_path, no_waiting):
+    pacer = frozen_pacer()
+    run(sequence(httpx.ConnectError("reset"), httpx.Response(200, content=b"{}")), tmp_path / "a.json", pacer=pacer, initial_backoff=2.0)
+
+    assert len(no_waiting) == 1 and 2.0 <= no_waiting[0] <= 2.5
+
+
+def test_a_3xx_that_was_not_followed_is_not_stored(tmp_path):
+    with pytest.raises(httpx.HTTPStatusError):
+        run(sequence(httpx.Response(304)), tmp_path / "p.json")
+    assert not (tmp_path / "p.json").exists()
+
+
+def test_our_own_malformed_request_is_not_retried(tmp_path):
+    handler = sequence(httpx.LocalProtocolError("Illegal header value"), httpx.Response(200, content=b"{}"))
+
+    with pytest.raises(httpx.LocalProtocolError):
+        run(handler, tmp_path / "p.json")
+    assert len(handler.calls) == 1
+
+
+def test_an_attempt_past_its_deadline_is_retried(tmp_path):
+    class Stalls(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"{"
+            await asyncio.Event().wait()  # the server stops sending, but keeps the connection
+
+    handler = sequence(httpx.Response(200, stream=Stalls()), httpx.Response(200, content=b"{}"))
+
+    run(handler, tmp_path / "p.json", deadline=0.05)
+
+    assert len(handler.calls) == 2
+    assert (tmp_path / "p.json").read_bytes() == b"{}"
+
+
+def test_error_bodies_are_read_only_up_to_the_cap(tmp_path):
+    chunks_sent: list[int] = []
+
+    class Huge(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            for n in range(10_000):
+                chunks_sent.append(n)
+                yield b"x" * 1024
+
+    with pytest.raises(httpx.HTTPStatusError):
+        run(sequence(httpx.Response(404, stream=Huge())), tmp_path / "p.json")
+
+    assert len(chunks_sent) == 1
+
+
+def test_secrets_are_scrubbed_from_logs_and_output(capsys):
+    shared.register_secret("AIzaTESTKEY")
+    shared.log("gcp", "LocalProtocolError: Illegal header value b'AIzaTESTKEY '")
+    with pytest.raises(SystemExit):
+        shared.emit({"error": "header AIzaTESTKEY rejected"}, code=1)
+
+    out = capsys.readouterr()
+    assert "AIzaTESTKEY" not in out.err + out.out
+    assert "[redacted]" in out.err and "[redacted]" in out.out
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("INGEST_HTTP_MAX_RETRIES", "-1"), ("INGEST_HTTP_INITIAL_BACKOFF_SECONDS", "0"), ("INGEST_MAX_PAGES", "0")],
+)
+def test_settings_refuse_values_that_would_burst_or_send_nothing(monkeypatch, name, value):
+    from pydantic import ValidationError
+
+    from ingest.config import IngestSettings
+
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError):
+        IngestSettings()

@@ -47,6 +47,7 @@ async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
                 region_file(region),
                 PRICING_HOST + offers[region]["currentVersionUrl"],
                 timeout=ingest_settings.http_large_timeout_seconds,
+                deadline=ingest_settings.http_large_attempt_deadline_seconds,
             )
             for region in REGIONS
         )

@@ -22,6 +22,9 @@ PRODUCTS_FILE = "products.json"
 
 async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
     await snapshot.fetch(client, PRODUCTS_FILE, PRICELIST_URL, timeout=ingest_settings.http_timeout_seconds)
+    # Nothing else reads this single response during the fetch, so check here that it
+    # is JSON; a 200 maintenance page would otherwise land in a successful receipt.
+    snapshot.read_json(PRODUCTS_FILE)
 
 
 def main() -> None:

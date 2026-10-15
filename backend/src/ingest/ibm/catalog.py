@@ -51,7 +51,8 @@ async def fetch(snapshot: RawSnapshot, client: httpx.AsyncClient) -> None:
             f"{CATALOG_BASE}/{service['id']}/%2A",
             lambda n, s=service_name: children_page_name(s, n),
         )
-        plan_ids = [plan_id for plan in plans if (plan_id := plan.get("id"))]
+        # dict.fromkeys keeps order and drops a plan the catalog listed twice.
+        plan_ids = list(dict.fromkeys(plan_id for plan in plans if (plan_id := plan.get("id"))))
         await asyncio.gather(*(_pricing(snapshot, client, plan_id, sem) for plan_id in plan_ids))
 
 

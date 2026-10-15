@@ -55,20 +55,38 @@ the first 100 of 138 plans because it ignored paging.
    its `RateLimit-Reset` (seconds or epoch). `Retry-After` is read as seconds or
    an HTTP date and never waits less than our own backoff, so `Retry-After: 0`
    is not a burst; a wait over `INGEST_HTTP_MAX_RETRY_AFTER_SECONDS` (300) fails
-   the fetch rather than stalling it. Backoff has jitter.
+   the fetch rather than stalling it. The pause is applied before a request
+   gives up (last attempt, or a wait over the cap), and a request already
+   waiting its turn rechecks for a pause that landed while it slept. A
+   transport error or an attempt past its whole-attempt deadline
+   (`INGEST_HTTP_ATTEMPT_DEADLINE_SECONDS`, 600; 3600 for AWS region files)
+   pauses the host for the backoff too. httpx.LocalProtocolError, our own
+   malformed request, is never retried. Backoff has jitter. Settings are
+   bounded at load, so a zero backoff or a negative retry count fails startup.
 5. **Paging cannot run away, and requests stay on the provider's hosts.** Every
    paging loop refuses a next token or link it has seen before and stops past
    `INGEST_MAX_PAGES` (1000). The client sends requests only over https to the
    provider's own hosts, so a redirect or a provider-supplied next link that
    points elsewhere fails the fetch before anything (GCP's `X-goog-api-key`
-   header included, which httpx keeps on cross-host redirects) is sent.
-6. **Only an accepted index is served.** The build writes `index.parquet.part`,
+   header included, which httpx keeps on cross-host redirects) is sent, and a
+   redirect chain longer than `INGEST_HTTP_MAX_REDIRECTS` (3) fails. Header
+   credentials are registered as secrets and scrubbed from every log line and
+   emitted JSON; GCP's key is trimmed and checked for header-safe characters
+   before use.
+6. **Only whole data counts as a finished file.** Only a 2xx with a non-empty,
+   non-HTML body is stored; one download per file name runs at a time, so a
+   name requested twice (IBM listing a plan twice) is fetched once. A stored
+   page that is not JSON is taken off the progress log and deleted when read,
+   so the next run fetches it again rather than resuming past it. Resume
+   clears leftover `.part` files, and an unreadable progress log fails with a
+   pointer to `--fresh`. Error bodies are read only up to 500 bytes.
+7. **Only an accepted index is served.** The build writes `index.parquet.part`,
    runs the gates, and renames it to `index.parquet` only on pass; a rejected
    build is kept as `index.rejected.parquet`, the previous accepted snapshot
    keeps serving, and the data-quality envelope says so with
    `index_rebuild_failed_fell_back`. Row-count and fingerprint baselines come
    only from accepted snapshots.
-7. **Builders account for what they skip.** A *candidate* is a record the
+8. **Builders account for what they skip.** A *candidate* is a record the
    builder's policy wants priced; a candidate missing a field it needs counts
    against that field. More than 1% missing flags `fields_missing`; more than 5%
    rejects the build. Zero candidates (`no_candidates`) or zero rows also reject
