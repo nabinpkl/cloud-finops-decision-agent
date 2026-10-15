@@ -99,9 +99,12 @@ the first 100 of 138 plans because it ignored paging.
 - A partial fetch is resumable and costs only the missing requests.
 - Snapshots from before this ADR (May 2026) cannot be indexed; the builders
   refuse their receipts. They are refetched, not converted.
-- The AWS schema fingerprint is still per SKU key and runs to ~1.5 GB per
-  snapshot; ADR 0004's fingerprint needs map-key collapsing before it is useful
-  for AWS. Not changed here.
+- The schema fingerprint (ADR 0004) now tells records from maps: an object keyed
+  by data (AWS SKUs and offer codes, IBM plan UUIDs, region codes, or more than
+  64 keys) collapses to one `{*}` path with a few values walked in sorted order.
+  The AWS fingerprint went from ~1.5 GB per snapshot, different with every new
+  SKU, to 88 entries in 0.1 s, walking 8 levels so the AWS price leaf (`pricePerUnit.USD`) is covered. Fingerprints carry `version: 2`; an older one is
+  not compared, and is skipped after reading its first bytes.
 - GCP and Azure spot prices are now in the stored pages; indexing them is a
   separate builder and taxonomy decision.
 

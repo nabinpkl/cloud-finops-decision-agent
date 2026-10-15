@@ -169,8 +169,8 @@ Where the build differs from the plan above:
   with identical row counts for all seven providers (aws 2880, azure 2598, gcp 1022, ibm
   1255, linode 337, vultr 271, oracle 14), every sampled citation resolving, and 0% missing
   fields. The gates are 1% to warn and 5% to reject.
-- **Not changed:** the AWS schema fingerprint is per SKU key (~1.5 GB per snapshot) and
-  dominates AWS index time (~5 minutes); ADR 0018 records it as a follow-up.
+- **AWS fingerprint:** it was per SKU key (~1.5 GB per snapshot) and dominated AWS index
+  time (~5 minutes). The walker now collapses data-keyed maps and walks 8 levels (down to `pricePerUnit.USD`); 88 entries in 0.1 s.
 
 Step 12 remains: `just refresh-all`, then `just compare 4 16 us-east`, one `lookup` per
 provider, and one citation walked by hand per provider. The May directories then move out
