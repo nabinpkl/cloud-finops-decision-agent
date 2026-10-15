@@ -15,7 +15,7 @@ In coding agent mode, read the repo-local context before editing:
 1. `README.md` for project purpose, setup, and current status.
 2. `PRD.md` for product scope and non-goals.
 3. `SPEC.md` for technical contracts and data shapes.
-4. `architecture-decisions/README.md` plus any ADR relevant to the files being changed.
+4. `docs/adr/README.md` plus any ADR relevant to the files being changed.
 
 Coding rules:
 
@@ -28,6 +28,7 @@ Coding rules:
 - Keep docs split by ownership: `README.md` for users, `PRD.md` for intent, `SPEC.md` for technical contracts, `AGENTS.md` for agent behavior.
 - Write tests only for desired behavior of the current architecture; do not write tests that assert the absence of previous architectural patterns; add/refer to ADRs for historical context.”
 - No backward comptability shims and silent fallbacks required on v0.
+- Ingest is raw first. An ingest module writes each provider response to `store/<provider>/<ISO>/` byte for byte, one file per request or page, through a temp file renamed into place. It reads only what the next request needs (a page token, a next link, AWS's region index) and never filters, merges or re-serializes a response. `receipt.json` is written last and lists each file's request URL, status, key headers (Date, ETag or Last-Modified, rate-limit) and the sha256 of the bytes received; a snapshot directory without a receipt is an unfinished fetch to resume, not a snapshot. Filtering, normalizing, indexing and citations read those files offline in `backend/src/normalize/`, so a parser fix or an upstream field rename is `just index-force <provider>`, never a refetch. Only AWS follows this today; [docs/plans/0001-raw-first-ingest.md](docs/plans/0001-raw-first-ingest.md) migrates the other six and closes the fetch and index gaps found alongside.
 
 
 ## Price / cloud agent mode
