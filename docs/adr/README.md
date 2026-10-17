@@ -28,6 +28,7 @@ Format follows Michael Nygard's original: Context, Decision, Status, Consequence
 | [0016](0016-ag-ui-transport.md) | AG-UI transport for the agent surface; FastAPI as an AG-UI server; assistant-ui via the AG-UI adapter | Accepted (implementation pending) |
 | [0017](0017-agent-composed-query-shapes.md) | Agent-composed query shapes over aggregation primitives in normalize | Accepted (implementation pending) |
 | [0018](0018-raw-first-ingest.md) | Ingest stores provider bytes unchanged; parsing happens offline | Accepted |
+| [0019](0019-native-currency-and-gpu-columns.md) | Prices stay in the currency published; GPU types are their own dimension | Accepted |
 
 ## When to write an ADR
 

@@ -115,6 +115,8 @@ Closest-larger across both dimensions: the chosen candidate satisfies `vcpu >= r
 
 When no candidate satisfies the request (e.g. user asked 256 vCPU but no provider has it in that family), the per-provider entry is null and the response notes `unmet_requirement`.
 
+A vCPU and RAM request is a CPU question: types in the taxonomy's `gpu` family, and rows that name GPUs (`gpu_count`), never answer it. Ranking is in USD. Per ADR 0019 prices are stored in the currency the provider published (`hourly_usd`/`monthly_usd`, or `hourly_eur`/`monthly_eur` for EUR-only sources) and never converted, so a provider whose matching rows are all EUR is listed in `unmet_requirements` as "only EUR prices match; not ranked against USD prices". lookup answers in USD for types with a vCPU and RAM figure and names the reason when a type is EUR-only or priced per GPU.
+
 ### Response shape (`compare`)
 
 ```json
@@ -188,9 +190,12 @@ The citation block on every result entry is the project's only ground-truth cont
   "store_path": "string, store/<provider>/<ISO>/<file>, the raw provider response holding the price",
   "json_path": "string, JSONPath into that file pointing at the price node",
   "fetched_at": "string, ISO 8601 UTC with trailing Z",
-  "age_hours": "number, computed at response time"
+  "age_hours": "number, computed at response time",
+  "price_scale": "number, present only when not 1: the quoted price is the value at json_path times price_scale"
 }
 ```
+
+`price_scale` covers sources whose cited number is in another unit than the quoted price: OVHcloud publishes integers in 1e-8 of a currency unit (`6050000` is $0.0605), and Scaleway prices some GPU types per minute (scale 60). The index stores it as `cited_price_scale`, and the build-time verifier checks `value * scale` against the cited column.
 
 `age_hours` is computed as `(now_utc() - parse(fetched_at)).total_seconds() / 3600`. AGENTS.md spells out the UTC-aware parsing pitfall; the normalization layer is the canonical implementation.
 

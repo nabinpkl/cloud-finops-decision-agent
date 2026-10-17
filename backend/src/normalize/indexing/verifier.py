@@ -1,7 +1,8 @@
 """Citation round-trip verifier per ADR 0003.
 
 For a sample of parquet rows, re-loads the raw JSON store_path, resolves the
-json_path, and asserts the value equals the price recorded. Returns a
+json_path, and asserts the value times the row's cited_price_scale equals the
+price in the column its cited_price_kind names. Returns a
 CitationVerification with the sample size, pass/fail counts, and any failures.
 
 The verifier is the build-time integrity gate on the citation contract: a
@@ -17,7 +18,7 @@ import orjson
 from jsonpath_ng.ext import parse as jsonpath_parse
 
 from normalize.config import normalize_settings
-from normalize.schema import CitationVerification, IndexRow
+from normalize.schema import CITED_COLUMN, CitationVerification, IndexRow
 from normalize.snapshot_files import resolve_store_path
 
 # Sampling: every snapshot's index is verified on up to N rows, deterministic
@@ -47,8 +48,9 @@ def verify(rows: list[IndexRow], *, sample_cap: int = SAMPLE_CAP) -> CitationVer
             if not matches:
                 _record_failure(result, row, reason="json_path resolved to nothing")
                 continue
-            resolved = _extract_price(matches[0])
-            recorded = row.monthly_usd if row.cited_price_kind == "monthly" else row.hourly_usd
+            value = _extract_price(matches[0])
+            resolved = None if value is None else value * row.cited_price_scale
+            recorded = getattr(row, CITED_COLUMN[row.cited_price_kind])
             if resolved is None or recorded is None:
                 _record_failure(
                     result,

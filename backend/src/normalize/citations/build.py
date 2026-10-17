@@ -10,10 +10,12 @@ from normalize.snapshot_time import snapshot_age_hours
 
 def build_citation(row: dict[str, Any], receipt: dict[str, Any]) -> CitationBlock:
     fetched_at = str(receipt.get("fetched_at", ""))
+    scale = row.get("cited_price_scale")
     return CitationBlock(
         source_url=str(row.get("source_url", "")),
         store_path=str(row.get("store_path", "")),
         json_path=str(row.get("json_path", "")),
         fetched_at=fetched_at,
         age_hours=snapshot_age_hours(fetched_at),
+        price_scale=None if scale is None or scale == 1.0 else float(scale),
     )

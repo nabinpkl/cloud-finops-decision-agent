@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Any, Literal
 
 import polars as pl
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from polars.datatypes import DataTypeClass
 
 
@@ -32,6 +32,22 @@ class SchemaModel(BaseModel):
 # `pricing` says which market the price is for: "on_demand" (pay as you go) or
 # "spot" (GCP Spot and Azure Spot capacity, reclaimable at any time). Readers
 # MUST filter on it; a spot price is never an answer to an on-demand question.
+#
+# Prices are stored in the currency the provider published them in, never
+# converted (ADR 0019): `hourly_usd`/`monthly_usd` for USD sources,
+# `hourly_eur`/`monthly_eur` for sources that publish only EUR (Scaleway, OVHcloud
+# Europe). A row carries one currency. Readers comparing prices MUST stay within
+# one currency.
+#
+# `gpu_model`, `gpu_count` and `gpu_memory_gb` describe the accelerators a type
+# includes, as the provider names them; null when the type has none or the source
+# does not say. A GPU-priced type may have no vCPU or RAM figure (RunPod prices
+# the GPU).
+#
+# `cited_price_scale` turns the number at `json_path` into the cited column:
+# column = value_at_json_path * cited_price_scale. It is 1 for most sources;
+# OVHcloud publishes integers in 1e-8 of a currency unit (1e-8), and Scaleway
+# prices some GPU types per minute (60).
 INDEX_SCHEMA: dict[str, DataTypeClass] = {
     "provider":             pl.String,
     "snapshot_iso":         pl.String,
@@ -46,10 +62,25 @@ INDEX_SCHEMA: dict[str, DataTypeClass] = {
     "ram_gb":               pl.Float64,       # null for rate rows
     "hourly_usd":           pl.Float64,       # per-instance for "instance" rows; per-unit for "rate" rows
     "monthly_usd":          pl.Float64,       # per-instance for "instance" rows; null for "rate" rows (rates are inherently hourly)
+    "hourly_eur":           pl.Float64,       # set instead of hourly_usd when the source publishes only EUR
+    "monthly_eur":          pl.Float64,
+    "gpu_model":            pl.String,        # null when the type has no GPU or the source does not name it
+    "gpu_count":            pl.Int32,
+    "gpu_memory_gb":        pl.Float64,       # per GPU
     "source_url":           pl.String,
     "store_path":           pl.String,
     "json_path":            pl.String,        # JSONPath into store_path resolving to the price node
-    "cited_price_kind":     pl.String,        # "hourly" | "monthly" | "rate_hourly"; tells the verifier which column the json_path leaf equals
+    "cited_price_kind":     pl.String,        # "hourly" | "monthly" | "rate_hourly" | "hourly_eur" | "monthly_eur"; the column the json_path leaf gives
+    "cited_price_scale":    pl.Float64,       # column = json_path value * scale; 1 unless the source uses another unit
+}
+
+# The column each cited_price_kind names.
+CITED_COLUMN: dict[str, str] = {
+    "hourly": "hourly_usd",
+    "monthly": "monthly_usd",
+    "rate_hourly": "hourly_usd",
+    "hourly_eur": "hourly_eur",
+    "monthly_eur": "monthly_eur",
 }
 
 
@@ -71,12 +102,31 @@ class IndexRow(SchemaModel):
     source_url: str
     store_path: str
     json_path: str
-    cited_price_kind: Literal["hourly", "monthly", "rate_hourly"]
+    cited_price_kind: Literal["hourly", "monthly", "rate_hourly", "hourly_eur", "monthly_eur"]
     vcpu: int | None = None
     ram_gb: float | None = None
     row_kind: Literal["instance", "rate"] = "instance"
     pricing: Literal["on_demand", "spot"] = "on_demand"
     rate_unit: Literal["per_vcpu_hour", "per_ocpu_hour", "per_gb_ram_hour"] | None = None
+    hourly_eur: float | None = None
+    monthly_eur: float | None = None
+    gpu_model: str | None = None
+    gpu_count: int | None = Field(default=None, ge=1)
+    gpu_memory_gb: float | None = Field(default=None, gt=0)
+    cited_price_scale: float = Field(default=1.0, gt=0)
+
+    @model_validator(mode="after")
+    def _one_currency_and_a_cited_price(self) -> IndexRow:
+        has_usd = self.hourly_usd is not None or self.monthly_usd is not None
+        has_eur = self.hourly_eur is not None or self.monthly_eur is not None
+        if has_usd and has_eur:
+            raise ValueError(f"{self.provider} {self.instance_type}: a row carries one currency, not USD and EUR")
+        if getattr(self, CITED_COLUMN[self.cited_price_kind]) is None:
+            raise ValueError(
+                f"{self.provider} {self.instance_type}: cites {self.cited_price_kind} "
+                f"but {CITED_COLUMN[self.cited_price_kind]} is empty"
+            )
+        return self
 
     def as_record(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

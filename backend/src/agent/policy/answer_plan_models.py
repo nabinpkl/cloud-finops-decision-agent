@@ -23,6 +23,8 @@ class SourceCitation(AnswerPlanModel):
     source_url: str
     json_path: str
     snapshot: SnapshotRef
+    # Copied from the tool result when it carries one: price = value * price_scale.
+    price_scale: float | None = None
 
 
 class CompositeCitation(AnswerPlanModel):

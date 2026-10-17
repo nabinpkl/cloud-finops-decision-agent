@@ -30,6 +30,7 @@ from normalize.query.instance_ranking import (
     candidate_brief,
     filter_instance_rows,
     rank_instance_rows,
+    usd_priced,
 )
 from normalize.query.loader import load_latest
 from normalize.query.models import (
@@ -83,8 +84,8 @@ def compare(
             continue
         receipt = _read_receipt(snapshot_dir)
 
-        # Atomic-instance path: filter by closest-larger and rank.
-        candidates = filter_instance_rows(
+        # Atomic-instance path: filter by closest-larger and rank in USD.
+        matching = filter_instance_rows(
             df=df,
             region=region,
             family=family,
@@ -93,6 +94,7 @@ def compare(
             provider=provider,
             any_family=ANY_FAMILY,
         )
+        candidates = usd_priced(matching)
         instance_winner: CompareResult | None = None
         if not candidates.is_empty():
             ranked = rank_instance_rows(candidates)
@@ -133,12 +135,12 @@ def compare(
             per_provider.append(instance_winner)
         per_provider.extend(synthesized)
         if not per_provider:
-            unmet.append(
-                UnmetRequirement(
-                    provider=provider,
-                    reason="no candidate meets vcpu and ram_gb",
-                )
+            reason = (
+                "only EUR prices match; not ranked against USD prices"
+                if not matching.is_empty()
+                else "no candidate meets vcpu and ram_gb"
             )
+            unmet.append(UnmetRequirement(provider=provider, reason=reason))
             continue
         per_provider.sort(key=lambda r: (r.monthly_usd or float("inf"), r.hourly_usd or float("inf")))
         results.append(per_provider[0])
@@ -225,6 +227,14 @@ def lookup(
         ).to_public_dict()
 
     row = matches.row(0, named=True)
+    not_served = _lookup_not_served(row)
+    if not_served is not None:
+        return LookupResponse(
+            request=request,
+            result=None,
+            data_quality=compute_envelope([provider]),
+            unmet_requirements=[UnmetRequirement(provider=provider, reason=not_served)],
+        ).to_public_dict()
     citation = build_citation(row, receipt)
     return LookupResponse(
         request=request,
@@ -245,6 +255,17 @@ def lookup(
 
 
 # ---------- helpers ----------
+
+
+def _lookup_not_served(row: dict[str, Any]) -> str | None:
+    """Why lookup cannot answer with this row, or None when it can. lookup answers in
+    USD for a type with a vCPU and RAM figure; EUR-only and GPU-priced types are
+    indexed but not served here yet (ADR 0019)."""
+    if row["hourly_usd"] is None and row["monthly_usd"] is None:
+        return f"{row['instance_type']} is priced in EUR only; lookup answers in USD"
+    if row["vcpu"] is None or row["ram_gb"] is None:
+        return f"{row['instance_type']} is priced per GPU with no vCPU or RAM figure; lookup does not serve GPU prices yet"
+    return None
 
 
 def _validated_providers(providers: list[str]) -> list[str]:

@@ -209,3 +209,15 @@ def test_missing_data_unmet_claim_must_match_tool_result():
     violations = validate_answer_plan(plan, [tool_result])
 
     assert any(violation.name == "answer_plan_unmet_binding" for violation in violations)
+
+
+def test_a_scaled_citation_binds_only_with_its_scale():
+    result = _tool_result()
+    result["results"][0]["citation"]["price_scale"] = 1e-8  # type: ignore[index]
+    without = AnswerPlan.model_validate(_answer_plan())
+    data = _answer_plan()
+    data["price_claims"][0]["citation"]["price_scale"] = 1e-8  # type: ignore[index]
+    with_scale = AnswerPlan.model_validate(data)
+
+    assert any(v.name == "answer_plan_citation_binding" for v in validate_answer_plan(without, [result]))
+    assert validate_answer_plan(with_scale, [result]) == []

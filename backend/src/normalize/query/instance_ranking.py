@@ -9,6 +9,9 @@ import polars as pl
 from normalize.query.models import CandidateBrief
 
 
+GPU_FAMILY = "gpu"
+
+
 def filter_instance_rows(
     *,
     df: pl.DataFrame,
@@ -19,11 +22,18 @@ def filter_instance_rows(
     provider: str,
     any_family: str,
 ) -> pl.DataFrame:
-    """Apply the closest-larger filter for one provider's instance rows."""
+    """Apply the closest-larger filter for one provider's instance rows.
+
+    A vCPU and RAM question is a CPU question: types with GPUs (the taxonomy's gpu
+    family, or a row that names its GPUs) never answer it, or a cheap old GPU box
+    would rank as the cheapest general-purpose machine. Rows of every currency
+    pass; the caller picks one currency to rank."""
     region_filter = (pl.col("region_canonical") == region) | (pl.col("region_native") == region)
     out = df.filter(
         (pl.col("provider") == provider)
         & (pl.col("row_kind") == "instance")
+        & (pl.col("family") != GPU_FAMILY)
+        & pl.col("gpu_count").is_null()
         & region_filter
         & (pl.col("vcpu").is_not_null())
         & (pl.col("ram_gb").is_not_null())
@@ -33,6 +43,11 @@ def filter_instance_rows(
     if family != any_family:
         out = out.filter(pl.col("family") == family)
     return out
+
+
+def usd_priced(rows: pl.DataFrame) -> pl.DataFrame:
+    """Rows with a USD price. EUR-only rows are never ranked against USD (ADR 0019)."""
+    return rows.filter(pl.col("hourly_usd").is_not_null() | pl.col("monthly_usd").is_not_null())
 
 
 def rank_instance_rows(candidates: pl.DataFrame) -> pl.DataFrame:

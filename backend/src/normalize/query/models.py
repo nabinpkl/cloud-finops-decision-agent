@@ -23,6 +23,9 @@ class CitationBlock(QueryModel):
     json_path: str
     fetched_at: str
     age_hours: float
+    # Present when the number at json_path is in another unit than the quoted
+    # price: price = value * price_scale (OVHcloud publishes 1e-8 units).
+    price_scale: float | None = None
 
 
 class CompositeCitationEntry(QueryModel):

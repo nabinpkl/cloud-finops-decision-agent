@@ -286,6 +286,7 @@ def _source_citation_matches(claim_citation: SourceCitation, row_citation: dict[
         claim_citation.source_url == row_citation.get("source_url")
         and claim_citation.json_path == row_citation.get("json_path")
         and claim_citation.snapshot.model_dump() == row_citation.get("snapshot")
+        and claim_citation.price_scale == row_citation.get("price_scale")
     )
 
 
