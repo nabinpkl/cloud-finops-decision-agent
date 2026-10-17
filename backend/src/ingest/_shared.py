@@ -235,6 +235,7 @@ async def fetch_polite(
     *,
     pacer: Pacer,
     params: dict | None = None,
+    json_body: dict | None = None,
     timeout: float | None = None,
     max_retries: int | None = None,
     initial_backoff: float | None = None,
@@ -243,7 +244,8 @@ async def fetch_polite(
     deadline: float | None = None,
     on_retry: RetryCallback | None = None,
 ) -> FetchedFile:
-    """GET url and stream the body to dest byte for byte, retrying what is worth retrying.
+    """GET url (or POST `json_body` to it) and stream the response to dest byte for
+    byte, retrying what is worth retrying.
 
     Every attempt waits its turn on the host's pacer. Retries 429, 5xx and
     transport errors (connection reset, timeout, protocol error). A 429 or 5xx
@@ -271,7 +273,11 @@ async def fetch_polite(
         last = attempt == max_retries
         await host.wait_turn()
         try:
-            async with asyncio.timeout(deadline), client.stream("GET", url, params=params, timeout=timeout) as resp:
+            method = "GET" if json_body is None else "POST"
+            async with (
+                asyncio.timeout(deadline),
+                client.stream(method, url, params=params, json=json_body, timeout=timeout) as resp,
+            ):
                 status = resp.status_code
                 spent = rate_limit_wait(resp.headers, time.time())
                 if spent is not None:

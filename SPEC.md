@@ -266,6 +266,8 @@ Ingest stores every provider response byte for byte, one file per request or pag
 }
 ```
 
+A file fetched by POST (RunPod's GraphQL query) also carries `request_body`, the JSON body sent, so the request can be repeated exactly.
+
 Builders read only the files the receipt lists, and refuse a receipt without `receipt_version: 2` or a file whose size differs from its entry. The index build writes `index_report.json` beside them; besides the ADR 0004 coverage fields it carries `candidates` (records the builder's policy wants priced), `missing_fields` (field name to count of candidates it could not price because that field was absent or empty), `missing_field_pct`, and `accepted`. Only an accepted build becomes `index.parquet`; a rejected one is kept as `index.rejected.parquet` and the previous accepted snapshot keeps serving.
 
 ### data_quality envelope

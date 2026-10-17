@@ -58,6 +58,9 @@ class RawFile:
     sha256: str
     size_bytes: int
     fetched_at: str
+    # The JSON body POSTed to `url`, for the few sources whose answer depends on
+    # it (RunPod's GraphQL query). Absent for GET requests.
+    request_body: str | None = None
 
 
 @dataclass(frozen=True)
@@ -146,16 +149,20 @@ class RawSnapshot:
         url: str,
         *,
         params: dict | None = None,
+        json_body: dict | None = None,
         timeout: float | None = None,
         deadline: float | None = None,
     ) -> RawFile:
-        """Fetch url into `name` unless an earlier run of this snapshot already did."""
+        """Fetch url into `name` unless an earlier run of this snapshot already did.
+        With `json_body` the request is a POST of that body, recorded in the receipt."""
         if not FILE_NAME_RE.match(name) or name in (PROGRESS_FILE, RECEIPT_FILE):
             raise IngestError(f"refusing raw file name {name!r}")
         async with self._name_locks.setdefault(name, asyncio.Lock()):
             if name in self._done:
                 return self._done[name]
-            return await self._fetch_new(client, name, url, params=params, timeout=timeout, deadline=deadline)
+            return await self._fetch_new(
+                client, name, url, params=params, json_body=json_body, timeout=timeout, deadline=deadline
+            )
 
     async def _fetch_new(
         self,
@@ -164,6 +171,7 @@ class RawSnapshot:
         url: str,
         *,
         params: dict | None,
+        json_body: dict | None,
         timeout: float | None,
         deadline: float | None,
     ) -> RawFile:
@@ -173,6 +181,7 @@ class RawSnapshot:
             self.path(name),
             pacer=self.pacer,
             params=params,
+            json_body=json_body,
             timeout=timeout,
             deadline=deadline,
             on_retry=self._on_retry(name),
@@ -192,6 +201,7 @@ class RawSnapshot:
             sha256=fetched.sha256,
             size_bytes=fetched.size_bytes,
             fetched_at=iso_z(now_utc()),
+            request_body=None if json_body is None else json.dumps(json_body, sort_keys=True),
         )
         with self.path(PROGRESS_FILE).open("a") as fh:
             fh.write(json.dumps(asdict(record)) + "\n")
@@ -220,6 +230,12 @@ class RawSnapshot:
         tmp.replace(self.path(RECEIPT_FILE))
         self.path(PROGRESS_FILE).unlink()
         return receipt
+
+    def refuse(self, name: str, why: str) -> NoReturn:
+        """Drop a stored response that parsed but is not the data asked for (a GraphQL
+        error answered with 200), so the next run fetches it again, and fail."""
+        self._forget(name)
+        raise IngestError(f"{name}: {why}; it will be fetched again")
 
     def _forget(self, name: str) -> None:
         """Take a stored file off the done list and the progress log, and delete it."""
