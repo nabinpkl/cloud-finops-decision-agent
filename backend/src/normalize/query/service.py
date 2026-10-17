@@ -27,6 +27,7 @@ from normalize.query.flex_synthesis import load_flex_rules
 from normalize.query.inputs import PricingMode
 from normalize.query.flex_synthesis import synthesize_rate_results
 from normalize.query.instance_ranking import (
+    GPU_FAMILY,
     candidate_brief,
     filter_instance_rows,
     rank_instance_rows,
@@ -45,7 +46,10 @@ from normalize.query.models import (
 )
 from normalize.taxonomy.loader import family_dimensions
 
-DEFAULT_PROVIDERS = ["aws", "azure", "ibm", "linode", "vultr", "gcp", "oracle"]
+# The providers a USD vCPU and RAM compare can draw on. Scaleway (EUR only) and
+# RunPod (GPU only) never answer that question, so they join a compare only when
+# named, and then say why they have no result (ADR 0019).
+DEFAULT_PROVIDERS = ["aws", "azure", "ibm", "linode", "vultr", "gcp", "oracle", "ovh", "exoscale", "cherryservers"]
 SUPPORTED_PROVIDER_SET = set(SUPPORTED_PROVIDERS)
 ANY_FAMILY = "any"
 HOURS_PER_MONTH = 730.0
@@ -81,6 +85,9 @@ def compare(
         df = df.filter(pl.col("pricing") == pricing)
         if df.is_empty():
             unmet.append(UnmetRequirement(provider=provider, reason=f"no {pricing} prices indexed"))
+            continue
+        if df.filter((pl.col("family") != GPU_FAMILY) & pl.col("gpu_count").is_null()).is_empty():
+            unmet.append(UnmetRequirement(provider=provider, reason="prices GPU types only; not a vCPU and RAM match"))
             continue
         receipt = _read_receipt(snapshot_dir)
 
@@ -135,12 +142,7 @@ def compare(
             per_provider.append(instance_winner)
         per_provider.extend(synthesized)
         if not per_provider:
-            reason = (
-                "only EUR prices match; not ranked against USD prices"
-                if not matching.is_empty()
-                else "no candidate meets vcpu and ram_gb"
-            )
-            unmet.append(UnmetRequirement(provider=provider, reason=reason))
+            unmet.append(UnmetRequirement(provider=provider, reason=_no_result_reason(df, matching, region)))
             continue
         per_provider.sort(key=lambda r: (r.monthly_usd or float("inf"), r.hourly_usd or float("inf")))
         results.append(per_provider[0])
@@ -255,6 +257,17 @@ def lookup(
 
 
 # ---------- helpers ----------
+
+
+def _no_result_reason(df: pl.DataFrame, matching: pl.DataFrame, region: str) -> str:
+    """Why a provider has no compare result. Rate rows (GCP, Oracle) are priced for
+    any region, so only an instance-priced provider can lack the region itself."""
+    if not matching.is_empty():
+        return "only EUR prices match; not ranked against USD prices"
+    in_region = (pl.col("region_canonical") == region) | (pl.col("region_native") == region)
+    if df.filter(pl.col("row_kind") == "rate").is_empty() and df.filter(in_region).is_empty():
+        return f"no prices indexed in {region}"
+    return "no candidate meets vcpu and ram_gb"
 
 
 def _lookup_not_served(row: dict[str, Any]) -> str | None:

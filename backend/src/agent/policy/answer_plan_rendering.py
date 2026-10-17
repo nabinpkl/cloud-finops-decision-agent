@@ -119,6 +119,11 @@ def _provider_label(provider: str) -> str:
         "vultr": "Vultr",
         "linode": "Linode",
         "ibm": "IBM",
+        "scaleway": "Scaleway",
+        "ovh": "OVHcloud",
+        "exoscale": "Exoscale",
+        "cherryservers": "Cherry Servers",
+        "runpod": "RunPod",
     }
     return labels.get(provider, provider)
 

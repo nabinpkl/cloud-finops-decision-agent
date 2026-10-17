@@ -82,12 +82,15 @@ def compare(
             native id). The query layer maps to per-provider native regions.
         family: Instance family filter ("any", "general-purpose",
             "compute-optimized", "memory-optimized").
-        providers: Subset of providers to compare; default is the v0 7-provider
-            set (aws, gcp, azure, oracle, vultr, linode, ibm).
+        providers: Subset of providers to compare; default is every provider
+            with USD CPU prices (aws, gcp, azure, oracle, vultr, linode, ibm,
+            ovh, exoscale, cherryservers). scaleway (EUR only) and runpod (GPU
+            only) answer only with the reason they have no result.
         expand: "cheapest" returns one result per provider; "full" also includes
             the per-provider ranked candidate list under `considered`.
-        pricing: "on_demand" (default) or "spot". Spot prices exist only for gcp
-            and azure, and spot capacity can be reclaimed at any time; use it
+        pricing: "on_demand" (default) or "spot". Spot prices exist only for gcp,
+            azure and some cherryservers bare metal, and spot capacity can be
+            reclaimed at any time; use it
             only when the user asks for spot or interruptible capacity.
     """
     return _compare_for_model(

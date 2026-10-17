@@ -155,7 +155,7 @@ a refetch.
 
 ### Providers
 
-Seven providers are in v0:
+Twelve providers are indexed:
 
 - AWS,
 - GCP,
@@ -163,7 +163,12 @@ Seven providers are in v0:
 - Oracle,
 - Vultr,
 - Linode,
-- IBM.
+- IBM,
+- OVHcloud,
+- Exoscale,
+- Cherry Servers,
+- Scaleway (EUR prices only),
+- RunPod (GPU prices only).
 
 Why these providers:
 
@@ -172,6 +177,13 @@ Why these providers:
 - Vultr and Linode add smaller independent-provider catalogs.
 - Linode adds explicit per-region override pricing.
 - IBM adds a hierarchical three-hop catalog walk to reach real regional prices.
+- OVHcloud, Exoscale and Cherry Servers add European and bare metal providers with
+  public price lists; Cherry Servers also sells some bare metal as spot.
+- Scaleway and OVHcloud's European regions publish EUR only. Prices are stored in
+  the currency published and never converted (ADR 0019), so compare ranks USD and
+  lists EUR-only matches as unranked.
+- RunPod prices GPUs per GPU-hour. GPU types from every new provider carry model,
+  count and GPU memory, and never answer a vCPU and RAM question.
 
 Deferred providers:
 
@@ -207,8 +219,8 @@ Then open a Claude Code session in this repo and ask a pricing question naturall
 
 ### One credential to provision
 
-AWS, Azure, Oracle, Vultr, Linode, and IBM expose the v0 pricing data through
-public endpoints with no auth.
+AWS, Azure, Oracle, Vultr, Linode, IBM, Scaleway, OVHcloud, Exoscale, Cherry
+Servers and RunPod expose their pricing data through public endpoints with no auth.
 
 Only GCP requires an API key for quota tracking, even though the catalog data is
 public. Set `GCP_API_KEY` in `.env` per `.env.example`.
@@ -234,7 +246,7 @@ public. Set `GCP_API_KEY` in `.env` per `.env.example`.
 
 Built:
 
-- ingest modules for all 7 v0 providers,
+- ingest modules for all 12 providers,
 - IBM's three-hop walk to per-region compute pricing,
 - parquet indexes per provider,
 - citation-verified prices,
@@ -254,8 +266,8 @@ Example:
 just compare 4 8 eu-central general-purpose
 ```
 
-That returns all 7 providers ranked by monthly cost, with citation blocks and a
-`data_quality` envelope.
+That returns every provider with USD CPU prices ranked by monthly cost, with
+citation blocks and a `data_quality` envelope.
 
 Remaining v0 work:
 

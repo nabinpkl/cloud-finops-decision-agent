@@ -22,7 +22,10 @@ from normalize.schema import IndexReport
 from normalize.indexing.verifier import verify
 from normalize.snapshot_files import require_raw_receipt
 
-SUPPORTED_PROVIDERS = ["linode", "vultr", "azure", "ibm", "aws", "gcp", "oracle"]  # all v0 providers
+SUPPORTED_PROVIDERS = [
+    "linode", "vultr", "azure", "ibm", "aws", "gcp", "oracle",
+    "scaleway", "ovh", "exoscale", "cherryservers", "runpod",
+]
 
 
 @dataclass

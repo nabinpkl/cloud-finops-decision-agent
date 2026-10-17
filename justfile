@@ -12,7 +12,7 @@ backend:
 fetch provider:
     just -f {{backend_just}} -d {{backend}} fetch {{provider}}
 
-# Fetch every provider in the v0 set.
+# Fetch every provider.
 fetch-all:
     just -f {{backend_just}} -d {{backend}} fetch-all
 
@@ -24,7 +24,7 @@ fetch-force provider:
 refresh provider:
     just -f {{backend_just}} -d {{backend}} refresh {{provider}}
 
-# Refresh every provider in the v0 set.
+# Refresh every provider.
 refresh-all:
     just -f {{backend_just}} -d {{backend}} refresh-all
 

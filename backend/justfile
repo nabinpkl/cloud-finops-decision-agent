@@ -5,8 +5,8 @@ default:
 fetch provider:
     uv run python -m ingest.{{provider}}
 
-# Fetch every provider in the v0 set.
-fetch-all: (fetch "aws") (fetch "gcp") (fetch "azure") (fetch "oracle") (fetch "vultr") (fetch "linode") (fetch "ibm")
+# Fetch every provider.
+fetch-all: (fetch "aws") (fetch "gcp") (fetch "azure") (fetch "oracle") (fetch "vultr") (fetch "linode") (fetch "ibm") (fetch "scaleway") (fetch "ovh") (fetch "exoscale") (fetch "cherryservers") (fetch "runpod")
 
 # Force a refetch ignoring the 24h freshness rule.
 fetch-force provider:
@@ -15,8 +15,8 @@ fetch-force provider:
 # Fetch one provider (unless fresh) and build its index, so no snapshot sits unindexed.
 refresh provider: (fetch provider) (index provider)
 
-# Refresh every provider in the v0 set.
-refresh-all: (refresh "aws") (refresh "gcp") (refresh "azure") (refresh "oracle") (refresh "vultr") (refresh "linode") (refresh "ibm")
+# Refresh every provider.
+refresh-all: (refresh "aws") (refresh "gcp") (refresh "azure") (refresh "oracle") (refresh "vultr") (refresh "linode") (refresh "ibm") (refresh "scaleway") (refresh "ovh") (refresh "exoscale") (refresh "cherryservers") (refresh "runpod")
 
 # Build the parquet index for one provider's latest snapshot.
 index provider:
@@ -27,7 +27,7 @@ index-force provider:
     uv run python -m normalize.index {{provider}} --force
 
 # Build indexes for every provider that has a supported builder.
-index-all: (index "linode") (index "vultr") (index "azure") (index "ibm") (index "aws") (index "gcp") (index "oracle")
+index-all: (index "linode") (index "vultr") (index "azure") (index "ibm") (index "aws") (index "gcp") (index "oracle") (index "scaleway") (index "ovh") (index "exoscale") (index "cherryservers") (index "runpod")
 
 # Compare cheapest matching instance across providers.
 # Example: just compare 4 8 eu-central general-purpose

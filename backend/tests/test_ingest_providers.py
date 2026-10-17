@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 import ingest._shared as shared
-from ingest import aws, azure, gcp, linode, oracle, vultr
+from ingest import aws, azure, cherryservers, exoscale, gcp, linode, oracle, ovh, runpod, scaleway, vultr
 from ingest._shared import IngestError
 from ingest.ibm import catalog as ibm
 from ingest.raw_snapshot import RawSnapshot
@@ -225,3 +225,82 @@ def test_gcp_key_is_trimmed_and_checked(monkeypatch, capsys):
     with pytest.raises(SystemExit):
         gcp.api_key()
     assert "AIza bad key" not in capsys.readouterr().out
+
+
+def test_scaleway_pages_until_total_count(store):
+    def handler(request):
+        params = query(request)
+        assert params["product_types"] == "instance"
+        page = int(params["page"])
+        return body({"products": [{"sku": f"p{page}"}] * (100 if page < 3 else 7), "total_count": 207})
+
+    snapshot = run(scaleway.fetch, "scaleway", handler)
+
+    assert snapshot.file_count == 3
+    assert snapshot.path("products-0003.json").exists()
+
+
+def test_scaleway_fails_loud_on_an_empty_page_before_the_total(store):
+    with pytest.raises(IngestError, match="empty page"):
+        run(scaleway.fetch, "scaleway", lambda r: body({"products": [], "total_count": 5}))
+
+
+def test_ovh_fetches_one_catalog_per_subsidiary(store):
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.host, query(request)["ovhSubsidiary"]))
+        return body({"locale": {"currencyCode": "USD"}, "addons": []})
+
+    snapshot = run(ovh.fetch, "ovh", handler)
+
+    assert seen == [("api.us.ovhcloud.com", "US"), ("api.ovh.com", "FR")]
+    assert snapshot.path("catalog-us.json").exists() and snapshot.path("catalog-fr.json").exists()
+
+
+def test_exoscale_stores_pricing_and_instance_types(store):
+    def handler(request):
+        if request.url.host == "portal.exoscale.com":
+            return body({"usd": {"running_medium": "0.04666000"}})
+        return body({"instance-types": []})
+
+    snapshot = run(exoscale.fetch, "exoscale", handler)
+
+    assert snapshot.file_count == 2
+
+
+def test_cherryservers_asks_for_usd(store):
+    def handler(request):
+        assert query(request) == {"currency": "USD"}
+        return body([])
+
+    assert run(cherryservers.fetch, "cherryservers", handler).path("plans.json").read_text() == "[]"
+
+
+def test_runpod_posts_its_query_and_records_it(store):
+    def handler(request):
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"query": runpod.QUERY}
+        return body({"data": {"gpuTypes": []}})
+
+    snapshot = run(runpod.fetch, "runpod", handler)
+
+    record = snapshot.done("gpu-types.json")
+    assert record is not None and record.request_body is not None
+    assert json.loads(record.request_body) == {"query": runpod.QUERY}
+
+
+def test_runpod_refuses_a_graphql_error_and_drops_it(store):
+    def handler(request):
+        return body({"errors": [{"message": "blocked"}]})
+
+    snapshot = RawSnapshot.start("runpod")
+    with pytest.raises(IngestError, match="without data.gpuTypes"):
+
+        async def go():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                await runpod.fetch(snapshot, client)
+
+        asyncio.run(go())
+    assert snapshot.done("gpu-types.json") is None
+    assert not snapshot.path("gpu-types.json").exists()

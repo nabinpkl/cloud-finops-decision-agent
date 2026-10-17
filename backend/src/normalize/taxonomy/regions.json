@@ -1,7 +1,7 @@
 {
   "_meta": {
     "version": "v0",
-    "description": "Canonical region buckets that all 7 v0 providers serve. The normalization layer accepts either the canonical key (us-east, eu-central, ap-southeast) or any provider-native code on input, and always emits the provider-native code in `region_native` on output. See SPEC.md for the schema.",
+    "description": "Canonical region buckets that the providers serve. The normalization layer accepts either the canonical key (us-east, eu-central, ap-southeast) or any provider-native code on input, and always emits the provider-native code in `region_native` on output. See SPEC.md for the schema.",
     "schema": {
       "<canonical>.label": "Human-readable label for the bucket.",
       "<canonical>.providers.<provider>": "Provider-native region code that maps to this canonical bucket. NULL means the provider does not operate in the bucket.",
@@ -25,7 +25,17 @@
       "vultr": "ewr",
       "vultr_notes": "Newark, NJ. Closest US-east point of presence in the Vultr catalog. Price is global per plan.",
       "linode": "us-east",
-      "linode_notes": "Newark, NJ. Base price applies; this region is not in region_prices[] overrides."
+      "linode_notes": "Newark, NJ. Base price applies; this region is not in region_prices[] overrides.",
+      "scaleway": null,
+      "scaleway_notes": "Scaleway has no US region.",
+      "ovh": "US-EAST-VA-1",
+      "ovh_notes": "Vint Hill, Virginia. Priced in USD by OVHcloud's US subsidiary (catalog-us.json).",
+      "exoscale": null,
+      "exoscale_notes": "Exoscale operates in Europe only.",
+      "cherryservers": null,
+      "cherryservers_notes": "Cherry Servers' only US region is US-Chicago (central, not east).",
+      "runpod": null,
+      "runpod_notes": "RunPod publishes one price per GPU type for every data center; its rows sit at region global."
     }
   },
   "eu-central": {
@@ -44,7 +54,17 @@
       "vultr": "fra",
       "vultr_notes": "Frankfurt. Price is global per plan.",
       "linode": "eu-central",
-      "linode_notes": "Frankfurt. Base price applies; this region is not in region_prices[] overrides."
+      "linode_notes": "Frankfurt. Base price applies; this region is not in region_prices[] overrides.",
+      "scaleway": "fr-par-1",
+      "scaleway_notes": "Paris zone 1. Scaleway has no Frankfurt zone; prices are EUR only, so Scaleway is not ranked against USD (ADR 0019).",
+      "ovh": "DE1",
+      "ovh_notes": "Frankfurt. Priced in EUR by OVHcloud's FR subsidiary (catalog-fr.json), so not ranked against USD (ADR 0019).",
+      "exoscale": "de-fra-1",
+      "exoscale_notes": "Frankfurt. Exoscale publishes one price for every zone.",
+      "cherryservers": "DE-Frankfurt",
+      "cherryservers_notes": "Frankfurt. Price is global per plan; regions are availability.",
+      "runpod": null,
+      "runpod_notes": "RunPod publishes one price per GPU type for every data center; its rows sit at region global."
     }
   },
   "ap-southeast": {
@@ -63,7 +83,17 @@
       "vultr": "sgp",
       "vultr_notes": "Singapore. Price is global per plan.",
       "linode": "ap-south",
-      "linode_notes": "Singapore. Base price applies; this region is not in region_prices[] overrides (id-cgk and br-gru are the only overrides in v0)."
+      "linode_notes": "Singapore. Base price applies; this region is not in region_prices[] overrides (id-cgk and br-gru are the only overrides in v0).",
+      "scaleway": null,
+      "scaleway_notes": "Scaleway has no Asia-Pacific region.",
+      "ovh": "SGP1",
+      "ovh_notes": "Singapore. Priced in EUR by OVHcloud's FR subsidiary, so not ranked against USD (ADR 0019).",
+      "exoscale": null,
+      "exoscale_notes": "Exoscale operates in Europe only.",
+      "cherryservers": "SG-Singapore",
+      "cherryservers_notes": "Singapore. Price is global per plan; regions are availability.",
+      "runpod": null,
+      "runpod_notes": "RunPod publishes one price per GPU type for every data center; its rows sit at region global."
     }
   }
 }

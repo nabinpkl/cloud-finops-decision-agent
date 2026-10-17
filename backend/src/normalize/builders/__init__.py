@@ -12,8 +12,8 @@ priced because a field it needs is absent or empty counts against that field in
 candidates, which is how an upstream rename shows up. Records our policy skips on
 purpose (Windows, spot, a family outside v0) are neither candidates nor missing.
 
-All schema knowledge for the seven providers lives in this package (per
-ADR 0002). Ingest fetches; builders translate."""
+All schema knowledge for the providers lives in this package (per ADR 0002).
+Ingest fetches; builders translate."""
 
 from __future__ import annotations
 
@@ -23,6 +23,9 @@ from pathlib import Path
 from typing import Protocol
 
 from normalize.schema import IndexRow
+
+# Hours in the month every builder uses to turn an hourly price into a monthly one.
+HOURS_PER_MONTH = 730.0
 
 
 @dataclass

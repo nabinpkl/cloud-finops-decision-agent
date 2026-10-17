@@ -17,14 +17,20 @@ import { cn } from "@/lib/utils";
 // wrapper (comparison-table.tsx) renders this same component, so both surfaces
 // are byte-identical. Reads only wire-stripped Citation fields; no store_path.
 
-const ACRONYMS = new Set(["aws", "gcp", "ibm"]);
+// Provider ids are lowercase (aws, gcp, vultr). Names that are not the id
+// title-cased are listed; the rest are title-cased, so "vultr" -> "Vultr".
+const LABELS: Record<string, string> = {
+  aws: "AWS",
+  gcp: "GCP",
+  ibm: "IBM",
+  ovh: "OVHcloud",
+  cherryservers: "Cherry Servers",
+  runpod: "RunPod",
+};
 
-// Provider ids are lowercase (aws, gcp, vultr). Render acronyms uppercase and
-// the rest title-cased, so "aws" -> "AWS" and "vultr" -> "Vultr".
 function providerLabel(provider: string): string {
   const lower = provider.toLowerCase();
-  if (ACRONYMS.has(lower)) return lower.toUpperCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
+  return LABELS[lower] ?? lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
 function usd(n?: number): string {

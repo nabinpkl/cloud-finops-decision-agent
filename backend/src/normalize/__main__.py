@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> None:
     p_compare.add_argument("--ram", "--ram-gb", dest="ram_gb", type=float, required=True)
     p_compare.add_argument("--region", required=True, help="Canonical bucket: us-east | eu-central | ap-southeast.")
     p_compare.add_argument("--family", default=ANY_FAMILY, help='Family slug from taxonomy/families.json or "any".')
-    p_compare.add_argument("--providers", default=None, help="Comma-separated list. Default: aws,azure,ibm,linode,vultr.")
+    p_compare.add_argument("--providers", default=None, help="Comma-separated list. Default: every provider with USD CPU prices (not scaleway or runpod).")
     p_compare.add_argument("--expand", default="cheapest", choices=["cheapest", "full"])
     p_compare.add_argument("--pricing", default="on_demand", choices=["on_demand", "spot"])
     p_compare.add_argument("--pretty", default="true", choices=["true", "false"])

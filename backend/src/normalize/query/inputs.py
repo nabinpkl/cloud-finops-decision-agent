@@ -8,10 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from normalize.index import SUPPORTED_PROVIDERS
 
-ProviderName = Literal["aws", "gcp", "azure", "oracle", "vultr", "linode", "ibm"]
+ProviderName = Literal[
+    "aws", "gcp", "azure", "oracle", "vultr", "linode", "ibm",
+    "scaleway", "ovh", "exoscale", "cherryservers", "runpod",
+]
 FamilyName = Literal["any", "general-purpose", "compute-optimized", "memory-optimized"]
 ExpandMode = Literal["cheapest", "full"]
-# "spot" prices exist for GCP and Azure only; other providers report no candidate.
+# "spot" prices exist for GCP, Azure and some Cherry Servers bare metal; other
+# providers report no spot prices indexed.
 PricingMode = Literal["on_demand", "spot"]
 
 PLAIN_SELECTOR_FORBIDDEN = ("/", "\\", "..", "<", ">")
